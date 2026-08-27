@@ -17,8 +17,14 @@
   "engines": {
     "node": ">=22"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "examples/*.json"
+  ],
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "prepublishOnly": "npm test"
   },
   "dependencies": {
     "@openacr/openacr": "^0.3.8",
