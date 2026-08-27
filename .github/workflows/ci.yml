@@ -1,0 +1,22 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm test
+      - name: Syntax-check every script
+        run: |
+          set -e
+          for f in bin/*.mjs $(find src -name '*.mjs'); do node --check "$f"; done
+          for f in $(find src -name '*.sh'); do bash -n "$f"; done

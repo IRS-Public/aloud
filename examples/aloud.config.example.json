@@ -1,0 +1,45 @@
+{
+  "app": {
+    "name": "Example App",
+    "version": "1.0.0",
+    "android": {
+      "package": "com.example.app",
+      "activity": ".MainActivity",
+      "apk": "build/app-debug.apk"
+    },
+    "ios": {
+      "bundleId": "com.example.app",
+      "app": "build/Example.app"
+    }
+  },
+  "nav": {
+    "mode": "deeplinks",
+    "screens": "screens-deeplinks.example.json",
+    "bridge": {
+      "port": 8081,
+      "globals": {
+        "nav": "__devNav",
+        "signIn": "__devSignInAs",
+        "signOut": "__devSignOut"
+      },
+      "hopRoutes": ["/home", "/settings"],
+      "appServer": {
+        "command": "npx expo start --offline",
+        "env": {}
+      }
+    }
+  },
+  "out": "aloud-report",
+  "baseline": {
+    "android": "aloud-baseline-android.json",
+    "ios": "aloud-baseline-ios.json"
+  },
+  "openacr": {
+    "out": "acr-draft.yaml",
+    "description": "Example App mobile app for iOS and Android.",
+    "author": {
+      "name": "A11y Team",
+      "email": "a11y@example.org"
+    }
+  }
+}

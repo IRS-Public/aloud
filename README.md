@@ -1,1 +1,204 @@
 # aloud
+
+**The first 508 audit that actually listens.**
+
+aloud drives real screen readers across the screens of your mobile app. It
+captures what they actually speak. It runs Section 508 / WCAG checks on the
+accessibility tree of each screen. It writes per-screen speech transcripts,
+an HTML evidence page, and a draft OpenACR conformance report.
+
+- **Android**: real TalkBack, built from Google's source at a pinned commit.
+  The transcript is what TalkBack spoke, captured from its speech log.
+- **iOS**: a computed VoiceOver transcript today, built from the
+  accessibility tree in the same order VoiceOver composes speech. Real
+  VoiceOver capture lands when Apple's `XCUIVoiceOverService` reaches GA in
+  Xcode 27. An experimental harness for it ships in this repo.
+
+Both audit legs have passed real CI runs on the IRS mobile app project it
+was built for.
+
+## Why
+
+508 audit tools today do not listen. Static scanners check the
+accessibility tree and stop there. But the DHS Trusted Tester methodology
+for mobile names its test instruments plainly: VoiceOver and TalkBack. A
+conformant audit uses the screen reader itself. aloud automates exactly
+that. It runs the instrument, records the speech, and turns the evidence
+into a report.
+
+One more reason the name fits: "audit" comes from the Latin *audire*, to
+hear. The first audits were hearings. This one is too.
+
+## Quickstart
+
+aloud is a standalone CLI. Point it at an app build. Get transcripts and a
+draft OpenACR. You do not need CI, and you do not need to change your app.
+
+```bash
+git clone https://github.com/IRS-Public/aloud && cd aloud && npm install
+```
+
+Write a small config (see `examples/aloud.config.example.json`). Save it as
+`aloud.config.json` in your project root.
+
+```json
+{
+  "app": {
+    "name": "Example App",
+    "version": "1.0.0",
+    "android": { "package": "com.example.app", "apk": "build/app-debug.apk" },
+    "ios": { "bundleId": "com.example.app", "app": "build/Example.app" }
+  }
+}
+```
+
+### Android
+
+You need a running emulator with a `google_apis` (userdebug) image, and a
+TalkBack APK (Google ships no prebuilt one, so aloud builds it from source
+at a pinned commit and caches it):
+
+```bash
+npx aloud talkback get --build
+npx aloud talkback install .aloud-cache/talkback.apk
+npx aloud android --apk path/to/app-debug.apk
+open aloud-report/android/index.html
+```
+
+On an x86_64 emulator, install `.aloud-cache/talkback-nolib.apk` instead.
+The pinned TalkBack build ships ARM native libs only.
+
+The first run exits with a failure: findings gate against a baseline, and
+no screen is in one yet. Accept the current counts:
+
+```bash
+npx aloud baseline aloud-report/android
+```
+
+The gate is a ratchet: from that baseline, per-screen error counts can only
+go down, and a rule id the baseline has never seen fails. Pass `--no-gate`
+to skip the gate instead.
+
+### iOS
+
+You need macOS, a booted simulator, and `idb` (accessibility tree dumps):
+
+```bash
+npx aloud ios --app path/to/YourApp.app
+open aloud-report/ios/index.html
+```
+
+Same first-run rule as Android: accept the baseline with
+`npx aloud baseline aloud-report/ios`, or pass `--no-gate`.
+
+### Draft OpenACR
+
+Run this after the baseline step: with no flags, `openacr` reads the
+baselines you accepted above.
+
+```bash
+npx aloud openacr
+```
+
+To draft from a fresh run without a baseline, pass the report dirs:
+`npx aloud openacr --report aloud-report/android --report-ios aloud-report/ios`.
+
+This emits `acr-draft.yaml`, a machine-readable accessibility conformance
+report in the GSA [OpenACR](https://github.com/GSA/openacr) format. It is a
+draft on purpose: only criteria the automated rules cover get a conformance
+level, and every note says so. See [docs/openacr.md](docs/openacr.md).
+
+With zero setup, aloud audits whatever screen is currently open
+(`--nav current-screen`, the default). Give it a screens manifest
+(`examples/screens-deeplinks.example.json`) to walk your whole app by deep
+links, or use bridge mode (`examples/screens-bridge.example.json`) for apps
+with a dev navigation hook. See
+[docs/how-it-works.md](docs/how-it-works.md).
+
+## Run it in CI (optional)
+
+aloud runs fine on GitHub-hosted runners. Copy the templates in
+[`examples/ci/`](examples/ci/):
+
+- [`examples/ci/android-audit.yml`](examples/ci/android-audit.yml): boots a
+  headless emulator with KVM, builds TalkBack once and caches it, runs the
+  audit, uploads the evidence page.
+- [`examples/ci/ios-audit.yml`](examples/ci/ios-audit.yml): boots a
+  simulator on a macOS runner, installs `idb` from a pinned tarball, runs
+  the audit, uploads the evidence page.
+
+Both templates use only GitHub-owned actions. See [docs/ci.md](docs/ci.md).
+
+## How it works
+
+**Android** runs two passes per screen. Pass one: TalkBack is on, and
+logcat markers bracket each screen so TalkBack's verbose speech log can be
+sliced into a per-screen spoken transcript. Pass two: TalkBack is off, and
+`uiautomator dump` feeds the 508 rule checks plus an evidence screenshot.
+Two passes because `uiautomator` evicts running accessibility services, so
+the tree pass would kill TalkBack mid-speech.
+
+**iOS** runs one pass. `idb` dumps the accessibility tree per screen. aloud
+computes the VoiceOver utterance for each element (label, value, trait,
+hint) and runs the iOS rule checks. The transcript is labeled
+`computed-voiceover` in every report, never passed off as real speech. A CI
+spike has already captured real VoiceOver speech through Xcode 27's
+`XCUIVoiceOverService`; the swap to real speech is roadmap, with the
+constraints documented honestly in [docs/ios.md](docs/ios.md).
+
+Findings gate against a per-screen baseline you accept explicitly with
+`aloud baseline`. It is a ratchet: counts only go down, and a rule id the
+baseline has never seen fails even under the count.
+
+Full pipeline, rule tables, and known limits:
+[docs/how-it-works.md](docs/how-it-works.md).
+
+## Status and roadmap
+
+Working today, proven in CI:
+
+- Android TalkBack transcripts and tree checks, two-pass.
+- iOS computed VoiceOver transcripts and tree checks.
+- Ratchet gate, HTML evidence page, draft OpenACR emitter.
+
+Roadmap, in honest order:
+
+- **Real VoiceOver on iOS.** Swap the computed transcript for
+  `XCUIVoiceOverService` speech at Xcode 27 GA. The spike proved capture
+  works but the utterance format differs from the computed one, so the swap
+  includes a normalization step before baselines carry over.
+- **Per-screen `performAccessibilityAudit()`** on iOS, alongside the tree
+  rules.
+- **TalkBack focus stepping** for full traversal-order transcripts. This
+  needs a broadcast-intent companion service; `adb shell input` events
+  inject below the accessibility layer and can never drive TalkBack.
+- **A logging TTS engine** for lossless speech capture. Logcat capture can
+  occasionally drop a line; a TTS engine that records what it is asked to
+  speak cannot.
+- **Deeper Android checks** through Google's Accessibility Test Framework.
+  The `uiautomator` dump omits `stateDescription`, `roleDescription`,
+  hints, and `paneTitle`.
+
+## Prior art, and the word "first"
+
+Static scanners (axe, Accessibility Scanner, Xcode's audit) inspect markup
+or the accessibility tree. They are useful, and aloud runs tree checks too.
+But they do not run a screen reader, so they cannot tell you what a blind
+user hears. Projects like ARIA-AT drive real screen readers to test
+interoperability on the web, not to audit an app. Commercial screen-reader
+automation exists in beta. As far as we know, no open tool before aloud
+combined all four: crawl an app's screens, drive the real screen readers,
+assert on the captured speech, and emit 508/OpenACR reporting. If we are
+wrong, open an issue; we would genuinely like to know.
+
+## License
+
+This project is dedicated to the public domain under
+[CC0 1.0 Universal](LICENSE). It was developed as a work of the United
+States federal government, following the precedent of IRS Direct File. You
+may copy, modify, and use it, for any purpose, without permission or
+attribution.
+
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).

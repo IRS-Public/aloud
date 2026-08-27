@@ -1,0 +1,34 @@
+[
+  {
+    "id": "account",
+    "title": "Account screens (bridge mode: routes, personas, eval)",
+    "screens": [
+      {
+        "id": "guest-home",
+        "title": "Home (signed out)",
+        "route": "/home",
+        "persona": null
+      },
+      {
+        "id": "account-home",
+        "title": "Home (signed in)",
+        "route": "/home",
+        "persona": "demo-user"
+      },
+      {
+        "id": "account-orders",
+        "title": "Orders",
+        "route": "/orders",
+        "persona": "demo-user"
+      },
+      {
+        "id": "account-order-sheet",
+        "title": "Order detail sheet",
+        "route": "/orders",
+        "persona": "demo-user",
+        "eval": "globalThis.__devNav('/orders/123')",
+        "settleMs": 3000
+      }
+    ]
+  }
+]

@@ -1,0 +1,4 @@
+node_modules/
+aloud-report/
+.aloud-cache/
+acr-draft.yaml

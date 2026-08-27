@@ -1,0 +1,102 @@
+name: aloud 508 audit (iOS)
+
+# Adopter template. Copy this file into your app repo at
+# .github/workflows/, fill in the "replace" blocks, and commit an
+# aloud.config.json at your repo root (see examples/aloud.config.example.json;
+# the iOS leg needs at least app.ios.bundleId).
+#
+# The transcript this leg produces is COMPUTED from the accessibility tree
+# and labeled that way in every report (docs/ios.md in the aloud
+# repository). Only GitHub-owned actions are used.
+#
+# Notes:
+# - `schedule` triggers only fire from the repo's default branch.
+# - macOS minutes bill about 10x Linux minutes; prefer nightly + manual
+#   over per-PR.
+
+on:
+  workflow_dispatch:
+    inputs:
+      flows:
+        description: "Comma-separated flow ids (empty = all)"
+        required: false
+        default: ""
+  schedule:
+    - cron: "23 9 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  ios-voiceover-audit:
+    name: Computed VoiceOver transcripts + tree checks (iOS)
+    runs-on: macos-15
+    timeout-minutes: 120
+    env:
+      FLOWS: ${{ inputs.flows || '' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install aloud
+        run: npm install --no-save github:IRS-Public/aloud
+
+      # --- replace with your app's build ---
+      # Produce a simulator .app. For an Xcode project this looks like:
+      #   xcodebuild -workspace ios/YourApp.xcworkspace -scheme YourApp \
+      #     -configuration Debug -sdk iphonesimulator \
+      #     -derivedDataPath ios/build CODE_SIGNING_ALLOWED=NO build | tail -20
+      # Cache what makes it fast (Pods, DerivedData) with actions/cache@v4.
+      - name: Build simulator app
+        run: |
+          echo "REPLACE ME: build your simulator .app here"
+          exit 1
+      # --- end replace ---
+
+      - name: Setup Python 3.11 for fb-idb
+        # fb-idb's grpclib/protobuf pins are unproven on newer Pythons.
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install idb (accessibility tree dumps)
+        run: |
+          # Pinned release tarball instead of brew: the tap's formula
+          # demands a full Xcode 26 source build when its bottle misses the
+          # runner image, which breaks on image updates. The v1.1.8 binary
+          # is what brew shipped anyway (docs/ios.md in the aloud repo).
+          curl -fsSL -o "$RUNNER_TEMP/idb-companion.tar.gz" \
+            https://github.com/facebook/idb/releases/download/v1.1.8/idb-companion.universal.tar.gz
+          tar -xzf "$RUNNER_TEMP/idb-companion.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/idb-companion.universal/bin" >> "$GITHUB_PATH"
+          pip install fb-idb
+          idb --help > /dev/null
+
+      # aloud boots a simulator if none is booted, installs the app, and
+      # enables the simulator accessibility flag idb needs.
+      - name: Run audit on simulator
+        run: |
+          # --- replace with your app's audit invocation ---
+          npx aloud ios --app path/to/YourApp.app --no-gate \
+            ${FLOWS:+--flow "$FLOWS"}
+          # --- end replace ---
+
+      # Advisory while your baselines burn in. Drop continue-on-error once
+      # they are stable to make regressions fail the job.
+      - name: Ratchet gate
+        continue-on-error: true
+        run: npx aloud report --dir aloud-report/ios --gate
+
+      - name: Upload evidence report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aloud-508-report-ios
+          path: aloud-report/ios/
+          retention-days: 90
