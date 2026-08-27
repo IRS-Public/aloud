@@ -2,6 +2,10 @@
 
 **The first 508 audit that actually listens.**
 
+[![ci](https://github.com/IRS-Public/aloud/actions/workflows/ci.yml/badge.svg)](https://github.com/IRS-Public/aloud/actions/workflows/ci.yml)
+[![license: CC0-1.0](https://img.shields.io/badge/license-CC0--1.0-blue.svg)](LICENSE)
+[![node >= 22](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](package.json)
+
 aloud drives real screen readers across the screens of your mobile app. It
 captures what they actually speak. It runs Section 508 / WCAG checks on the
 accessibility tree of each screen. It writes per-screen speech transcripts,
@@ -29,16 +33,39 @@ into a report.
 One more reason the name fits: "audit" comes from the Latin *audire*, to
 hear. The first audits were hearings. This one is too.
 
+## Try it in 60 seconds
+
+No emulator, no simulator, no setup. The demo replays a captured audit of a
+bundled sample screen through the real pipeline:
+
+```bash
+git clone https://github.com/IRS-Public/aloud && cd aloud && npm install
+npx aloud demo
+```
+
+Here is the demo screen's captured TalkBack transcript:
+
+```text
+Order status, heading
+Your order shipped on Tuesday, August 25th.
+Track package, button
+Unlabeled, button
+Cancel order, button
+```
+
+Line four is the audit. A static scanner logs "missing contentDescription"
+in a table. aloud shows you the moment a blind user reaches a share button
+and hears the word "Unlabeled". The demo report fails that screen on two
+real findings: the unlabeled control, and a cancel button smaller than the
+touch-target minimum. If your machine has a text-to-speech voice, the
+report also reconstructs the transcript as playable audio, labeled as a
+reconstruction.
+
 ## Quickstart
 
 aloud is a standalone CLI. Point it at an app build. Get transcripts and a
 draft OpenACR. You do not need CI, and you do not need to change your app.
-
-```bash
-git clone https://github.com/IRS-Public/aloud && cd aloud && npm install
-```
-
-Write a small config (see `examples/aloud.config.example.json`). Save it as
+Install it as in the demo above, then write a small config (see `examples/aloud.config.example.json`). Save it as
 `aloud.config.json` in your project root.
 
 ```json
@@ -190,6 +217,18 @@ automation exists in beta. As far as we know, no open tool before aloud
 combined all four: crawl an app's screens, drive the real screen readers,
 assert on the captured speech, and emit 508/OpenACR reporting. If we are
 wrong, open an issue; we would genuinely like to know.
+
+|  | aloud | Static scanners (axe, Accessibility Scanner) | Xcode audit | ARIA-AT | Commercial beta tools |
+| --- | --- | --- | --- | --- | --- |
+| Runs the real screen reader | Yes* | No | No | Yes | Yes |
+| Captures the spoken output | Yes* | No | No | Yes | Yes |
+| Walks every screen of a mobile app | Yes | No | Only screens your UI tests visit | No, web only | Varies |
+| Section 508 / OpenACR reporting | Yes | No | No | No | No |
+| Open source | Yes, CC0 | Core only | No | Yes | No |
+
+\* Real TalkBack on Android today. On iOS the transcript is computed and
+labeled as computed; real VoiceOver capture is on the roadmap for Xcode 27
+GA, with the experimental harness already in this repo.
 
 ## License
 

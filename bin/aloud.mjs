@@ -58,6 +58,8 @@ const USAGE = `aloud — the first 508 audit that actually listens
 Usage: aloud <command> [flags]
 
 Commands:
+  demo         Try aloud with no device: replay the bundled sample capture through the
+               real checks and report into ./aloud-demo-report [--out <dir>]
   android      Run the Android leg: TalkBack transcript pass + tree pass + report + gate
   ios          Run the iOS leg: computed VoiceOver transcript + tree checks + report + gate
   talkback     Manage TalkBack on the device: status | install <apk> | enable | disable |
@@ -193,6 +195,20 @@ function runTalkback(argv) {
   run(process.execPath, [join(ALOUD_HOME, "src", "android", "talkback.mjs"), ...argv]);
 }
 
+function runDemo(argv) {
+  if (argv.includes("--help")) {
+    return console.log(
+      `Usage: aloud demo [--out <dir>]
+
+Replays the bundled sample capture through the real checks and the real
+report generator. Writes ./aloud-demo-report by default. No device needed.
+Demo data. This is a replay of a captured audit of the bundled sample
+screen, not your app.`,
+    );
+  }
+  run(process.execPath, [join(ALOUD_HOME, "src", "demo", "demo.mjs"), ...argv]);
+}
+
 function runReport(argv) {
   const { values } = parse("report", argv);
   if (values.help) return console.log(USAGE);
@@ -262,6 +278,9 @@ switch (command) {
   case "--version":
   case "-v":
     console.log(aloudVersion());
+    break;
+  case "demo":
+    runDemo(rest);
     break;
   case "android":
   case "ios":
