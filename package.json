@@ -1,0 +1,19 @@
+{
+  "name": "aloud",
+  "version": "0.1.0",
+  "description": "508 mobile screen-reader audit: drive TalkBack and VoiceOver across an app's screens, capture what they speak, and emit evidence transcripts plus a draft OpenACR.",
+  "type": "module",
+  "bin": {
+    "aloud": "bin/aloud.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@openacr/openacr": "^0.3.8",
+    "js-yaml": "^4"
+  }
+}

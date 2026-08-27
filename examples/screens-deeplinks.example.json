@@ -1,0 +1,25 @@
+[
+  {
+    "id": "public",
+    "title": "Public screens (deeplinks mode: each screen needs a url)",
+    "screens": [
+      {
+        "id": "home",
+        "title": "Home",
+        "url": "exampleapp://home"
+      },
+      {
+        "id": "search",
+        "title": "Search",
+        "url": "exampleapp://search",
+        "settleMs": 3500
+      },
+      {
+        "id": "home-dark",
+        "title": "Home (dark mode)",
+        "url": "exampleapp://home",
+        "dark": true
+      }
+    ]
+  }
+]

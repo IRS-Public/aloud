@@ -1,0 +1,43 @@
+# xcodegen spec for the experimental real-VoiceOver harness (Xcode 27).
+#
+# The generated .xcodeproj is NOT committed — run `xcodegen generate` in
+# this directory (see docs/ios.md). HostApp
+# exists only because a ui-testing bundle needs a host target to hang off;
+# the test itself drives the already-installed target app by bundle id from
+# the TARGET_BUNDLE_ID env (installed separately with `simctl install`).
+name: VoiceOverSpike
+options:
+  bundleIdPrefix: org.example.aloud
+  deploymentTarget:
+    iOS: "18.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGNING_ALLOWED: "NO"
+    GENERATE_INFOPLIST_FILE: "YES"
+targets:
+  HostApp:
+    type: application
+    platform: iOS
+    sources: [HostApp]
+    settings:
+      base:
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+  VoiceOverSpikeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: HostApp
+    settings:
+      base:
+        TEST_TARGET_NAME: HostApp
+schemes:
+  VoiceOverSpike:
+    build:
+      targets:
+        HostApp: all
+        VoiceOverSpikeUITests: all
+    test:
+      targets:
+        - VoiceOverSpikeUITests
