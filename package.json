@@ -1,6 +1,14 @@
 {
-  "name": "aloud",
+  "name": "@irs-public/aloud",
   "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IRS-Public/aloud.git"
+  },
+  "license": "CC0-1.0",
   "description": "508 mobile screen-reader audit: drive TalkBack and VoiceOver across an app's screens, capture what they speak, and emit evidence transcripts plus a draft OpenACR.",
   "type": "module",
   "bin": {

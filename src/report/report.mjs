@@ -13,6 +13,7 @@
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { renderReportHtml } from "./html.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -79,55 +80,26 @@ const summary = {
 writeFileSync(join(OUT, "summary.json"), JSON.stringify(summary, null, 2));
 
 // ── evidence page ──
-const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
-const rows = ids
-  .map((id) => {
-    const s = screens[id];
-    const shot = `shots/${id}.png`;
-    const violations = (s.violations ?? [])
-      .map(
-        (v) =>
-          `<li class="${v.severity}"><code>${esc(v.ruleId)}</code> (WCAG ${esc(v.wcag)}) — ${esc(v.detail)}<br><small>${esc(v.element)}</small></li>`,
-      )
-      .join("");
-    const transcript = (s.transcript ?? []).map((u) => `<li>${esc(u)}</li>`).join("");
-    // A transcript.json without a source field is an Android TalkBack
-    // capture from an older walker; only "computed-voiceover" changes the label.
-    const spokenLabel =
-      s.source === "computed-voiceover" ? "VoiceOver transcript (computed)" : "TalkBack transcript";
-    return `<section>
-  <h2>${esc(s.title ?? id)} <small>${esc(id)}</small></h2>
-  <div class="cols">
-    <figure><img src="${shot}" alt="${esc(id)}" loading="lazy"></figure>
-    <div>
-      <h3>${spokenLabel} (${s.transcript?.length ?? 0})</h3>
-      <ol class="say">${transcript || "<li class='none'>no capture in this run</li>"}</ol>
-      <h3>Violations (${s.violations?.length ?? 0})</h3>
-      <ul class="v">${violations || "<li class='none'>none</li>"}</ul>
-    </div>
-  </div>
-</section>`;
-  })
-  .join("\n");
+// A screenshot exists only when the tree pass ran for that screen; the page
+// omits the figure otherwise instead of rendering a broken image.
+const shots = new Set(ids.filter((id) => existsSync(join(OUT, "shots", `${id}.png`))));
+
+// Optional reconstructed audio: <report-dir>/speech-audio/manifest.json maps
+// screen ids to utterance clips ({ i, file, text }). Produced by a separate
+// step; when absent the page renders nothing audio-related.
+const audioManifestPath = join(OUT, "speech-audio", "manifest.json");
+let audioManifest = null;
+if (existsSync(audioManifestPath)) {
+  try {
+    audioManifest = JSON.parse(readFileSync(audioManifestPath, "utf8"));
+  } catch {
+    console.warn(`ignoring unreadable audio manifest at ${audioManifestPath}`);
+  }
+}
 
 writeFileSync(
   join(OUT, "index.html"),
-  `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<title>aloud 508 audit — spoken output &amp; tree checks</title>
-<style>
-  :root { --accent:#1a1a2e; --ink:#111113; --line:#d5d7db; }
-  body { font: 15px/1.5 -apple-system, system-ui, sans-serif; color: var(--ink); margin: 2rem auto; max-width: 1100px; padding: 0 1rem; }
-  h1 { color: var(--accent); } h2 small { color: #777; font-weight: 400; }
-  section { border-top: 1px solid var(--line); padding: 1.2rem 0; }
-  .cols { display: flex; gap: 1.5rem; align-items: flex-start; }
-  figure { margin: 0; } img { width: 220px; border: 1px solid var(--line); border-radius: 8px; }
-  ol.say li { background: #16181b; color: #fff; border-radius: 6px; padding: 4px 10px; margin: 4px 0; font-family: ui-monospace, monospace; font-size: 13px; list-style: none; }
-  ul.v li.error { color: #a01919; } ul.v li.warn { color: #8a5a00; } li.none { color: #999; }
-</style></head><body>
-<h1>aloud 508 audit — spoken output &amp; tree checks</h1>
-<p>${ids.length} screens · generated ${esc(summary.generated)}</p>
-${rows}
-</body></html>`,
+  renderReportHtml({ screens, ids, generated: summary.generated, shots, audioManifest }),
 );
 console.log(`summary: ${ids.length} screens → ${join(OUT, "summary.json")}`);
 
