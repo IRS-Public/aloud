@@ -1,3 +1,5 @@
+<img src="docs/assets/social-preview.png" alt="aloud. The first 508 audit that actually listens. A speech waveform over the text: TalkBack, VoiceOver, OpenACR, CC0." width="100%">
+
 # aloud
 
 **The first 508 audit that actually listens.**
