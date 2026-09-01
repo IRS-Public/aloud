@@ -23,28 +23,35 @@ an HTML evidence page, and a draft OpenACR conformance report.
 Both audit legs have passed real CI runs on the IRS mobile app project it
 was built for.
 
-## Bugs it has actually found
+## Findings from a real audit, and what they taught the tool
 
-aloud audits the IRS mobile app in CI. Real findings from real runs — each
-one passed the static tree checks other tools run, and was caught here by
-reading what the screen reader would actually say:
+aloud's transcripts were read against a real IRS-app feature branch. Three
+findings surfaced. Chasing them to root cause improved the tool more than
+the app — which is the honest shape of dogfooding:
 
-- **Half a client roster lost its button trait.** A practitioner's client
-  list rendered six visually identical rows; VoiceOver announced four as
-  "button" and two as plain text. A blind user has no way to know those
-  two clients are tappable. Caught by transcript review; now automated as
-  `ios-list-row-not-interactive` (warn), which flags a static row sitting
-  in a column of interactive siblings.
-- **Preference toggles speaking "1".** Switched-context settings rows
-  announced "Paperless notices, 1" — a raw numeric state where a person
-  needs "on" or "off". Now automated as `ios-toggle-raw-value` (error).
-- **An action row announcing as prose.** A "Respond to a notice" row was
-  pressable but carried no interactive trait — it read as a statement,
-  not an action. Same rule family as the roster finding.
+- **"Paperless notices, 1."** Preference toggles appeared to announce a raw
+  numeric state. Root cause: a UISwitch dumps `AXValue "1"` through the
+  mac-AX bridge, but real VoiceOver speaks "on". The *transcript* was
+  wrong, not the app. Fixed: switch-family numeric state now normalizes to
+  on/off, and RN's Switch (which surfaces as `CheckBox`) is recognized as
+  a switch. The remaining `ios-toggle-raw-value` rule (error) catches the
+  genuinely broken shape: a non-switch control wearing numeric state.
+- **Roster rows intermittently losing their button trait.** In walk-time
+  dumps, two of six visually identical client rows read as static text; in
+  settled dumps all six carry the trait. The app's code was right — the
+  dump can race the accessibility tree's realization. That intermittency
+  is exactly what a blind user hits on a slow render, so the new
+  `ios-list-row-not-interactive` rule (warn) flags a static row sitting in
+  a column of interactive siblings for human review instead of silently
+  passing it.
+- **A switch flagged for being 51x31pt.** Adding CheckBox to the
+  interactive set tripped the 44pt target rule on Apple's own UISwitch
+  geometry. Apple's audit passes it; aloud now exempts switch-family
+  roles from the platform-minimum rule.
 
-The pattern behind all three: the accessibility tree was *valid* — labels
-present, targets big enough — but the speech was wrong. That is the gap
-aloud exists to close.
+The meta-lesson is the tool's thesis restated: the dump is not the speech.
+Every one of these was invisible to a static tree check and surfaced only
+by reading what VoiceOver would say.
 
 ## Why
 
