@@ -18,12 +18,27 @@ import { INTERACTIVE_ROLES, composeUtterance, isFocusable } from "./voiceover.mj
 // help (the accessibilityHint surfaces here through Apple's mac-AX
 // translation), enabled, frame {x,y,width,height} in POINTS, AXUniqueId
 // (the RN testID), role_description.
+const SWITCH_ROLES = new Set(["Switch", "Toggle", "CheckBox"]);
+
 export function normalizeElements(dump) {
   const list = Array.isArray(dump) ? dump : JSON.parse(dump);
   return list.map((e) => ({
     label: nullish(e.AXLabel),
-    // bare booleans read as switch state — "false" spoken aloud helps no one
-    value: e.AXValue === true ? "on" : e.AXValue === false ? "off" : nullish(e.AXValue),
+    // bare booleans read as switch state — "false" spoken aloud helps no
+    // one. Switch-family roles get the same courtesy for numeric state:
+    // a UISwitch dumps AXValue "1"/"0" through mac-AX, but real VoiceOver
+    // speaks "on"/"off" — the transcript must match the speech, not the
+    // dump (first found as a false 508 finding against the IRS app).
+    value:
+      e.AXValue === true
+        ? "on"
+        : e.AXValue === false
+          ? "off"
+          : SWITCH_ROLES.has(e.type ?? e.role ?? "") && (e.AXValue === "1" || e.AXValue === 1)
+            ? "on"
+            : SWITCH_ROLES.has(e.type ?? e.role ?? "") && (e.AXValue === "0" || e.AXValue === 0)
+              ? "off"
+              : nullish(e.AXValue),
     hint: nullish(e.help),
     role: e.type ?? e.role ?? "",
     roleDescription: nullish(e.role_description),
@@ -83,7 +98,10 @@ export function runIosChecks(elements) {
     // Target size — 44x44pt is the Apple platform minimum (HIG; Apple's
     // hitRegion audit uses the same bar. WCAG 2.5.8 AA is 24px — we hold
     // the platform bar, same policy as the Android 48dp rule).
-    if (interactive && el.enabled && (el.frame.w < 44 || el.frame.h < 44)) {
+    // UISwitch is 51x31pt from Apple's own hands — their audit passes it,
+    // so the platform-minimum rule exempts switch-family roles (the row
+    // that hosts one typically extends the hit area anyway).
+    if (interactive && el.enabled && !SWITCH_ROLES.has(el.role) && (el.frame.w < 44 || el.frame.h < 44)) {
       add(
         "ios-touch-target-small",
         "2.5.8",
@@ -94,10 +112,9 @@ export function runIosChecks(elements) {
 
     // 4.1.2 Name, Role, Value — a control speaking a bare "1"/"0" as its
     // value: VoiceOver says "one"/"zero" where a person needs "on"/"off".
-    // Booleans are normalized upstream; numeric toggle state (a switch
-    // wired to a 0/1 int, an RN Switch missing its value adapter) slips
-    // through as digits. Found in the wild on the IRS app: preference
-    // toggles announcing "Paperless notices, 1".
+    // Booleans and switch-family numeric state normalize upstream; a
+    // digit that SURVIVES normalization is a non-switch control wearing
+    // toggle state (a custom pressable with a numeric accessibilityValue).
     if (interactive && (el.value === "1" || el.value === "0")) {
       add(
         "ios-toggle-raw-value",

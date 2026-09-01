@@ -141,18 +141,39 @@ describe("runIosChecks", () => {
     );
   });
 
-  it("flags a toggle announcing a raw numeric value", () => {
-    const v = check([el({ type: "Switch", AXLabel: "Paperless notices", AXValue: "1" })]);
-    const hit = v.find((x) => x.ruleId === "ios-toggle-raw-value");
-    assert.ok(hit);
-    assert.ok(hit.detail.includes('"1"'));
-    // real booleans normalize to on/off upstream and must NOT flag
+  it("flags a raw numeric value only on non-switch controls", () => {
+    // A switch-family control's "1" normalizes to "on" upstream — real
+    // VoiceOver speaks on/off — so it must NOT flag…
+    assert.equal(
+      check([el({ type: "Switch", AXLabel: "Paperless notices", AXValue: "1" })]).filter(
+        (x) => x.ruleId === "ios-toggle-raw-value",
+      ).length,
+      0,
+    );
+    // …and neither does a real boolean.
     assert.equal(
       check([el({ type: "Switch", AXLabel: "Paperless notices", AXValue: true })]).filter(
         (x) => x.ruleId === "ios-toggle-raw-value",
       ).length,
       0,
     );
+    // But a Button carrying numeric toggle state (a custom pressable with
+    // accessibilityValue "1") still speaks "one" — that flags.
+    const v = check([el({ type: "Button", AXLabel: "Paperless notices", AXValue: "1" })]);
+    const hit = v.find((x) => x.ruleId === "ios-toggle-raw-value");
+    assert.ok(hit);
+    assert.ok(hit.detail.includes('"1"'));
+  });
+
+  it("normalizes switch-family numeric state to on/off in the transcript", () => {
+    const [onEl] = normalizeElements([
+      el({ type: "CheckBox", AXLabel: "Paperless notices", AXValue: "1" }),
+    ]);
+    assert.equal(onEl.value, "on");
+    const [offEl] = normalizeElements([
+      el({ type: "Toggle", AXLabel: "Email notifications", AXValue: 0 }),
+    ]);
+    assert.equal(offEl.value, "off");
   });
 
   it("warns when a list row loses its interactive trait among interactive siblings", () => {
