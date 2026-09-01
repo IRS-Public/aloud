@@ -118,6 +118,8 @@ order) and runs the iOS rules (`src/ios/tree.mjs`):
 | `ios-interactive-unlabeled` | 4.1.2 | error |
 | `ios-image-unlabeled` | 4.1.2 | error |
 | `ios-touch-target-small` (44pt Apple bar) | 2.5.8 | error |
+| `ios-toggle-raw-value` (switch speaking "1"/"0") | 4.1.2 | error |
+| `ios-list-row-not-interactive` (static row among interactive siblings) | 4.1.2 | warn (report-only) |
 | `ios-duplicate-speakable` | 4.1.2 | warn (report-only) |
 
 The transcript is labeled `computed-voiceover` in every report. It is never

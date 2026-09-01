@@ -140,4 +140,40 @@ describe("runIosChecks", () => {
       [],
     );
   });
+
+  it("flags a toggle announcing a raw numeric value", () => {
+    const v = check([el({ type: "Switch", AXLabel: "Paperless notices", AXValue: "1" })]);
+    const hit = v.find((x) => x.ruleId === "ios-toggle-raw-value");
+    assert.ok(hit);
+    assert.ok(hit.detail.includes('"1"'));
+    // real booleans normalize to on/off upstream and must NOT flag
+    assert.equal(
+      check([el({ type: "Switch", AXLabel: "Paperless notices", AXValue: true })]).filter(
+        (x) => x.ruleId === "ios-toggle-raw-value",
+      ).length,
+      0,
+    );
+  });
+
+  it("warns when a list row loses its interactive trait among interactive siblings", () => {
+    const row = (y, over = {}) =>
+      el({ frame: { x: 20, y, width: 350, height: 60 }, ...over });
+    const v = check([
+      row(0, { AXLabel: "Dana Whitfield" }),
+      row(70, { AXLabel: "Miguel Santana", type: "StaticText" }),
+      row(140, { AXLabel: "Priya Anand" }),
+      row(210, { AXLabel: "Chidi Okafor" }),
+    ]);
+    const hits = v.filter((x) => x.ruleId === "ios-list-row-not-interactive");
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].severity, "warn");
+    assert.ok(hits[0].detail.includes("Miguel Santana"));
+    // an all-static column (a definition list) must not flag
+    const calm = check([
+      row(0, { AXLabel: "A", type: "StaticText" }),
+      row(70, { AXLabel: "B", type: "StaticText" }),
+      row(140, { AXLabel: "C", type: "StaticText" }),
+    ]);
+    assert.equal(calm.filter((x) => x.ruleId === "ios-list-row-not-interactive").length, 0);
+  });
 });

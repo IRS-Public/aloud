@@ -23,6 +23,29 @@ an HTML evidence page, and a draft OpenACR conformance report.
 Both audit legs have passed real CI runs on the IRS mobile app project it
 was built for.
 
+## Bugs it has actually found
+
+aloud audits the IRS mobile app in CI. Real findings from real runs — each
+one passed the static tree checks other tools run, and was caught here by
+reading what the screen reader would actually say:
+
+- **Half a client roster lost its button trait.** A practitioner's client
+  list rendered six visually identical rows; VoiceOver announced four as
+  "button" and two as plain text. A blind user has no way to know those
+  two clients are tappable. Caught by transcript review; now automated as
+  `ios-list-row-not-interactive` (warn), which flags a static row sitting
+  in a column of interactive siblings.
+- **Preference toggles speaking "1".** Switched-context settings rows
+  announced "Paperless notices, 1" — a raw numeric state where a person
+  needs "on" or "off". Now automated as `ios-toggle-raw-value` (error).
+- **An action row announcing as prose.** A "Respond to a notice" row was
+  pressable but carried no interactive trait — it read as a statement,
+  not an action. Same rule family as the roster finding.
+
+The pattern behind all three: the accessibility tree was *valid* — labels
+present, targets big enough — but the speech was wrong. That is the gap
+aloud exists to close.
+
 ## Why
 
 508 audit tools today do not listen. Static scanners check the

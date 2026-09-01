@@ -91,6 +91,64 @@ export function runIosChecks(elements) {
         `touch target ${Math.round(el.frame.w)}x${Math.round(el.frame.h)}pt (minimum 44x44pt)`,
       );
     }
+
+    // 4.1.2 Name, Role, Value — a control speaking a bare "1"/"0" as its
+    // value: VoiceOver says "one"/"zero" where a person needs "on"/"off".
+    // Booleans are normalized upstream; numeric toggle state (a switch
+    // wired to a 0/1 int, an RN Switch missing its value adapter) slips
+    // through as digits. Found in the wild on the IRS app: preference
+    // toggles announcing "Paperless notices, 1".
+    if (interactive && (el.value === "1" || el.value === "0")) {
+      add(
+        "ios-toggle-raw-value",
+        "4.1.2",
+        el,
+        `control announces raw value "${el.value}" — a switch state should speak on/off`,
+      );
+    }
+  }
+
+  // 4.1.2 — inconsistent interactivity across a visual list: rows that are
+  // left-aligned to the same column and same width, where SOME announce as
+  // interactive and some as static text. A VoiceOver user hears "button" on
+  // one row and nothing on its visual twin — no way to know the second row
+  // is tappable. Warn-only: static section footers inside card lists are
+  // legitimate. Found in the wild on the IRS app: half a client roster's
+  // rows had lost their button trait.
+  const columns = new Map();
+  for (const el of elements) {
+    if (!(el.frame && el.frame.w > 0 && el.frame.h >= 40)) continue;
+    if (!el.label) continue;
+    const key = `${Math.round(el.frame.x)}:${Math.round(el.frame.w)}`;
+    (columns.get(key) ?? columns.set(key, []).get(key)).push(el);
+  }
+  for (const rows of columns.values()) {
+    if (rows.length < 3) continue; // a list, not a pair
+    const interactiveRows = rows.filter((el) => INTERACTIVE_ROLES.has(el.role) && el.enabled);
+    const staticRows = rows.filter((el) => !INTERACTIVE_ROLES.has(el.role));
+    if (!(interactiveRows.length >= 2 && staticRows.length > 0 && interactiveRows.length > staticRows.length)) {
+      continue;
+    }
+    // Height similarity: list rows share a rhythm. A static element much
+    // taller than the interactive rows is prose (an intro paragraph), not
+    // a row that lost its trait.
+    const heights = interactiveRows.map((el) => el.frame.h).sort((a, b) => a - b);
+    const median = heights[Math.floor(heights.length / 2)];
+    for (const el of staticRows) {
+      if (el.frame.h > median * 1.5) continue;
+      // Prose, not a row: a long label is an intro paragraph or help text
+      // sharing the column by coincidence (row labels run short; prose
+      // runs long). Dot-separators alone can't discriminate — real rows
+      // speak "Name. TIN ending in 1234. Status" — so length carries it.
+      if (el.label.length > 90) continue;
+      add(
+        "ios-list-row-not-interactive",
+        "4.1.2",
+        el,
+        `row "${el.label}" sits in a list where ${interactiveRows.length} sibling rows announce as interactive, but this one has no interactive trait`,
+        "warn",
+      );
+    }
   }
 
   // 4.1.2 — two controls that announce identically are indistinguishable.
