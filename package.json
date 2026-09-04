@@ -32,6 +32,6 @@
   },
   "dependencies": {
     "@openacr/openacr": "^0.3.8",
-    "js-yaml": "^4"
+    "js-yaml": "^5"
   }
 }
