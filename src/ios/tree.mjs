@@ -18,38 +18,49 @@ import { INTERACTIVE_ROLES, composeUtterance, isFocusable } from "./voiceover.mj
 // help (the accessibilityHint surfaces here through Apple's mac-AX
 // translation), enabled, frame {x,y,width,height} in POINTS, AXUniqueId
 // (the RN testID), role_description.
+
+// Roles whose value is switch state. UISwitch reaches the mac-AX dump as
+// AXCheckBox (verified against the IRS app), so "CheckBox" is a switch here.
 const SWITCH_ROLES = new Set(["Switch", "Toggle", "CheckBox"]);
+
+// Roles whose value is legitimately free-form: typed text or a slider
+// position. A "1" in these is content, not toggle state.
+const VALUE_BEARING_ROLES = new Set(["TextField", "SecureTextField", "SearchField", "Slider"]);
 
 export function normalizeElements(dump) {
   const list = Array.isArray(dump) ? dump : JSON.parse(dump);
-  return list.map((e) => ({
-    label: nullish(e.AXLabel),
-    // bare booleans read as switch state — "false" spoken aloud helps no
-    // one. Switch-family roles get the same courtesy for numeric state:
-    // a UISwitch dumps AXValue "1"/"0" through mac-AX, but real VoiceOver
-    // speaks "on"/"off" — the transcript must match the speech, not the
-    // dump (first found as a false 508 finding against the IRS app).
-    value:
-      e.AXValue === true
-        ? "on"
-        : e.AXValue === false
-          ? "off"
-          : SWITCH_ROLES.has(e.type ?? e.role ?? "") && (e.AXValue === "1" || e.AXValue === 1)
-            ? "on"
-            : SWITCH_ROLES.has(e.type ?? e.role ?? "") && (e.AXValue === "0" || e.AXValue === 0)
-              ? "off"
-              : nullish(e.AXValue),
-    hint: nullish(e.help),
-    role: e.type ?? e.role ?? "",
-    roleDescription: nullish(e.role_description),
-    enabled: e.enabled !== false,
-    testID: nullish(e.AXUniqueId),
-    frame: normFrame(e.frame ?? e.AXFrame),
-    raw: e,
-  }));
+  return list.map((e) => {
+    const role = e.type ?? e.role ?? "";
+    return {
+      label: nullish(e.AXLabel),
+      value: normValue(e.AXValue, role),
+      hint: nullish(e.help),
+      role,
+      roleDescription: nullish(e.role_description),
+      enabled: e.enabled !== false,
+      testID: nullish(e.AXUniqueId),
+      frame: normFrame(e.frame ?? e.AXFrame),
+      raw: e,
+    };
+  });
 }
 
 const nullish = (v) => (v === null || v === undefined || v === "null" ? "" : String(v));
+
+// Bare booleans read as switch state — "false" spoken aloud helps no one.
+// Switch-family roles get the same courtesy for numeric state: a UISwitch
+// dumps AXValue "1"/"0" through mac-AX, but real VoiceOver speaks
+// "on"/"off" — the transcript must match the speech, not the dump (first
+// found as a false 508 finding against the IRS app).
+function normValue(v, role) {
+  if (v === true) return "on";
+  if (v === false) return "off";
+  if (SWITCH_ROLES.has(role)) {
+    if (v === "1" || v === 1) return "on";
+    if (v === "0" || v === 0) return "off";
+  }
+  return nullish(v);
+}
 
 function normFrame(f) {
   if (!f) return null;
@@ -62,6 +73,11 @@ function normFrame(f) {
   const m = String(f).match(/\{\{(-?[\d.]+),\s*(-?[\d.]+)\},\s*\{(-?[\d.]+),\s*(-?[\d.]+)\}\}/);
   return m ? { x: +m[1], y: +m[2], w: +m[3], h: +m[4] } : null;
 }
+
+// Headings arrive either as the Heading role or as a StaticText whose
+// role_description says "heading" (UIAccessibilityTraitHeader through mac-AX).
+const isHeading = (el) =>
+  el.role === "Heading" || /\bheading\b/i.test(el.roleDescription ?? "");
 
 const describe = (el) =>
   `${el.role || "?"}${el.testID ? ` testID=${el.testID}` : ""}` +
@@ -115,12 +131,17 @@ export function runIosChecks(elements) {
     // Booleans and switch-family numeric state normalize upstream; a
     // digit that SURVIVES normalization is a non-switch control wearing
     // toggle state (a custom pressable with a numeric accessibilityValue).
-    if (interactive && (el.value === "1" || el.value === "0")) {
+    // Text fields and sliders are exempt: a "1" there is what the user
+    // typed or where the thumb sits. Warn-only: the shape has not yet been
+    // seen in the wild (the first sighting was the transcript's fault, not
+    // the app's), and a button carrying a badge count of "1" is legitimate.
+    if (interactive && !VALUE_BEARING_ROLES.has(el.role) && (el.value === "1" || el.value === "0")) {
       add(
         "ios-toggle-raw-value",
         "4.1.2",
         el,
         `control announces raw value "${el.value}" — a switch state should speak on/off`,
+        "warn",
       );
     }
   }
@@ -131,17 +152,24 @@ export function runIosChecks(elements) {
   // one row and nothing on its visual twin — no way to know the second row
   // is tappable. Warn-only: static section footers inside card lists are
   // legitimate. Found in the wild on the IRS app: half a client roster's
-  // rows had lost their button trait.
+  // rows had lost their button trait in a walk-time dump (walk.mjs now
+  // re-dumps until the tree settles, which removes the racy case; this
+  // rule catches the shape when it is real).
   const columns = new Map();
   for (const el of elements) {
     if (!(el.frame && el.frame.w > 0 && el.frame.h >= 40)) continue;
     if (!el.label) continue;
+    // A section heading sharing the list's column is the grouped-list
+    // idiom, not a row that lost its trait.
+    if (isHeading(el)) continue;
     const key = `${Math.round(el.frame.x)}:${Math.round(el.frame.w)}`;
     (columns.get(key) ?? columns.set(key, []).get(key)).push(el);
   }
   for (const rows of columns.values()) {
     if (rows.length < 3) continue; // a list, not a pair
-    const interactiveRows = rows.filter((el) => INTERACTIVE_ROLES.has(el.role) && el.enabled);
+    // A disabled row still announces its trait ("button, dimmed"), so it
+    // shapes the list like an enabled one.
+    const interactiveRows = rows.filter((el) => INTERACTIVE_ROLES.has(el.role));
     const staticRows = rows.filter((el) => !INTERACTIVE_ROLES.has(el.role));
     if (!(interactiveRows.length >= 2 && staticRows.length > 0 && interactiveRows.length > staticRows.length)) {
       continue;

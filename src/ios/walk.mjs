@@ -119,10 +119,7 @@ async function walk() {
     await nav.goto(screen);
     if (NAV_MODE !== "bridge") await sleep(screen.settleMs ?? 2500);
 
-    // describe-all output is always JSON (one flat array); the --json
-    // flag is a root-parser logging flag and mispositions after the verb.
-    const dump = sh("idb", ["ui", "describe-all", "--udid", udid]);
-    const elements = normalizeElements(parseIdbOutput(dump));
+    const elements = normalizeElements(parseIdbOutput(await settledDump(udid)));
     const transcript = computeTranscript(elements);
     const violations = runIosChecks(elements);
     const errors = violations.filter((v) => v.severity === "error");
@@ -153,6 +150,30 @@ async function walk() {
   }
   await nav.stop();
   setAppearance(initialAppearance === "dark");
+}
+
+// describe-all output is always JSON (one flat array); the --json flag is a
+// root-parser logging flag and mispositions after the verb.
+const describeAll = (udid) => sh("idb", ["ui", "describe-all", "--udid", udid]);
+
+// A dump can race the accessibility tree's realization: on the IRS app,
+// walk-time dumps showed two of six list rows without their button trait
+// while a later dump showed all six with it. That is a measurement
+// artifact, not an app finding, so keep dumping until two consecutive
+// dumps agree (or the budget runs out — a screen with a live spinner never
+// settles, and the last dump is still the best evidence we have).
+const SETTLE_TRIES = 6;
+const SETTLE_INTERVAL_MS = 500;
+async function settledDump(udid) {
+  let prev = describeAll(udid);
+  for (let i = 1; i < SETTLE_TRIES; i++) {
+    await sleep(SETTLE_INTERVAL_MS);
+    const next = describeAll(udid);
+    if (next === prev) return next;
+    prev = next;
+  }
+  console.log(`    (tree did not settle after ${SETTLE_TRIES} dumps — using the last one)`);
+  return prev;
 }
 
 // idb --json historically emits either one JSON array or newline-delimited

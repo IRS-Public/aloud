@@ -94,7 +94,9 @@ export const AUTOMATED_CRITERIA = {
     ],
     covers: "interactive elements, image controls, and text fields must expose an accessible name",
     extra:
-      "Elements that announce identical labels are flagged as warnings (native-duplicate-speakable, ios-duplicate-speakable); warnings do not gate.",
+      "Three report-only warnings add related evidence: elements that announce identical labels (native-duplicate-speakable, ios-duplicate-speakable), " +
+      "iOS controls announcing a raw \"1\"/\"0\" where a switch state should speak on/off (ios-toggle-raw-value), " +
+      "and iOS list rows with no interactive trait among interactive siblings (ios-list-row-not-interactive); warnings do not gate.",
   },
 };
 

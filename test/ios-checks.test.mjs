@@ -158,11 +158,32 @@ describe("runIosChecks", () => {
       0,
     );
     // But a Button carrying numeric toggle state (a custom pressable with
-    // accessibilityValue "1") still speaks "one" — that flags.
+    // accessibilityValue "1") still speaks "one" — that flags, as a warning.
     const v = check([el({ type: "Button", AXLabel: "Paperless notices", AXValue: "1" })]);
     const hit = v.find((x) => x.ruleId === "ios-toggle-raw-value");
     assert.ok(hit);
+    assert.equal(hit.severity, "warn");
     assert.ok(hit.detail.includes('"1"'));
+  });
+
+  it("does not mistake typed text or a slider position for raw toggle state", () => {
+    const toggleHits = (elements) =>
+      check(elements).filter((x) => x.ruleId === "ios-toggle-raw-value").length;
+    // "1" in a text field is what the user typed (number of dependents).
+    assert.equal(toggleHits([el({ type: "TextField", AXLabel: "Dependents", AXValue: "1" })]), 0);
+    assert.equal(toggleHits([el({ type: "SearchField", AXLabel: "Search", AXValue: "0" })]), 0);
+    // A slider at 0 is a position, not a switch.
+    assert.equal(toggleHits([el({ type: "Slider", AXLabel: "Volume", AXValue: 0 })]), 0);
+  });
+
+  it("speaks a CheckBox (UISwitch through mac-AX) as a switch", () => {
+    const [n] = normalizeElements([el({ type: "CheckBox", AXLabel: "Paperless", AXValue: "1" })]);
+    assert.equal(composeUtterance(n), "Paperless, on, switch");
+    // Apple's own 51x31pt UISwitch geometry passes the target-size rule.
+    const v = check([
+      el({ type: "CheckBox", AXLabel: "Paperless", AXValue: "1", frame: { x: 0, y: 0, width: 51, height: 31 } }),
+    ]);
+    assert.equal(v.filter((x) => x.ruleId === "ios-touch-target-small").length, 0);
   });
 
   it("normalizes switch-family numeric state to on/off in the transcript", () => {
@@ -196,5 +217,86 @@ describe("runIosChecks", () => {
       row(140, { AXLabel: "C", type: "StaticText" }),
     ]);
     assert.equal(calm.filter((x) => x.ruleId === "ios-list-row-not-interactive").length, 0);
+  });
+
+  describe("list-row false-positive guards (tuned against the live IRS app)", () => {
+    const row = (y, over = {}) =>
+      el({ frame: { x: 20, y, width: 350, height: 60 }, ...over });
+    const listHits = (elements) =>
+      check(elements).filter((x) => x.ruleId === "ios-list-row-not-interactive");
+
+    it("needs at least three rows to call the column a list", () => {
+      assert.equal(
+        listHits([row(0, { AXLabel: "A" }), row(70, { AXLabel: "B", type: "StaticText" })]).length,
+        0,
+      );
+    });
+
+    it("needs interactive rows to be the majority", () => {
+      // two buttons, two static: a card with two labels and two actions
+      assert.equal(
+        listHits([
+          row(0, { AXLabel: "A" }),
+          row(70, { AXLabel: "B", type: "StaticText" }),
+          row(140, { AXLabel: "C" }),
+          row(210, { AXLabel: "D", type: "StaticText" }),
+        ]).length,
+        0,
+      );
+    });
+
+    it("skips a static element much taller than the rows (an intro paragraph)", () => {
+      assert.equal(
+        listHits([
+          row(0, { AXLabel: "Intro", type: "StaticText", frame: { x: 20, y: 0, width: 350, height: 120 } }),
+          row(130, { AXLabel: "A" }),
+          row(200, { AXLabel: "B" }),
+          row(270, { AXLabel: "C" }),
+        ]).length,
+        0,
+      );
+    });
+
+    it("skips a static element with a long label (prose sharing the column)", () => {
+      // The guard boundary is 90 characters: at 90 a row still flags, at
+      // 91 it reads as prose. Real rows speak "Name. TIN ending in 1234.
+      // Status" and stay well under.
+      const withLabel = (label) =>
+        listHits([
+          row(0, { AXLabel: label, type: "StaticText" }),
+          row(70, { AXLabel: "A" }),
+          row(140, { AXLabel: "B" }),
+          row(210, { AXLabel: "C" }),
+        ]).length;
+      assert.equal(withLabel("x".repeat(90)), 1);
+      assert.equal(withLabel("x".repeat(91)), 0);
+    });
+
+    it("skips a section heading sharing the list's column", () => {
+      const elements = (headingOver) => [
+        row(0, { AXLabel: "Clients", ...headingOver }),
+        row(60, { AXLabel: "Dana", type: "Cell" }),
+        row(120, { AXLabel: "Miguel", type: "Cell" }),
+        row(180, { AXLabel: "Priya", type: "Cell" }),
+      ];
+      assert.equal(listHits(elements({ type: "Heading" })).length, 0);
+      // UIAccessibilityTraitHeader arrives as StaticText + role_description
+      assert.equal(
+        listHits(elements({ type: "StaticText", role_description: "heading" })).length,
+        0,
+      );
+    });
+
+    it("counts a disabled row as interactive — it still announces its trait", () => {
+      const hits = listHits([
+        row(0, { AXLabel: "A" }),
+        row(70, { AXLabel: "B", enabled: false }),
+        row(140, { AXLabel: "C" }),
+        row(210, { AXLabel: "D", type: "StaticText" }),
+      ]);
+      assert.equal(hits.length, 1);
+      assert.ok(hits[0].detail.includes('"D"'));
+      assert.ok(hits[0].detail.includes("3 sibling rows"));
+    });
   });
 });
