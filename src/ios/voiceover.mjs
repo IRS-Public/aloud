@@ -20,11 +20,15 @@ const ROLE_WORDS = {
   SearchField: "search field",
   Switch: "switch",
   Toggle: "switch",
+  // A React Native Switch reaches the mac-AX dump as "CheckBox" (verified
+  // against the IRS app: UISwitch → AXCheckBox translation, so the role
+  // string is "CheckBox" with that capital B — iOS has no checkbox trait
+  // of its own). Real VoiceOver speaks it as a switch.
+  CheckBox: "switch",
   Slider: "adjustable",
   Heading: "heading",
   Tab: "tab",
   RadioButton: "radio button",
-  Checkbox: "checkbox",
 };
 
 export const roleWord = (role) => ROLE_WORDS[role] ?? "";
@@ -54,10 +58,10 @@ export const INTERACTIVE_ROLES = new Set([
   "SearchField",
   "Switch",
   "Toggle",
+  "CheckBox",
   "Slider",
   "Tab",
   "RadioButton",
-  "Checkbox",
   "Cell",
 ]);
 

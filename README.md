@@ -182,6 +182,38 @@ baseline has never seen fails even under the count.
 Full pipeline, rule tables, and known limits:
 [docs/how-it-works.md](docs/how-it-works.md).
 
+## Bugs it has actually found
+
+aloud's transcripts were read against a real IRS-app feature branch after
+the tree checks had passed every screen. Three findings surfaced. Chasing
+each to root cause improved the tool more than the app, which is the
+honest shape of dogfooding:
+
+- **"Paperless notices, 1."** Preference toggles appeared to announce a raw
+  numeric state. Root cause: a UISwitch dumps `AXValue "1"` through the
+  mac-AX bridge, but real VoiceOver speaks "on". The *transcript* was
+  wrong, not the app. Fixed: switch-family numeric state now normalizes to
+  on/off, and RN's Switch (which surfaces as `CheckBox`) is recognized as
+  a switch. A new `ios-toggle-raw-value` warning covers the genuinely
+  broken shape, a non-switch control wearing numeric state, and stays out
+  of text fields and sliders, where a "1" is content.
+- **Roster rows intermittently losing their button trait.** In walk-time
+  dumps, two of six visually identical client rows read as static text; in
+  settled dumps all six carry the trait. The app's code was right. The
+  dump can race the accessibility tree's realization. Fixed at the cause:
+  the walker now re-dumps until two consecutive dumps agree. The new
+  `ios-list-row-not-interactive` warning still flags a static row sitting
+  in a column of interactive siblings, so a real lost trait gets human
+  review instead of a silent pass.
+- **A switch flagged for being 51x31pt.** Adding CheckBox to the
+  interactive set tripped the 44pt target rule on Apple's own UISwitch
+  geometry. Apple's audit passes it; aloud now exempts switch-family
+  roles from the platform-minimum rule.
+
+The meta-lesson is the tool's thesis restated: the dump is not the speech.
+Every one of these was invisible to a static tree check and surfaced only
+by reading what VoiceOver would say.
+
 ## Status and roadmap
 
 Working today, proven in CI:

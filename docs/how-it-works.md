@@ -118,7 +118,19 @@ order) and runs the iOS rules (`src/ios/tree.mjs`):
 | `ios-interactive-unlabeled` | 4.1.2 | error |
 | `ios-image-unlabeled` | 4.1.2 | error |
 | `ios-touch-target-small` (44pt Apple bar) | 2.5.8 | error |
+| `ios-toggle-raw-value` (non-switch control speaking "1"/"0") | 4.1.2 | warn (report-only) |
+| `ios-list-row-not-interactive` (static row among interactive siblings) | 4.1.2 | warn (report-only) |
 | `ios-duplicate-speakable` | 4.1.2 | warn (report-only) |
+
+Errors count toward the gate; warns appear in the report only. Switch-family
+roles (`Switch`, `Toggle`, and `CheckBox`, which is how a UISwitch reaches
+the mac-AX dump) speak numeric state as on/off and are exempt from the
+44pt rule: Apple's own UISwitch is 51x31pt and Apple's audit passes it.
+
+Each dump is taken twice or more: the walker re-dumps every half second
+until two consecutive dumps agree (up to six), because a dump can race the
+accessibility tree's realization and drop traits from rows that are still
+settling.
 
 The transcript is labeled `computed-voiceover` in every report. It is never
 passed off as real speech. Real VoiceOver capture through Xcode 27's

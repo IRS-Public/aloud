@@ -40,6 +40,12 @@ binary is what brew shipped anyway. The Python client is `pip install
 fb-idb`, on Python 3.11 (its grpclib/protobuf pins are unproven on newer
 Pythons).
 
+A dump can also race the tree's realization: on the IRS app, a walk-time
+dump showed two of six list rows without their button trait while a
+later dump showed all six with it. `src/ios/walk.mjs` therefore re-dumps
+every half second until two consecutive dumps agree (up to six), and says
+so in the log when a screen never settles.
+
 One preflight the runner scripts do for you: idb tree reads come back
 empty unless the simulator's app-accessibility flag is on. `src/ios/run.sh`
 writes `com.apple.Accessibility ApplicationAccessibilityEnabled` before
