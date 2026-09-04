@@ -53,7 +53,7 @@ aloud does not know your app. You tell it how to reach each screen with
   open right now. One screen per run; `--screen-id` names the report key
   (default `current`).
 - **deeplinks**. You provide a screens manifest (`--screens`, see
-  `examples/screens.example.json`). Each screen has a `url` and aloud opens
+  `examples/screens-deeplinks.example.json`). Each screen has a `url` and aloud opens
   it with a deep link. Works on release builds.
 - **bridge**. For apps with a dev navigation hook. The walker evaluates
   small expressions in the app's JS runtime through the dev server (the
