@@ -5,6 +5,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
+import { validateScreenId } from "./screen-id.mjs";
 
 export const NAV_MODES = ["current-screen", "deeplinks", "bridge"];
 
@@ -79,6 +80,9 @@ function deepMerge(base, extra) {
 export function validateConfig(cfg) {
   if (!NAV_MODES.includes(cfg.nav.mode)) {
     throw new Error(`unknown nav.mode "${cfg.nav.mode}" (use ${NAV_MODES.join(" | ")})`);
+  }
+  if (cfg.nav.screenId !== undefined) {
+    validateScreenId(cfg.nav.screenId, "nav.screenId");
   }
   if ((cfg.nav.mode === "deeplinks" || cfg.nav.mode === "bridge") && !cfg.nav.screens) {
     throw new Error(`nav.mode "${cfg.nav.mode}" needs nav.screens (path to the screens manifest)`);

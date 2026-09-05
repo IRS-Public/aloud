@@ -3,6 +3,8 @@
 // mode from the resolved config (nav.mode) and never import a mode module
 // directly.
 
+import { validateScreenId } from "../screen-id.mjs";
+
 const MODES = ["current-screen", "deeplinks", "bridge"];
 
 export async function loadNavigator(mode = "current-screen") {
@@ -29,9 +31,13 @@ export function flattenManifest(manifest, flowFilter = []) {
   }
   const seen = new Set();
   for (const screen of screens) {
-    if (!screen.id) throw new Error("every screen in the manifest needs an id");
-    if (seen.has(screen.id)) throw new Error(`duplicate screen id "${screen.id}" in the manifest`);
-    seen.add(screen.id);
+    validateScreenId(screen?.id, "manifest screen id");
+    // Reports also run on filesystems that treat letter case as equivalent.
+    const fileKey = screen.id.toLowerCase();
+    if (seen.has(fileKey)) {
+      throw new Error(`duplicate screen id "${screen.id}" in the manifest (IDs must be unique ignoring letter case)`);
+    }
+    seen.add(fileKey);
   }
   return screens;
 }

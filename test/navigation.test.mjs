@@ -76,5 +76,7 @@ describe("screen IDs", () => {
     ];
     assert.throws(() => flattenManifest(flows), /duplicate screen id "home"/);
     assert.deepEqual(flattenManifest(flows, ["first"]), [{ id: "home" }]);
+    flows[0].screens[0].id = "Home";
+    assert.throws(() => flattenManifest(flows), /duplicate screen id "home"/);
   });
 });
