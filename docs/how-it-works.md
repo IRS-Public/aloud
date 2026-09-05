@@ -51,7 +51,10 @@ aloud does not know your app. You tell it how to reach each screen with
 
 - **current-screen** (default). Zero setup. aloud audits whatever screen is
   open right now. One screen per run; `--screen-id` names the report key
-  (default `current`).
+  (default `current`). Open the target screen before running the audit;
+  aloud preserves the running app and its current light/dark appearance.
+  On Android, capture begins before TalkBack is enabled so the initial
+  focus announcement is included in the transcript.
 - **deeplinks**. You provide a screens manifest (`--screens`, see
   `examples/screens-deeplinks.example.json`). Each screen has a `url` and aloud opens
   it with a deep link. Works on release builds.
