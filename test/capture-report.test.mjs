@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-function report(t, checked, unchecked, gate = true) {
+function report(t, checked, unchecked, gate = true, checkedGate = { errors: 0, ruleIds: [] }) {
   const out = mkdtempSync(join(tmpdir(), "aloud-capture-report-"));
   t.after(() => rmSync(out, { recursive: true, force: true }));
   const baseline = {};
@@ -20,7 +20,7 @@ function report(t, checked, unchecked, gate = true) {
   }
   for (const id of checked) {
     writeFileSync(join(out, `${id}.tree.json`), JSON.stringify({
-      screen: id, violations: [], gate: baseline[id],
+      screen: id, violations: [], gate: checkedGate,
     }));
   }
   const baselinePath = join(out, "baseline.json");
@@ -53,5 +53,12 @@ describe("report gate requires completed tree checks", () => {
     const res = report(t, ["checked"], []);
     assert.equal(res.status, 0, res.stderr);
     assert.match(res.stdout, /508 gate passed/);
+  });
+
+  it("rejects a gate with no measured error count", (t) => {
+    const res = report(t, ["checked"], [], true, { errors: null, ruleIds: [] });
+    assert.equal(res.status, 1, res.stdout + res.stderr);
+    assert.match(res.stderr, /checked: .*tree checks/i);
+    assert.doesNotMatch(res.stdout, /508 gate passed/);
   });
 });

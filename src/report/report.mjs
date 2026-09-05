@@ -113,7 +113,11 @@ if (GATE) {
   const failures = [];
   for (const id of ids) {
     const gate = screens[id].gate;
-    if (!gate) continue; // transcript-only run
+    if (!gate || !Number.isSafeInteger(gate.errors) || gate.errors < 0 ||
+        !Array.isArray(gate.ruleIds) || !gate.ruleIds.every((rule) => typeof rule === "string")) {
+      failures.push(`${id}: no completed tree checks — run the tree pass before gating, or use --no-gate for capture-only evidence`);
+      continue;
+    }
     const base = baseline[id];
     if (!base) {
       failures.push(
