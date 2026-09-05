@@ -290,7 +290,7 @@ describe("OpenACR evidence coverage", () => {
       const adherence = findCriterion(acr, num);
       assert.equal(adherence.level, "not-evaluated", num);
       assert.match(adherence.notes, /no violations on 1 Android screens/);
-      assert.match(adherence.notes, /missing tree checks.*1 Android screens/);
+      assert.match(adherence.notes, /missing tree checks.*1 Android screens/i);
     }
   });
 
@@ -306,7 +306,7 @@ describe("OpenACR evidence coverage", () => {
     assert.equal(adherence.level, "partially-supports");
     assert.match(adherence.notes, /violations on 1 of 1 Android screens/);
     assert.match(adherence.notes, /Android home: native-interactive-unlabeled/);
-    assert.match(adherence.notes, /missing tree checks.*1 Android screens/);
+    assert.match(adherence.notes, /missing tree checks.*1 Android screens/i);
     assert.equal(findCriterion(acr, "1.1.1").level, "not-evaluated");
   });
 
@@ -332,6 +332,13 @@ describe("OpenACR evidence coverage", () => {
     assert.doesNotMatch(notes, /3 Android screens.*captured speech/);
     assert.doesNotMatch(acr.evaluation_methods_used, /transcripts captured per screen/);
     assert.doesNotMatch(findCriterion(acr, "2.5.5").notes, /on every audited screen/);
+  });
+
+  it("identifies iOS transcript entries as computed output", () => {
+    const acr = build({ android: null, ios: summary({ home: { ...completed, utterances: 2 } }) });
+    const notes = findCriterion(acr, "302.1").notes;
+    assert.match(notes, /1 iOS screens.*computed utterances/);
+    assert.doesNotMatch(notes, /captured speech/);
   });
 
   it("rejects missing or empty audit inputs, even beside a populated platform", () => {
