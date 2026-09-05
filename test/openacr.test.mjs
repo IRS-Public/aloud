@@ -6,9 +6,11 @@
  * fixture baselines and small inline fixtures stand in for audit runs.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { load } from "js-yaml";
@@ -181,7 +183,7 @@ describe("buildAcr on the fixture baselines", () => {
     assert.ok(adherence.notes.includes("human review"));
   });
 
-  it("records the screen-reader transcript coverage with computed counts", () => {
+  it("distinguishes baseline screen counts from unverified transcript coverage", () => {
     const androidCount = Object.keys(android.screens).length;
     const iosCount = Object.keys(ios.screens).length;
     assert.ok(acr.notes.includes(`${androidCount} on Android`));
@@ -193,9 +195,10 @@ describe("buildAcr on the fixture baselines", () => {
     assert.ok(fpc.notes.includes(`${iosCount} iOS screens`));
     assert.ok(fpc.notes.includes("TalkBack"));
     assert.ok(fpc.notes.includes("VoiceOver"));
+    assert.match(fpc.notes, /transcript coverage.*unavailable/i);
   });
 
-  it("scales the transcript counts with the input, never a fixed count", () => {
+  it("scales the baseline coverage counts with the input, never a fixed count", () => {
     const two = normalizeAudit({
       home: { errors: 0, ruleIds: [] },
       "pay-tab": { errors: 0, ruleIds: [] },
@@ -236,5 +239,169 @@ describe("buildAcr on a failing fixture", () => {
   it("still validates against schema and catalog", () => {
     assert.equal(validateOpenACR(acr, "openacr-0.1.0.json").result, true);
     assert.equal(validateOpenACRCatalogValues(acr, catalog).result, true);
+  });
+});
+
+
+describe("OpenACR evidence coverage", () => {
+  const summary = (screens) => normalizeAudit({ generated: "2026-09-05T00:00:00.000Z", screens });
+  const completed = { errors: 0, ruleIds: [], utterances: null };
+  const transcriptOnly = { errors: null, ruleIds: [], utterances: 2 };
+
+  it("does not pass any tree criterion after a transcript-only run", () => {
+    const acr = build({ android: summary({ home: transcriptOnly }), ios: null });
+    for (const num of Object.keys(AUTOMATED_CRITERIA)) {
+      const adherence = findCriterion(acr, num);
+      assert.equal(adherence.level, "not-evaluated", num);
+      assert.match(adherence.notes, /no completed tree checks/i);
+    }
+    assert.doesNotMatch(acr.notes, /tree checks.*run on every audited screen/);
+    assert.match(findCriterion(acr, "302.1").notes, /1 Android screens.*captured speech/);
+    assert.equal(validateOpenACR(acr, "openacr-0.1.0.json").result, true);
+    assert.equal(validateOpenACRCatalogValues(acr, catalog).result, true);
+  });
+
+  it("leaves the Android-only criterion unevaluated for iOS-only audits", () => {
+    const acr = build({ android: null, ios: summary({ home: completed }) });
+    const adherence = findCriterion(acr, "1.3.1");
+    assert.equal(adherence.level, "not-evaluated");
+    assert.match(adherence.notes, /no applicable.*checks/i);
+    assert.equal(findCriterion(acr, "4.1.2").level, "supports");
+  });
+
+  it("counts only applicable platforms as checked for a criterion", () => {
+    const acr = build({
+      android: summary({ home: completed }),
+      ios: summary({ home: completed, settings: completed }),
+    });
+    const adherence = findCriterion(acr, "1.3.1");
+    assert.equal(adherence.level, "supports");
+    assert.match(adherence.notes, /no violations on 1 Android screens/);
+    assert.doesNotMatch(adherence.notes, /no violations on .*iOS screens/);
+    assert.match(adherence.notes, /no applicable.*iOS/i);
+  });
+
+  it("withholds a clean verdict when applicable screens lack tree checks", () => {
+    const acr = build({
+      android: summary({ home: completed, payment: transcriptOnly }),
+      ios: null,
+    });
+    for (const num of Object.keys(AUTOMATED_CRITERIA)) {
+      const adherence = findCriterion(acr, num);
+      assert.equal(adherence.level, "not-evaluated", num);
+      assert.match(adherence.notes, /no violations on 1 Android screens/);
+      assert.match(adherence.notes, /missing tree checks.*1 Android screens/);
+    }
+  });
+
+  it("does not hide known failures when other screens are incomplete", () => {
+    const acr = build({
+      android: summary({
+        home: { errors: 1, ruleIds: ["native-interactive-unlabeled"], utterances: null },
+        payment: transcriptOnly,
+      }),
+      ios: null,
+    });
+    const adherence = findCriterion(acr, "4.1.2");
+    assert.equal(adherence.level, "partially-supports");
+    assert.match(adherence.notes, /violations on 1 of 1 Android screens/);
+    assert.match(adherence.notes, /Android home: native-interactive-unlabeled/);
+    assert.match(adherence.notes, /missing tree checks.*1 Android screens/);
+    assert.equal(findCriterion(acr, "1.1.1").level, "not-evaluated");
+  });
+
+  it("does not let a clean platform mask an incomplete applicable platform", () => {
+    const acr = build({ android: summary({ home: completed }), ios: summary({ home: transcriptOnly }) });
+    assert.equal(findCriterion(acr, "4.1.2").level, "not-evaluated");
+    assert.equal(findCriterion(acr, "1.3.1").level, "supports");
+  });
+
+  it("counts captured speech separately from absent or empty transcripts", () => {
+    const acr = build({
+      android: summary({
+        spoken: { ...completed, utterances: 2 },
+        silent: { ...completed, utterances: 0 },
+        treeOnly: completed,
+      }),
+      ios: null,
+    });
+    const notes = findCriterion(acr, "302.1").notes;
+    assert.match(notes, /1 Android screens.*captured speech/);
+    assert.match(notes, /1 Android screens.*no captured speech/);
+    assert.match(notes, /transcript coverage.*unavailable.*1 Android screens/i);
+    assert.doesNotMatch(notes, /3 Android screens.*captured speech/);
+    assert.doesNotMatch(acr.evaluation_methods_used, /transcripts captured per screen/);
+    assert.doesNotMatch(findCriterion(acr, "2.5.5").notes, /on every audited screen/);
+  });
+
+  it("rejects missing or empty audit inputs, even beside a populated platform", () => {
+    assert.throws(() => build({ android: null, ios: null }), /no audit input/i);
+    for (const input of [{}, { screens: {} }]) {
+      assert.throws(() => build({ android: normalizeAudit(input), ios: null }), /no screens/i);
+      assert.throws(() => build({ android: normalizeAudit(input) }), /no screens/i);
+    }
+  });
+
+  it("rejects malformed evidence instead of interpreting it as a pass", () => {
+    const badScreens = [
+      null,
+      [],
+      {},
+      { errors: -1, ruleIds: [] },
+      { errors: 0.5, ruleIds: [] },
+      { errors: "0", ruleIds: [] },
+      { errors: 0 },
+      { errors: 0, ruleIds: "native-interactive-unlabeled" },
+      { errors: 1, ruleIds: [] },
+      { errors: 0, ruleIds: ["native-interactive-unlabeled"] },
+      { errors: null, ruleIds: ["native-interactive-unlabeled"] },
+      { errors: 1, ruleIds: ["native-interactive-unlabeled", "native-edittext-unlabeled"] },
+      { errors: 1, ruleIds: [1] },
+      { errors: 0, ruleIds: [], utterances: -1 },
+    ];
+    for (const screen of badScreens) {
+      assert.throws(
+        () => build({ android: summary({ broken: screen }), ios: null }),
+        /invalid audit.*broken/i,
+        JSON.stringify(screen),
+      );
+    }
+    for (const input of [null, [], "invalid", { screens: null }, { screens: [] }]) {
+      assert.throws(() => build({ android: normalizeAudit(input), ios: null }), /invalid audit/i);
+    }
+  });
+
+  it("rejects known rule IDs filed under the wrong platform", () => {
+    assert.throws(
+      () => build({ android: summary({ home: { errors: 1, ruleIds: ["ios-interactive-unlabeled"] } }) }),
+      /ios-interactive-unlabeled.*Android/,
+    );
+  });
+});
+
+describe("OpenACR CLI evidence validation", () => {
+  it("fails on a malformed configured baseline instead of silently dropping the platform", () => {
+    const dir = mkdtempSync(join(tmpdir(), "aloud-openacr-invalid-"));
+    try {
+      const androidPath = join(dir, "android.json");
+      const iosPath = join(dir, "ios.json");
+      const configPath = join(dir, "config.json");
+      const outputPath = join(dir, "draft.yaml");
+      writeFileSync(androidPath, JSON.stringify({ home: { errors: 0, ruleIds: [] } }));
+      writeFileSync(iosPath, '{"home":');
+      writeFileSync(configPath, JSON.stringify({
+        app: { name: "Fixture app", version: "1.0.0" },
+        baseline: { android: androidPath, ios: iosPath },
+        openacr: { out: outputPath },
+      }));
+      const result = spawnSync(process.execPath, [join(HERE, "../src/report/openacr.mjs")], {
+        encoding: "utf8",
+        env: { ...process.env, ALOUD_CONFIG: configPath },
+      });
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /JSON|invalid audit/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
