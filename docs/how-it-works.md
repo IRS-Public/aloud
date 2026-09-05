@@ -54,7 +54,10 @@ aloud does not know your app. You tell it how to reach each screen with
   (default `current`). Open the target screen before running the audit;
   aloud preserves the running app and its current light/dark appearance.
   On Android, capture begins before TalkBack is enabled so the initial
-  focus announcement is included in the transcript.
+  focus announcement is included in the transcript. If this run installs a
+  build (`--apk`, `--app`, or a configured build path), aloud opens that
+  build first and audits its opening screen. Omit build paths when auditing
+  a screen you have navigated to manually.
 - **deeplinks**. You provide a screens manifest (`--screens`, see
   `examples/screens-deeplinks.example.json`). Each screen has a `url` and aloud opens
   it with a deep link. Works on release builds.

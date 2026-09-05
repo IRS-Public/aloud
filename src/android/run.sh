@@ -77,6 +77,13 @@ echo "── device ──"
 if [ -n "$APK" ]; then
   echo "── install $APK ──"
   "$ADB" install -r "$APK"
+  if [ "$NAV_MODE" = "current-screen" ]; then
+    # An explicitly installed build needs opening before current-screen can
+    # capture it. Runs without installation preserve the user's navigation.
+    APP_PACKAGE="$(cfg 'c.app?.android?.package')"
+    APP_ACTIVITY="$(cfg 'c.app?.android?.activity')"
+    "$ADB" shell am start -n "$APP_PACKAGE/${APP_ACTIVITY:-.MainActivity}"
+  fi
 fi
 
 APP_SERVER_PID=""
