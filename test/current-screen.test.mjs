@@ -30,7 +30,7 @@ if (command === 'xcrun') {
   else if (a[0] === 'ui' && a.length === 3) out('dark');
   else if (a[0] === 'io') fs.writeFileSync(a[3], 'image');
 } else if (command === 'idb') {
-  out(JSON.stringify([{ AXLabel: 'Checkout', AXRole: 'AXButton', AXFrame: '{{0, 0}, {100, 50}}' }]));
+  out(JSON.stringify([{ AXLabel: 'Checkout', type: 'Button', AXFrame: '{{0, 0}, {100, 50}}' }]));
 } else if (command === 'adb') {
   if (args[0] === 'logcat') {
     if (args.includes('-c')) fs.writeFileSync(process.env.MOCK_LOGCAT, '');
@@ -119,4 +119,36 @@ test("Android current-screen brackets TalkBack startup speech without changing t
   const end = calls.findIndex(c => c.at(-1) === "screen-end:current");
   assert.ok(clear >= 0 && clear < start && start < enable && enable < end, "capture must start before TalkBack speaks");
   assert.equal(calls.filter(c => c[2] === "settings" && c[3] === "put" && c[5] === "accessibility_enabled" && c[6] === "1").length, 1, "enable TalkBack once");
+});
+
+
+test("iOS current-screen launches an explicitly installed build before capture", (t) => {
+  const r = rig(t);
+  const app = join(r.dir, "Example.app");
+  const result = spawnSync("bash", [join(ROOT, "src/ios/run.sh"), "--app", app, "--no-gate"], {
+    env: r.env, encoding: "utf8", timeout: 25000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = r.calls();
+  const install = calls.findIndex(c => c[2] === "install" && c.at(-1) === app);
+  const launch = calls.findIndex(c => c[2] === "launch" && c.at(-1) === "com.example.app");
+  const capture = calls.findIndex(c => c[0] === "idb");
+  assert.ok(install >= 0 && install < launch && launch < capture, "the installed app must open before capture");
+  assert.equal(calls.filter(c => c[2] === "launch").length, 1);
+  assert.ok(!calls.some(c => c[2] === "terminate"));
+});
+
+test("Android current-screen launches an explicitly installed APK before speech capture", (t) => {
+  const r = rig(t);
+  const apk = join(r.dir, "example.apk");
+  const result = spawnSync("bash", [join(ROOT, "src/android/run.sh"), "--apk", apk, "--pass", "transcript", "--no-gate"], {
+    env: r.env, encoding: "utf8", timeout: 30000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = r.calls();
+  const install = calls.findIndex(c => c[0] === "adb" && c[1] === "install" && c.at(-1) === apk);
+  const launch = calls.findIndex(c => c[2] === "am" && c[3] === "start" && c.at(-1) === "com.example.app/.MainActivity");
+  const capture = calls.findIndex(c => c.at(-1) === "screen-start:current");
+  assert.ok(install >= 0 && install < launch && launch < capture, "the installed app must open before capture");
+  assert.deepEqual(JSON.parse(readFileSync(join(r.out, "android", "current.transcript.json"), "utf8")).transcript, ["Checkout"]);
 });
