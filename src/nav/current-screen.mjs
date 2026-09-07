@@ -2,8 +2,11 @@
 // now. It ignores the screens manifest and reports one synthetic screen.
 // Works on any app with no dev bridge and no deep links.
 
+import { validateScreenId } from "../screen-id.mjs";
+
 export async function createNavigator(ctx) {
-  const id = ctx.config?.nav?.screenId || "current";
+  const configuredId = ctx.config?.nav?.screenId;
+  const id = validateScreenId(configuredId === undefined ? "current" : configuredId, "nav.screenId");
   return {
     name: "current-screen",
     screens: [{ id, title: "Current screen" }],

@@ -64,6 +64,16 @@ aloud does not know your app. You tell it how to reach each screen with
 A manifest groups screens into flows. `--flow a,b` walks a subset. Screens
 can set `settleMs` (extra wait) and `dark: true` (dark mode).
 
+Screen IDs must be non-empty strings containing only ASCII letters, digits,
+underscores, and hyphens (for example, `account-orders` or `home_dark`). The
+same format applies to `--screen-id` and `nav.screenId`. Dots, spaces, and
+path separators are rejected. `_between` and names inherited from
+`Object.prototype`, such as `constructor`, `toString`, and `__proto__`, are
+reserved. IDs preserve their case and identify report files, transcript
+markers, and baseline entries. They must be unique across selected flows
+even when ignoring letter case: `Home` and `home` would overwrite the same
+report on a filesystem that ignores case.
+
 ## The Android leg
 
 Two passes, because they cannot share a device session: `uiautomator dump`
