@@ -75,6 +75,11 @@ fi
 if [ -n "$APP" ]; then
   echo "── install $APP ──"
   xcrun simctl install booted "$APP"
+  if [ "$NAV_MODE" = "current-screen" ]; then
+    # Launch only when this run explicitly installed a build. Otherwise the
+    # walker must keep the screen the user already selected.
+    xcrun simctl launch booted "$(cfgget 'c.app?.ios?.bundleId')"
+  fi
 fi
 
 # idb reads come back EMPTY unless the simulator's app-accessibility flag is

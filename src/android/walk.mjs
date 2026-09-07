@@ -20,8 +20,10 @@
 // the host, so it is platform-blind; only the device shell-outs differ
 // (adb here, simctl on iOS).
 
+import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadNavigator } from "../nav/index.mjs";
 import {
   getDensityDpi,
@@ -126,7 +128,7 @@ async function walk() {
 
   const walked = [];
   for (const screen of nav.screens) {
-    setAppearance(!!screen.dark);
+    if (NAV_MODE !== "current-screen") setAppearance(!!screen.dark);
     // The start marker must land between the adapter's tab hop and its final
     // navigation, so the hop's speech stays OUTSIDE the marker pair — the
     // adapter calls onBeforeFinalNav at exactly that point.
@@ -135,6 +137,14 @@ async function walk() {
         ? { onBeforeFinalNav: () => logMarker(`screen-start:${screen.id}`) }
         : {};
     await nav.goto(screen, hooks);
+    if (PASS === "transcript" && NAV_MODE === "current-screen") {
+      // A settled screen has no navigation event to make TalkBack speak.
+      // Enable it inside the marker pair so its initial focus announcement
+      // is captured without restarting the app or changing the screen.
+      execFileSync(process.execPath, [fileURLToPath(new URL("./talkback.mjs", import.meta.url)), "enable"], {
+        stdio: "inherit",
+      });
+    }
     // The bridge adapter sleeps internally (settle + eval timing is part of
     // the proven loop); for the other modes the walker owns the settle.
     if (NAV_MODE !== "bridge") await sleep(screen.settleMs ?? 2500);

@@ -77,6 +77,13 @@ echo "── device ──"
 if [ -n "$APK" ]; then
   echo "── install $APK ──"
   "$ADB" install -r "$APK"
+  if [ "$NAV_MODE" = "current-screen" ]; then
+    # An explicitly installed build needs opening before current-screen can
+    # capture it. Runs without installation preserve the user's navigation.
+    APP_PACKAGE="$(cfg 'c.app?.android?.package')"
+    APP_ACTIVITY="$(cfg 'c.app?.android?.activity')"
+    "$ADB" shell am start -n "$APP_PACKAGE/${APP_ACTIVITY:-.MainActivity}"
+  fi
 fi
 
 APP_SERVER_PID=""
@@ -115,7 +122,11 @@ for PASS in $PASSES; do
   # set -u is fatal on macOS /bin/bash 3.2 (fixed only in bash 4.4).
   if [ "$PASS" = "transcript" ]; then
     echo "── transcript pass (TalkBack on) ──"
-    node "$ALOUD_HOME/src/android/talkback.mjs" enable
+    # current-screen enables TalkBack inside its capture markers so the
+    # initial announcement is retained. Other modes announce on navigation.
+    if [ "$NAV_MODE" != "current-screen" ]; then
+      node "$ALOUD_HOME/src/android/talkback.mjs" enable
+    fi
     node "$ALOUD_HOME/src/android/walk.mjs" --pass transcript --port "$PORT" ${FLOW_ARGS[@]+"${FLOW_ARGS[@]}"}
     node "$ALOUD_HOME/src/android/talkback.mjs" disable
   else

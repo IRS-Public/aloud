@@ -74,13 +74,16 @@ const SHOTS_DIR = join(OUT, "shots");
 async function walk() {
   mkdirSync(SHOTS_DIR, { recursive: true });
   const udid = bootedUdid();
-  // Cold start for deterministic screens (same rationale as Android).
-  try {
-    simctl("terminate", udid, BUNDLE_ID);
-  } catch {
-    // not running — fine
+  // Navigators that can reconstruct a screen start clean. current-screen
+  // must preserve the app state the user selected before running the audit.
+  if (NAV_MODE !== "current-screen") {
+    try {
+      simctl("terminate", udid, BUNDLE_ID);
+    } catch {
+      // not running — fine
+    }
+    simctl("launch", udid, BUNDLE_ID);
   }
-  simctl("launch", udid, BUNDLE_ID);
 
   // The screens manifest (screens.json). current-screen mode has none.
   const manifest =
@@ -113,7 +116,7 @@ async function walk() {
   };
 
   for (const screen of nav.screens) {
-    setAppearance(!!screen.dark);
+    if (NAV_MODE !== "current-screen") setAppearance(!!screen.dark);
     // Bridge mode sleeps internally (persona/hop/eval timing is proven and
     // owned by the adapter); other modes settle here.
     await nav.goto(screen);
