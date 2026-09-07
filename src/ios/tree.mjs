@@ -29,8 +29,13 @@ const VALUE_BEARING_ROLES = new Set(["TextField", "SecureTextField", "SearchFiel
 
 export function normalizeElements(dump) {
   const list = Array.isArray(dump) ? dump : JSON.parse(dump);
+  if (!Array.isArray(list)) throw new Error("invalid idb dump: expected an array of elements");
   return list.map((e) => {
+    if (!e || typeof e !== "object" || Array.isArray(e)) {
+      throw new Error("invalid idb dump: expected element objects");
+    }
     const role = e.type ?? e.role ?? "";
+    if (typeof role !== "string") throw new Error("invalid idb dump: element role must be a string");
     return {
       label: nullish(e.AXLabel),
       value: normValue(e.AXValue, role),
@@ -66,12 +71,28 @@ function normFrame(f) {
   if (!f) return null;
   if (typeof f === "object") {
     const { x, y, width, height } = f;
-    if ([x, y, width, height].some((n) => typeof n !== "number")) return null;
+    if (![x, y, width, height].every(Number.isFinite)) return null;
     return { x, y, w: width, h: height };
   }
   // AXFrame string form: "{{x, y}, {w, h}}"
   const m = String(f).match(/\{\{(-?[\d.]+),\s*(-?[\d.]+)\},\s*\{(-?[\d.]+),\s*(-?[\d.]+)\}\}/);
-  return m ? { x: +m[1], y: +m[2], w: +m[3], h: +m[4] } : null;
+  return m && m.slice(1).map(Number).every(Number.isFinite)
+    ? { x: +m[1], y: +m[2], w: +m[3], h: +m[4] }
+    : null;
+}
+
+// A labeled application/window root alone does not establish that the
+// screen's accessibility content was captured. Unlabeled controls/images
+// remain usable evidence: the checks must still report their missing names.
+export function validateIosCapture(elements) {
+  const containers = new Set(["Application", "Window", "SystemWide"]);
+  const usable = elements.some((el) =>
+    el.role.trim() && !containers.has(el.role) && el.frame && el.frame.w > 0 && el.frame.h > 0 &&
+    (isFocusable(el) || el.role === "Image"),
+  );
+  if (!usable) {
+    throw new Error("no visible accessibility content; check app rendering and simulator accessibility settings");
+  }
 }
 
 // Headings arrive either as the Heading role or as a StaticText whose

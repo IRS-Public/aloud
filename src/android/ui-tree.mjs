@@ -11,25 +11,35 @@
 // uiautomator XML is flat-attribute <node> elements, nested or self-closing.
 // A tiny stack parser is enough; no XML library needed for this format.
 export function parseUiDump(xml) {
+  // Reject partial dumps and command diagnostics rather than extracting a
+  // plausible node from arbitrary text. uiautomator emits one hierarchy
+  // containing only nested/self-closing nodes, with quoted attributes.
+  const document = String(xml).trim().replace(/^<\?xml\s[^?]*\?>\s*/, "");
+  const hierarchy = document.match(/^<hierarchy\b([^<>]*)>([\s\S]*)<\/hierarchy\s*>$/);
+  if (!hierarchy) throw new Error("invalid uiautomator dump: expected a complete hierarchy");
+  parseAttributes(hierarchy[1]);
+  const body = hierarchy[2];
   const nodes = [];
   const stack = [];
-  const tagRe = /<node\b([^>]*?)(\/?)>|<\/node>/g;
-  const attrRe = /([\w-]+)="([^"]*)"/g;
+  const tagRe = /<node\b((?:[^"'<>]|"[^"<]*"|'[^'<]*')*?)(\/?)>|<\/node\s*>/y;
+  const whitespace = /\s*/y;
+  let offset = 0;
   let m;
-  while ((m = tagRe.exec(xml))) {
-    if (m[0] === "</node>") {
+  while (offset < body.length) {
+    whitespace.lastIndex = offset;
+    whitespace.exec(body);
+    offset = whitespace.lastIndex;
+    if (offset === body.length) break;
+    tagRe.lastIndex = offset;
+    m = tagRe.exec(body);
+    if (!m) throw new Error("invalid uiautomator dump: malformed node XML");
+    offset = tagRe.lastIndex;
+    if (m[0].startsWith("</node")) {
+      if (!stack.length) throw new Error("invalid uiautomator dump: unmatched closing node");
       stack.pop();
       continue;
     }
-    const attrs = {};
-    let a;
-    while ((a = attrRe.exec(m[1])))
-      attrs[a[1]] = a[2]
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/&apos;/g, "'");
+    const attrs = parseAttributes(m[1]);
     const node = {
       ...attrs,
       bounds: parseBounds(attrs.bounds),
@@ -40,13 +50,36 @@ export function parseUiDump(xml) {
     nodes.push(node);
     if (m[2] !== "/") stack.push(node);
   }
+  if (stack.length) throw new Error("invalid uiautomator dump: unclosed node");
   return nodes;
 }
 
+function parseAttributes(text) {
+  const attrs = {};
+  const attrRe = /\s+([\w-]+)\s*=\s*(?:"([^"<]*)"|'([^'<]*)')/y;
+  let offset = 0;
+  while (text.slice(offset).trim()) {
+    attrRe.lastIndex = offset;
+    const m = attrRe.exec(text);
+    if (!m || Object.hasOwn(attrs, m[1])) {
+      throw new Error("invalid uiautomator dump: malformed or duplicate attribute");
+    }
+    attrs[m[1]] = (m[2] ?? m[3])
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, "&");
+    offset = attrRe.lastIndex;
+  }
+  return attrs;
+}
+
 function parseBounds(s) {
-  const m = s && s.match(/\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]/);
+  const m = s && s.match(/^\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]$/);
   if (!m) return null;
   const [x1, y1, x2, y2] = m.slice(1).map(Number);
+  if (![x1, y1, x2, y2].every(Number.isFinite)) return null;
   return { x1, y1, x2, y2, w: x2 - x1, h: y2 - y1 };
 }
 
@@ -82,6 +115,22 @@ const clippedByScroll = (n) => {
 };
 const speakableSelf = (n) => Boolean((n.text || "").trim() || (n["content-desc"] || "").trim());
 const speakableDeep = (n) => speakableSelf(n) || n.children.some(speakableDeep);
+
+// Finding no violations only means something after capturing app content.
+// A layout root, system dialog, or launcher is not evidence about the app.
+// Unlabeled controls DO count: those are evidence the rules should flag.
+export function validateUiCapture(nodes, appPackage) {
+  const app = nodes.filter((n) => n.package === appPackage);
+  if (!app.length) throw new Error(`no nodes from target app ${appPackage}; check the foreground app`);
+  const usable = app.some((n) =>
+    n.class?.trim() && n.bounds && n.bounds.w > 0 && n.bounds.h > 0 &&
+    (speakableSelf(n) || ["focusable", "clickable", "long-clickable", "checkable"].some((key) => truthy(n[key]))),
+  );
+  if (!usable) {
+    throw new Error(`no visible accessibility content from target app ${appPackage}; check that the screen has rendered`);
+  }
+}
+
 const describe = (n) =>
   `${(n.class || "?").replace(/^android\.widget\./, "")}` +
   `${n["resource-id"] ? ` id=${n["resource-id"]}` : ""}` +

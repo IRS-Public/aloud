@@ -18,7 +18,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadNavigator } from "../nav/index.mjs";
-import { computeTranscript, normalizeElements, runIosChecks } from "./tree.mjs";
+import { computeTranscript, normalizeElements, runIosChecks, validateIosCapture } from "./tree.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -122,7 +122,7 @@ async function walk() {
     await nav.goto(screen);
     if (NAV_MODE !== "bridge") await sleep(screen.settleMs ?? 2500);
 
-    const elements = normalizeElements(parseIdbOutput(await settledDump(udid)));
+    const elements = await settledElements(udid, screen.id);
     const transcript = computeTranscript(elements);
     const violations = runIosChecks(elements);
     const errors = violations.filter((v) => v.severity === "error");
@@ -167,16 +167,32 @@ const describeAll = (udid) => sh("idb", ["ui", "describe-all", "--udid", udid]);
 // settles, and the last dump is still the best evidence we have).
 const SETTLE_TRIES = 6;
 const SETTLE_INTERVAL_MS = 500;
-async function settledDump(udid) {
-  let prev = describeAll(udid);
-  for (let i = 1; i < SETTLE_TRIES; i++) {
-    await sleep(SETTLE_INTERVAL_MS);
-    const next = describeAll(udid);
-    if (next === prev) return next;
-    prev = next;
+async function settledElements(udid, screenId) {
+  let prev;
+  let elements;
+  let lastError;
+  for (let i = 0; i < SETTLE_TRIES; i++) {
+    if (i) await sleep(SETTLE_INTERVAL_MS);
+    try {
+      const next = describeAll(udid);
+      elements = normalizeElements(parseIdbOutput(next));
+      validateIosCapture(elements);
+      if (next === prev) return elements;
+      prev = next;
+      lastError = undefined;
+    } catch (err) {
+      // Repeated empty/invalid dumps are not a settled screen. Allow the
+      // existing realization budget to recover, then fail without artifacts.
+      prev = undefined;
+      elements = undefined;
+      lastError = err;
+    }
+  }
+  if (lastError) {
+    throw new Error(`screen "${screenId}": iOS accessibility capture failed after ${SETTLE_TRIES} attempts: ${lastError.message}`);
   }
   console.log(`    (tree did not settle after ${SETTLE_TRIES} dumps — using the last one)`);
-  return prev;
+  return elements;
 }
 
 // idb --json historically emits either one JSON array or newline-delimited

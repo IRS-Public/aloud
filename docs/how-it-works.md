@@ -44,6 +44,15 @@ Reports land under the report root (`--out`, default `aloud-report`):
 `*.tree.json` and `*.transcript.json` files, `shots/` screenshots,
 `summary.json`, and `index.html`.
 
+A missing accessibility capture fails the walk before it writes that screen's
+tree report or screenshot. Android requires a complete XML hierarchy with
+visible accessibility content from the configured app package; launcher,
+system-dialog-only, and empty layout trees cannot pass the audit. iOS retries
+empty or malformed dumps within its six-capture settling budget and fails if
+the final dump still has no visible accessibility content. An unlabeled control
+is valid evidence and is checked normally. Check the foreground app, screen
+rendering, and accessibility setup when a capture fails.
+
 ## Navigation modes
 
 aloud does not know your app. You tell it how to reach each screen with
@@ -99,7 +108,10 @@ npx aloud talkback install .aloud-cache/talkback.apk
 npx aloud android --apk path/to/app-debug.apk
 ```
 
-`--pass transcript|tree|both` runs one pass alone (default `both`).
+`--pass transcript|tree|both` runs one pass alone (default `both`). Use
+`--pass transcript --no-gate` for capture-only evidence: a gate requires
+completed tree checks for every screen in the report. A transcript-only or
+partially checked report still renders, but cannot pass `aloud report --gate`.
 Requires a `google_apis` (userdebug) emulator image; see
 [docs/talkback.md](talkback.md) for why.
 

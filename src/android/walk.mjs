@@ -40,7 +40,7 @@ import {
   waitForDevice,
 } from "./adb.mjs";
 import { dedupeConsecutive, segmentTranscript } from "./transcript.mjs";
-import { parseUiDump, runChecks } from "./ui-tree.mjs";
+import { parseUiDump, runChecks, validateUiCapture } from "./ui-tree.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -153,8 +153,14 @@ async function walk() {
       await sleep(TALKBACK_SETTLE_MS);
       logMarker(`screen-end:${screen.id}`);
     } else {
-      const xml = uiDump();
-      const violations = runChecks(parseUiDump(xml), { densityDpi, appPackage });
+      let nodes;
+      try {
+        nodes = parseUiDump(uiDump());
+        validateUiCapture(nodes, appPackage);
+      } catch (err) {
+        throw new Error(`screen "${screen.id}": Android accessibility capture failed: ${err.message}`);
+      }
+      const violations = runChecks(nodes, { densityDpi, appPackage });
       const errors = violations.filter((v) => v.severity === "error");
       // .gate is what the ratchet compares and what `aloud baseline` merges
       // into the baseline file — computed once, here, so gate and baseline
