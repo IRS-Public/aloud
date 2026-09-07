@@ -150,7 +150,7 @@ jobs:
       # dead emulator fails in minutes, not at the job timeout.
       - name: Boot emulator (API 34 google_apis x86_64, headless)
         run: |
-          bash node_modules/aloud/src/android/boot-emulator-ci.sh
+          bash node_modules/@irs-public/aloud/src/android/boot-emulator-ci.sh
           # Later steps call bare `adb`; platform-tools is not on the
           # runner's default PATH.
           echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
