@@ -29,21 +29,37 @@ The emitter is `src/report/openacr.mjs`. Three properties make the output
 a draft you can trust, rather than a report you cannot:
 
 - **Only automated evidence gets a conformance level.** Criteria the
-  audit rules map to (1.1.1, 1.3.1, 2.5.8, 4.1.2) are marked `supports`
-  or `partially-supports`, with notes that name the failing screens and
-  rule ids, and say plainly that automation covers part of the criterion
+  audit rules map to (1.1.1, 1.3.1, 2.5.8, 4.1.2) get `supports` only
+  when applicable tree checks completed without mapped failures on every
+  supplied screen for those platforms. Known failures produce
+  `partially-supports`, with the failing screens and rule ids in the notes.
+  Missing tree checks produce `not-evaluated` unless there is already a
+  known failure. Notes state that automation covers part of the criterion
   only. Every other criterion is `not-evaluated` with a "needs human
   review" note. A few `not-evaluated` rows carry related evidence in
   their notes (for example, the transcript coverage on 302.1), still
   marked as needing human review.
-- **Unknown rule ids throw.** If a baseline contains a rule id the
-  emitter does not know, it refuses to build the report. Without that, a
-  new audit rule with failures would be invisible to every mapped
-  criterion and the draft would claim `supports` while the audit is
-  failing.
+- **Invalid evidence throws.** Empty audits, malformed screen data,
+  inconsistent error counts and rule ids, unknown rules, and rules filed
+  under the wrong platform stop generation. A missing optional baseline
+  file is allowed; an unreadable or malformed existing baseline is an
+  error.
 - **Nothing is a silent pass.** Every adherence entry has a level and a
-  note. Screen counts in the notes are computed from the audits actually
-  read, so a partial run stays honest.
+  note. Checked-screen counts include only completed tree checks on
+  platforms that implement the criterion's rules. For example, 1.3.1 has
+  an Android-only check and stays `not-evaluated` in an iOS-only report.
+  Transcript-only runs cannot establish support for tree criteria.
+
+A filtered run describes only the screens supplied to the emitter. Within
+that input, a mix of completed and missing tree checks cannot produce a
+clean verdict. Notes identify incomplete coverage even when another screen
+has a known failure.
+
+Transcript coverage comes from the summary's utterance counts. Notes
+distinguish TalkBack speech from computed iOS utterances and identify empty
+transcripts. Baselines contain no transcript counts, so their transcript
+coverage is reported as unavailable. Use fresh report directories when you
+need that evidence in the draft.
 
 The author block defaults to "Automated draft" with a placeholder email
 (set `openacr.author` in the config).

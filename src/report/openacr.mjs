@@ -105,7 +105,7 @@ export const AUTOMATED_CRITERIA = {
 // buildAcr from the actual screen counts.
 const SPECIAL_NOTES = {
   "2.5.5":
-    "Not evaluated; needs human review. Related evidence: the automated target-size rules hold the platform bars (48x48dp Android, 44x44pt iOS), which meet the 44 CSS px measure of this AAA criterion on every audited screen.",
+    "Not evaluated; needs human review. Related evidence: where tree checks completed, the automated target-size rules check platform bars (48x48dp Android, 44x44pt iOS). Review the findings and criterion exceptions before drawing a conformance conclusion.",
   "2.4.6":
     "Not evaluated; needs human review. Related evidence: the audit flags interactive elements that announce identical labels (native-duplicate-speakable, ios-duplicate-speakable) as warnings; warnings do not gate.",
 };
@@ -113,23 +113,79 @@ const SPECIAL_NOTES = {
 // Coverage strings such as "12 Android screens and 12 iOS screens" are
 // always computed from the audits actually read, never hardcoded, so
 // partial runs stay honest.
-function transcriptCoverage(audits) {
+function screenCoverage(audits) {
   return audits
     .map(({ platform, screens }) => `${Object.keys(screens).length} ${platform} screens`)
     .join(" and ");
 }
 
+function selectScreens(audits, predicate) {
+  return audits
+    .map(({ platform, screens }) => ({
+      platform,
+      screens: Object.fromEntries(Object.entries(screens).filter(([, s]) => predicate(s))),
+    }))
+    .filter(({ screens }) => Object.keys(screens).length > 0);
+}
+
+function transcriptCoverage(audits) {
+  const spoken = selectScreens(audits, (s) => s.utterances > 0);
+  const silent = selectScreens(audits, (s) => s.utterances === 0);
+  const unknown = selectScreens(audits, (s) => s.utterances == null);
+  return [
+    ...spoken.map((audit) =>
+      `${screenCoverage([audit])} have ${audit.platform === "iOS" ? "computed utterances" : "captured speech"}.`),
+    ...silent.map((audit) =>
+      `${screenCoverage([audit])} have no ${audit.platform === "iOS" ? "computed utterances" : "captured speech"}.`),
+    unknown.length ? `Transcript coverage is unavailable for ${screenCoverage(unknown)}.` : "",
+  ].filter(Boolean).join(" ");
+}
+
 const NOT_EVALUATED_NOTE = "Not covered by the automated audit. Needs human review.";
+const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const isCount = (value) => Number.isSafeInteger(value) && value >= 0;
+
+// A missing tree check is an explicit null, never an implicit zero. Reject
+// malformed or contradictory evidence before any criterion can see it.
+function validateScreens(screens, platform = "input") {
+  if (!isRecord(screens)) throw new Error(`invalid audit (${platform}): screens must be an object`);
+  if (Object.keys(screens).length === 0) throw new Error(`invalid audit (${platform}): no screens`);
+  for (const [id, s] of Object.entries(screens)) {
+    const invalid = (reason) => {
+      throw new Error(`invalid audit (${platform} ${id}): ${reason}`);
+    };
+    if (!isRecord(s)) invalid("screen evidence must be an object");
+    if (s.errors !== null && !isCount(s.errors)) invalid("errors must be a non-negative integer or null");
+    if (!Array.isArray(s.ruleIds) || s.ruleIds.some((r) => typeof r !== "string" || !r)) {
+      invalid("ruleIds must be an array of non-empty strings");
+    }
+    if (new Set(s.ruleIds).size !== s.ruleIds.length) invalid("ruleIds must be unique");
+    if ((s.errors === null || s.errors === 0) && s.ruleIds.length > 0) {
+      invalid("ruleIds require a positive error count");
+    }
+    if (s.errors > 0 && (s.ruleIds.length === 0 || s.ruleIds.length > s.errors)) {
+      invalid("error count and ruleIds disagree");
+    }
+    if (s.utterances != null && !isCount(s.utterances)) {
+      invalid("utterances must be a non-negative integer or null");
+    }
+  }
+}
 
 // ── inputs ──
 // Baselines are a flat map { screenId: { errors, ruleIds } };
 // report.mjs's summary.json wraps the same shape as
 // { generated, screens: {...} }. Normalize both.
 export function normalizeAudit(data) {
-  if (data && typeof data === "object" && data.screens) {
-    return { screens: data.screens, generated: data.generated ?? null };
+  if (!isRecord(data)) throw new Error("invalid audit: expected a baseline or report object");
+  const audit = Object.hasOwn(data, "screens")
+    ? { screens: data.screens, generated: data.generated ?? null }
+    : { screens: data, generated: null };
+  validateScreens(audit.screens);
+  if (audit.generated !== null && typeof audit.generated !== "string") {
+    throw new Error("invalid audit: generated must be a date string or null");
   }
-  return { screens: data ?? {}, generated: null };
+  return audit;
 }
 
 // For one criterion, list the screens whose baseline error rule ids
@@ -147,17 +203,33 @@ export function findFailures(criterionRules, audits) {
 
 function adherenceForAutomated(num, audits) {
   const auto = AUTOMATED_CRITERIA[num];
-  const failures = findFailures(auto.rules, audits);
-  const checked = audits
-    .map(({ platform, screens }) => `${Object.keys(screens).length} ${platform} screens`)
-    .join(" and ");
+  const platforms = new Set(auto.rules.map((r) => RULES[r].platform));
+  const applicable = audits.filter(({ platform }) => platforms.has(platform));
+  const unsupported = audits.filter(({ platform }) => !platforms.has(platform));
+  const completed = selectScreens(applicable, (s) => s.errors !== null);
+  const missing = selectScreens(applicable, (s) => s.errors === null);
+  const failures = findFailures(auto.rules, completed);
+  const checked = screenCoverage(completed);
+  const gaps = [
+    missing.length ? `Missing tree checks on ${screenCoverage(missing)}; those screens remain unevaluated.` : "",
+    unsupported.length
+      ? `No applicable automated checks for ${unsupported.map(({ platform }) => platform).join(" or ")}; this criterion remains unevaluated on that platform.`
+      : "",
+  ].filter(Boolean).join(" ");
   const coverage =
     `Automated checks cover part of this criterion only: ${auto.covers}. ` +
     (auto.extra ? `${auto.extra} ` : "") +
+    (gaps ? `${gaps} ` : "") +
     `A human review must complete the rest. See https://github.com/IRS-Public/aloud/blob/main/docs/how-it-works.md.`;
+  if (completed.length === 0) {
+    return {
+      level: "not-evaluated",
+      notes: `No completed tree checks for this criterion. ${coverage}`,
+    };
+  }
   if (failures.length === 0) {
     return {
-      level: "supports",
+      level: missing.length ? "not-evaluated" : "supports",
       notes: `The automated native audit found no violations on ${checked}. ${coverage}`,
     };
   }
@@ -187,29 +259,35 @@ export function buildAcr({
     throw new Error("buildAcr needs an app name (config app.name)");
   }
   const audits = [];
-  if (android) audits.push({ platform: "Android", screens: android.screens });
-  if (ios) audits.push({ platform: "iOS", screens: ios.screens });
+  if (android != null) audits.push({ platform: "Android", screens: android.screens });
+  if (ios != null) audits.push({ platform: "iOS", screens: ios.screens });
+  if (audits.length === 0) throw new Error("no audit input: provide at least one platform audit");
 
   // Refuse rule ids the emitter does not know. Without this, a new audit
   // rule with baseline errors would be invisible to every mapped criterion
   // and the report would claim "supports" while the audit is failing.
   for (const { platform, screens } of audits) {
+    validateScreens(screens, platform);
     for (const [id, s] of Object.entries(screens)) {
-      for (const r of s.ruleIds ?? []) {
+      for (const r of s.ruleIds) {
         if (!RULES[r]) {
           throw new Error(
             `unknown audit rule id "${r}" (${platform} ${id}): add it to RULES and ` +
               "map it in AUTOMATED_CRITERIA in src/report/openacr.mjs",
           );
         }
+        if (RULES[r].platform !== platform) {
+          throw new Error(`invalid audit rule id "${r}" (${platform} ${id}): this rule runs on ${RULES[r].platform}`);
+        }
       }
     }
   }
 
+  const transcriptNotes = transcriptCoverage(audits);
+  const transcriptMethods =
+    "Transcripts, when present, are TalkBack speech-log output on Android and computed VoiceOver output on iOS.";
   const note302 =
-    "Not evaluated; needs human review. Related evidence: the audit records what a " +
-    "screen-reader user hears on every screen — TalkBack speech-log transcripts on " +
-    `Android and computed VoiceOver transcripts on iOS (${transcriptCoverage(audits)}). ` +
+    `Not evaluated; needs human review. Related evidence: ${transcriptNotes} ${transcriptMethods} ` +
     "See https://github.com/IRS-Public/aloud/blob/main/docs/how-it-works.md.";
 
   const chapters = {};
@@ -238,9 +316,15 @@ export function buildAcr({
     chapters[chapter.id] = { criteria };
   }
 
-  const screenCounts = audits
+  const completed = selectScreens(audits, (s) => s.errors !== null);
+  const missing = selectScreens(audits, (s) => s.errors === null);
+  const screenCounts = completed
     .map(({ platform, screens }) => `${Object.keys(screens).length} on ${platform}`)
     .join(", ");
+  const treeNotes = completed.length
+    ? `Tree checks for labels and touch-target size completed (${screenCounts}).`
+    : "No completed tree checks are present in the input.";
+  const missingNotes = missing.length ? ` Missing tree checks on ${screenCoverage(missing)}.` : "";
 
   return {
     title: `${appName} Accessibility Conformance Report (draft)`,
@@ -257,18 +341,13 @@ export function buildAcr({
     notes:
       "DRAFT. This report is generated from the automated 508 audit " +
       "(https://github.com/IRS-Public/aloud/blob/main/docs/how-it-works.md). It records only what " +
-      "automation can prove: " +
-      "tree checks for labels and touch-target size, run on every audited screen " +
-      `(${screenCounts}). The audit also captures what a screen-reader user hears ` +
-      "on each of those screens: TalkBack speech-log transcripts on Android and " +
-      "computed VoiceOver transcripts on iOS. Every criterion marked " +
+      `automation can prove. ${treeNotes}${missingNotes} ${transcriptNotes} ${transcriptMethods} Every criterion marked ` +
       "'not-evaluated' needs a human review. A Section 508 office must complete " +
       "those rows and replace the author contact before publication.",
     evaluation_methods_used:
-      "Automated accessibility-tree checks on a device or simulator for every " +
-      "screen in the screens manifest (uiautomator dumps on Android, idb " +
-      "accessibility dumps on iOS), with screen-reader transcripts captured per " +
-      "screen (TalkBack on Android; computed VoiceOver on iOS). Rules and WCAG " +
+      "Automated accessibility-tree checks use device or simulator dumps " +
+      "(uiautomator on Android, idb on iOS). " +
+      `${treeNotes}${missingNotes} ${transcriptNotes} ${transcriptMethods} Rules and WCAG ` +
       "mapping: src/android/ui-tree.mjs and src/ios/tree.mjs. " +
       "No human evaluation yet.",
     catalog: CATALOG_ID,
@@ -302,8 +381,9 @@ function main() {
     if (cfgPath) {
       try {
         return normalizeAudit(readJson(cfgPath));
-      } catch {
-        return null;
+      } catch (error) {
+        if (error.code === "ENOENT") return null;
+        throw error;
       }
     }
     return null;
