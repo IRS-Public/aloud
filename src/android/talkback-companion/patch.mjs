@@ -24,6 +24,11 @@ export function patchCompanion(root, { noNative = false } = {}) {
   replace(focus, "      scrollCallback.onAutoScrollFailed(scrolledNode);", `      ${bridge}.signal("scroll-failed");\n      scrollCallback.onAutoScrollFailed(scrolledNode);`);
   copyFileSync(join(here, "AloudBridge.java"), join(pkg, "AloudBridge.java"));
   if (noNative) {
+    const display = join(root, "braille/brailledisplay/src/phone/java/com/google/android/accessibility/braille/brailledisplay/BrailleDisplay.java");
+    replace(display, "    this.brailleDisplayManager = new BrailleDisplayManager(accessibilityService, controller);",
+      "    this.brailleDisplayManager = null; // Aloud emulator build has no braille native libraries.");
+    replace(display, "  public void start() {", "  public void start() {\n    if (brailleDisplayManager == null) return;");
+    replace(display, "  public void stop() {", "  public void stop() {\n    if (brailleDisplayManager == null) return;");
     for (const module of ["brltty", "translate"]) {
       replace(join(root, "braille", module, "build.gradle"),
         "    externalNativeBuild {\n        ndkBuild {\n            path file('src/phone/jni/Android.mk')\n        }\n    }\n", "");

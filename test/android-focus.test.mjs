@@ -1,0 +1,117 @@
+import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { test } from "node:test";
+import { createFocusCapturer, focusTranscript, validateFocusResponse, validateTalkBackFocusCapture } from "../src/android/talkback-focus.mjs";
+import { saveAccessibilityState, restoreAccessibilityState } from "../src/android/accessibility-state.mjs";
+import { loadConfig } from "../src/config.mjs";
+
+const target = "org.irs_public.aloud.fixture";
+const node = (id) => ({ id, windowId: 3, packageName: target, text: "Same label", enabled: true });
+function response(sequence, action, status, before, after = before) {
+  return { schemaVersion: 1, source: "talkback-focus", talkbackCommit: "229212fdf5842191d0a93fc95d9ca1423b346866",
+    requestId: "test-request", screen: "fixture", target, sequence, action, status, session: "service-session",
+    pid: 45, windowId: 3, runtime: "14", elapsedMs: 800, before: node(before), after: node(after),
+    signals: status === "edge" ? ["edge"] : [], focusEvents: status === "focused" ? [node(after)] : [],
+    speech: status === "focused" ? [{ utteranceId: `talkback_${sequence}`, text: "Same label, Button" }] : [] };
+}
+function capture() {
+  return { schemaVersion: 1, source: "talkback-focus", speechSource: "talkback-tts-request-listener",
+    requestId: "test-request", screen: "fixture", target, targetPid: "20", coverage: {
+      complete: true, start: "backward-edge", reason: "forward-edge", maxSteps: 3 }, commands: [
+      response(0, "hello", "ready", "a"), response(1, "previous", "edge", "a"),
+      response(2, "first", "focused", "a"), response(3, "next", "focused", "a", "b"),
+      response(4, "next", "edge", "b"),
+    ] };
+}
+
+test("preserves distinct focuses with duplicate speech and verifies native boundaries", () => {
+  const c = capture();
+  validateTalkBackFocusCapture(c);
+  assert.deepEqual(focusTranscript(c), ["Same label, Button", "Same label, Button"]);
+  assert.notEqual(c.commands[2].after.id, c.commands[3].after.id);
+});
+
+for (const [name, mutate] of Object.entries({
+  "sequence gap": (c) => { c.commands[3].sequence++; },
+  "different request": (c) => { c.commands[2].requestId = "another"; },
+  "service restart": (c) => { c.commands[3].pid++; },
+  "window change": (c) => { c.commands[3].windowId++; },
+  "missing focus event": (c) => { c.commands[3].focusEvents = []; },
+  "missing speech request": (c) => { c.commands[3].speech = []; },
+  "scroll failure disguised as complete": (c) => { c.commands[3].signals.push("scroll-failed"); },
+  "wrap disguised as complete": (c) => { c.commands[3].signals.push("wrap"); },
+  "edge guessed from repeated focus": (c) => { c.commands.at(-1).signals = []; },
+  "truncated forward pass": (c) => { c.commands.pop(); },
+  "missing rewind": (c) => { c.commands[1].status = "step-timeout"; },
+  "different speech source": (c) => { c.speechSource = "computed"; },
+  "wrong pin": (c) => { c.commands[0].talkbackCommit = "new-build"; },
+})) test(`rejects ${name}`, () => { const c = capture(); mutate(c); assert.throws(() => validateTalkBackFocusCapture(c)); });
+
+test("does not accept a focused status with speech alone", () => {
+  const r = response(1, "next", "focused", "a", "b"); r.focusEvents = [];
+  assert.throws(() => validateFocusResponse(r, r), /focus and speech/);
+});
+
+for (const mode of ["complete", "limit", "restart", "missing-companion"]) {
+  test(`controller ${mode} retains raw broadcasts and stops conservatively`, async (t) => {
+    const out = mkdtempSync(join(tmpdir(), "aloud-focus-")); t.after(() => rmSync(out, { recursive: true, force: true }));
+    let count = 0;
+    const source = capture().commands;
+    const capturer = createFocusCapturer({ out, target, maxSteps: 3,
+      runShell: () => mode === "restart" && count > 2 ? "21" : "20",
+      runAdb: (args) => {
+        if (args[0] === "logcat") return "raw diagnostics";
+        const value = (name) => args[args.indexOf(name) + 1];
+        const action = value("op"), sequence = Number(value("sequence"));
+        count++;
+        if (mode === "missing-companion") return "Broadcast completed: result=0";
+        const r = mode === "limit" && sequence > 0 ? response(sequence, action, "focused", "a", "b") : structuredClone(source[sequence]);
+        r.requestId = value("requestId");
+        return `Broadcast completed: result=200, data="${Buffer.from(JSON.stringify(r)).toString("base64")}"`;
+      },
+    });
+    if (mode === "complete") assert.equal((await capturer("fixture")).coverage.complete, true);
+    else await assert.rejects(capturer("fixture"), /incomplete TalkBack traversal/);
+    const result = JSON.parse(readFileSync(join(out, "talkback-focus/fixture.json")));
+    assert.equal(result.coverage.complete, mode === "complete");
+    assert.match(readFileSync(join(out, "talkback-focus/fixture.logcat.txt"), "utf8"), /raw diagnostics/);
+    if (mode === "restart") assert.match(result.coverage.reason, /target-process-changed/);
+    if (mode === "limit") assert.equal(result.coverage.reason, "rewind-step-limit");
+  });
+}
+
+test("restores absent and present secure settings and original TalkBack preferences", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "aloud-settings-")); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "state.json"), calls = [];
+  const settings = { enabled_accessibility_services: "some.other/Service:com.android.talkback/Service", accessibility_enabled: "null" };
+  const original = { ...settings };
+  const runShell = (...args) => {
+    calls.push(args);
+    if (args[0] === "settings") {
+      if (args[1] === "get") return settings[args[3]];
+      if (args[1] === "delete") settings[args[3]] = "null";
+      if (args[1] === "put") settings[args[3]] = args[4].slice(1, -1);
+    }
+    if (args[0] === "stat") return "12345";
+    if (args[0] === "sh") return args.at(-1).includes(".xml.bak") ? "no" : "yes";
+    return "";
+  };
+  saveAccessibilityState(file, "com.android.talkback", { runShell, runAdb: () => "" });
+  settings.enabled_accessibility_services = "changed"; settings.accessibility_enabled = "1";
+  restoreAccessibilityState(file, { runShell });
+  assert.deepEqual(settings, original);
+  const stop = calls.findIndex((a) => a[0] === "am");
+  const restore = calls.findIndex((a) => a[0] === "cp" && a[2].startsWith("/data/local/tmp"));
+  assert.ok(stop >= 0 && restore > stop, "stop the running service before restoring cached preferences");
+  assert.ok(calls.some((a) => a[0] === "rm" && a.at(-1).endsWith(".xml.bak")));
+});
+
+test("validates opt-in Android traversal configuration", () => {
+  assert.equal(loadConfig(null).android.talkBack, "startup");
+  assert.equal(loadConfig(null, { android: { talkBack: "focus", talkBackMaxSteps: 200 } }).android.talkBack, "focus");
+  for (const android of [{ talkBack: "computed" }, { talkBackMaxSteps: 0 }, { talkBackMaxSteps: 201 }, { talkBackMaxSteps: 2.5 }]) {
+    assert.throws(() => loadConfig(null, { android }), /android.talkBack/);
+  }
+});
