@@ -3,3 +3,6 @@ aloud-report/
 .aloud-cache/
 acr-draft.yaml
 aloud-demo-report/
+.gradle/
+**/build/
+**/local.properties

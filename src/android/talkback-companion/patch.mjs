@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 export const TALKBACK_COMMIT = "229212fdf5842191d0a93fc95d9ca1423b346866";
 const here = dirname(fileURLToPath(import.meta.url));
-export function patchCompanion(root) {
+export function patchCompanion(root, { noNative = false } = {}) {
   const pkg = join(root, "talkback/src/main/java/com/google/android/accessibility/talkback");
   const bridge = "com.google.android.accessibility.talkback.AloudBridge";
   function replace(file, before, after, expected = 1) {
@@ -23,8 +23,14 @@ export function patchCompanion(root) {
   replace(focus, "      final AutoScrollCallback autoScrollCallback = scrollCallback;", `      ${bridge}.signal("scroll-complete");\n      final AutoScrollCallback autoScrollCallback = scrollCallback;`);
   replace(focus, "      scrollCallback.onAutoScrollFailed(scrolledNode);", `      ${bridge}.signal("scroll-failed");\n      scrollCallback.onAutoScrollFailed(scrolledNode);`);
   copyFileSync(join(here, "AloudBridge.java"), join(pkg, "AloudBridge.java"));
+  if (noNative) {
+    for (const module of ["brltty", "translate"]) {
+      replace(join(root, "braille", module, "build.gradle"),
+        "    externalNativeBuild {\n        ndkBuild {\n            path file('src/phone/jni/Android.mk')\n        }\n    }\n", "");
+    }
+  }
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (!process.argv[2]) throw new Error("usage: patch.mjs <pinned-talkback-source>");
-  patchCompanion(process.argv[2]);
+  patchCompanion(process.argv[2], { noNative: process.argv.includes("--no-native") });
 }
