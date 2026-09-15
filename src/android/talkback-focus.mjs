@@ -8,7 +8,7 @@ import { TALKBACK_COMMIT } from "./talkback-companion/patch.mjs";
 
 export const FOCUS_ACTION = "org.irs_public.aloud.TALKBACK_COMMAND";
 const statuses = ["not-ready", "ready", "focused", "edge", "wrap", "scroll-failed", "target-changed", "window-changed",
-  "service-stopped", "step-timeout", "speech-limit"];
+  "service-stopped", "step-timeout", "speech-limit", "external-notification"];
 const isText = (x) => typeof x === "string" && x.length > 0;
 const nodeMatches = (node, target, windowId) => node && isText(node.id) &&
   node.packageName === target && node.windowId === windowId;

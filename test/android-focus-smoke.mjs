@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
-import { adb, shell } from "../src/android/adb.mjs";
+import { ADB, adb, shell } from "../src/android/adb.mjs";
 import { enable, disable, findTalkBack } from "../src/android/talkback.mjs";
 import { saveAccessibilityState, restoreAccessibilityState } from "../src/android/accessibility-state.mjs";
 import { createFocusCapturer, focusTranscript } from "../src/android/talkback-focus.mjs";
@@ -171,6 +171,23 @@ try {
   assert.equal(signalResult.code, 143, signalLog);
   assert.deepEqual(settings(), signalBefore);
   results.restoreAfterSignal = "verified";
+
+  // An unrelated app notification must not become part of a passing screen transcript.
+  enable();
+  await launch("nested");
+  let notification;
+  await assert.rejects(createFocusCapturer({ out, target, runAdb: (args, opts) => {
+    if (!notification && args.includes("next")) {
+      const post = spawn(ADB, ["shell", "sh", "-c",
+        "'sleep 0.3; cmd notification post -t AloudInterrupt aloud-interrupt External-interruption'"], { stdio: "ignore" });
+      notification = new Promise((resolve) => {
+        post.on("error", () => resolve(-1)); post.on("close", resolve);
+      });
+    }
+    return adb(args, opts);
+  } })("external-notification"), /incomplete.*external-notification/);
+  assert.equal(await notification, 0, "notification injection failed");
+  results.externalNotification = "rejected";
 
 } finally {
   restoreAccessibilityState(originalFile);

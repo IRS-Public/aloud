@@ -56,7 +56,7 @@ test("does not accept a focused status with speech alone", () => {
   assert.throws(() => validateFocusResponse(r, r), /focus and speech/);
 });
 
-for (const mode of ["complete", "limit", "restart", "exit", "unavailable", "missing-companion"]) {
+for (const mode of ["complete", "limit", "restart", "exit", "unavailable", "missing-companion", "external-notification"]) {
   test(`controller ${mode} retains raw broadcasts and stops conservatively`, async (t) => {
     const out = mkdtempSync(join(tmpdir(), "aloud-focus-")); t.after(() => rmSync(out, { recursive: true, force: true }));
     let count = 0;
@@ -73,6 +73,7 @@ for (const mode of ["complete", "limit", "restart", "exit", "unavailable", "miss
         count++;
         if (mode === "missing-companion") return "Broadcast completed: result=0";
         const r = mode === "limit" && sequence > 0 ? response(sequence, action, "focused", sequence === 1 ? "a" : `node-${sequence - 1}`, `node-${sequence}`) : structuredClone(source[sequence]);
+        if (mode === "external-notification" && sequence === 4) r.status = "external-notification";
         r.requestId = value("requestId");
         return `Broadcast completed: result=200, data="${Buffer.from(JSON.stringify(r)).toString("base64")}"`;
       },
@@ -85,6 +86,7 @@ for (const mode of ["complete", "limit", "restart", "exit", "unavailable", "miss
     if (["restart", "exit"].includes(mode)) assert.match(result.coverage.reason, /target-process-changed/);
     if (mode === "unavailable") assert.equal(result.coverage.reason, "target-not-running");
     if (mode === "limit") assert.equal(result.coverage.reason, "rewind-step-limit");
+    if (mode === "external-notification") assert.equal(result.coverage.reason, "external-notification");
   });
 }
 

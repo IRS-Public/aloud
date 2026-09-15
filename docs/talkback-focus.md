@@ -35,7 +35,7 @@ exposes all its content, or that every speech request was audibly delivered.
 No new WCAG criterion is marked as evaluated.
 
 Scrolling is driven by TalkBack's asynchronous navigation. A failed scroll,
-wrap, missing focus/speech evidence, window change, process change, missing
+wrap, missing focus/speech evidence, external notification, window change, process change, missing
 companion, or timeout makes the run fail. Repeated text, repeated focus, and
 an actor returning `false` are never end signals. Dynamic content, WebViews,
 links within a node, and other cases without a verifiable boundary may fail;

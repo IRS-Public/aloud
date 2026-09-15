@@ -87,6 +87,9 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
         }
         node.recycle();
       }
+    } else if (type == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED
+        && !b.target.contentEquals(safe(event.getPackageName()))) {
+      b.failure = "external-notification";
     } else if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && event.getWindowId() != b.windowId) {
       b.failure = "window-changed";
     } else if (type == AccessibilityEvent.TYPE_VIEW_SCROLLED) {

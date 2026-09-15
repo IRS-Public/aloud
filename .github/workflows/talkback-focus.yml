@@ -66,6 +66,9 @@ jobs:
         run: bash src/android/boot-emulator-ci.sh
       - name: Install and exercise real TalkBack focus traversal
         run: |
+          # Keep first-boot Assistant onboarding notifications out of positive fixtures.
+          # The suite injects a foreign notification explicitly as a negative case.
+          "$ANDROID_HOME/platform-tools/adb" shell pm disable-user --user 0 com.google.android.googlequicksearchbox
           node bin/aloud.mjs talkback install .aloud-cache/talkback.apk
           "$ANDROID_HOME/platform-tools/adb" install -r -g test/android-fixture/build/outputs/apk/debug/AloudFocusFixture-debug.apk
           node test/android-focus-smoke.mjs
