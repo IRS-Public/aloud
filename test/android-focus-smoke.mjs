@@ -1,6 +1,6 @@
 // Native acceptance suite; run with a companion APK, fixture APK, and a working TTS engine installed.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { adb, shell } from "../src/android/adb.mjs";
@@ -138,6 +138,36 @@ try {
   writeFileSync(join(out, "runner-success.log"), successLog);
   assert.deepEqual(settings(), successBefore);
   results.restoreAfterSuccess = "verified";
+  // Send TERM to the runner and its device-command child once the native session is active.
+  await launch("scroll");
+  const signalBefore = settings();
+  const signalRoot = join(out, "runner-signal");
+  const signalConfig = join(out, "runner-signal.json");
+  writeFileSync(signalConfig, JSON.stringify({ out: signalRoot, app: { android: { package: target } },
+    android: { talkBack: "focus", talkBackMaxSteps: 80 }, nav: { mode: "current-screen", screenId: "signal" } }));
+  const child = spawn("bash", ["src/android/run.sh", "--pass", "transcript", "--no-gate"], {
+    env: { ...process.env, ALOUD_CONFIG: signalConfig }, detached: true, stdio: ["ignore", "pipe", "pipe"],
+  });
+  let signalLog = "";
+  child.stdout.on("data", (b) => { signalLog += b; });
+  child.stderr.on("data", (b) => { signalLog += b; });
+  const closed = new Promise((r, reject) => { child.on("error", reject); child.on("close", (code, signal) => r({ code, signal })); });
+  let signaled = false;
+  for (let i = 0; i < 200; i++) {
+    if (existsSync(join(signalRoot, "android/talkback-focus/signal.commands.jsonl"))) {
+      process.kill(-child.pid, "SIGTERM"); signaled = true; break;
+    }
+    if (child.exitCode !== null) break;
+    await sleep(100);
+  }
+  if (!signaled && child.exitCode === null) process.kill(-child.pid, "SIGTERM");
+  const signalResult = await closed;
+  writeFileSync(join(out, "runner-signal.log"), signalLog);
+  assert.equal(signaled, true, "runner never reached capture before signal test");
+  assert.equal(signalResult.code, 143, signalLog);
+  assert.deepEqual(settings(), signalBefore);
+  results.restoreAfterSignal = "verified";
+
 } finally {
   restoreAccessibilityState(originalFile);
   assert.deepEqual(settings(), original.settings);
