@@ -1,0 +1,47 @@
+{
+  "auditTypes": "all",
+  "bundleId": "org.aloud.audit.AuditFixture",
+  "issues": [
+    {
+      "compactDescription": "Dynamic Type font sizes are unsupported",
+      "detailedDescription": "User will not be able to change the font size of this element",
+      "element": {
+        "frame": {
+          "height": 22,
+          "width": 6,
+          "x": 198,
+          "y": 484
+        },
+        "identifier": "",
+        "label": "!"
+      },
+      "typeMask": "65536",
+      "types": [
+        "dynamicType"
+      ]
+    },
+    {
+      "compactDescription": "Contrast nearly passed",
+      "detailedDescription": "Contrast is not high enough for element unless font size is larger.",
+      "element": {
+        "frame": {
+          "height": 20.33333333333337,
+          "width": 68.66666666666669,
+          "x": 166.66666666666666,
+          "y": 530.6666666666666
+        },
+        "identifier": "",
+        "label": "Continue"
+      },
+      "typeMask": "1",
+      "types": [
+        "contrast"
+      ]
+    }
+  ],
+  "requestId": "9b099477-fdff-4e3f-be9a-25e48be9394e",
+  "schemaVersion": 1,
+  "screen": "fixture",
+  "source": "apple-accessibility-audit",
+  "status": "completed"
+}

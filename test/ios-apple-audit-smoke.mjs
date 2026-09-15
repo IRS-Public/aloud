@@ -28,7 +28,8 @@ simctl("launch", device.udid, bundleId);
 const result = auditor.capture("fixture");
 assert.equal(result.status, "completed");
 assert.equal(result.bundleId, bundleId);
-assert.ok(result.issues.some((issue) => issue.types.includes("hitRegion")), "must capture the intentional tiny-target finding");
+assert.ok(result.issues.some((issue) => issue.types.includes("dynamicType") && issue.element?.label === "!"),
+  "must capture the intentional fixed-font finding");
 // Stopping the target must not cause the harness to launch it or substitute
 // its own host. The failed capture must not produce completed evidence.
 simctl("terminate", device.udid, bundleId);

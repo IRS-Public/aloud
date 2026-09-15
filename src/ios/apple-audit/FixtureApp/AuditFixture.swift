@@ -1,12 +1,14 @@
 import SwiftUI
 import UIKit
 
-struct TinyControl: UIViewRepresentable {
+struct FixedFontControl: UIViewRepresentable {
   func makeUIView(context: Context) -> UIButton {
     let button = UIButton(type: .custom)
     button.setTitle("!", for: .normal)
+    button.titleLabel?.font = .systemFont(ofSize: 17)
+    button.titleLabel?.adjustsFontForContentSizeCategory = false
     button.backgroundColor = .black
-    button.accessibilityLabel = "Tiny target"
+    button.accessibilityLabel = "Fixed-font control"
     return button
   }
   func updateUIView(_ uiView: UIButton, context: Context) {}
@@ -18,8 +20,8 @@ struct AuditFixture: App {
     WindowGroup {
       VStack(spacing: 32) {
         Text("Aloud native audit fixture").font(.title).accessibilityAddTraits(.isHeader)
-        Text("The tiny button below intentionally fails Apple's hit-region audit.")
-        TinyControl().frame(width: 8, height: 8)
+        Text("The button below deliberately uses a fixed font that does not scale with Dynamic Type.")
+        FixedFontControl().frame(width: 8, height: 8)
         Button("Continue") {}
       }.padding()
     }

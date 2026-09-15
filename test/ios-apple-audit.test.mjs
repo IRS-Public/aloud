@@ -24,6 +24,13 @@ const record = (extra = {}) => ({
 const encode = (result, requestId = expected.requestId) =>
   `2026-09-15 XCTest: ALOUD-APPLE-AUDIT:${requestId}:${Buffer.from(JSON.stringify(result)).toString("base64")}\n`;
 
+test("accepts real Apple simulator findings captured in the smoke workflow", () => {
+  const real = JSON.parse(readFileSync(join(ROOT, "test/fixtures/apple-audit-ios.json")));
+  const parsed = parseAppleAudit(encode(real, real.requestId), real);
+  assert.equal(parsed.issues.length, 2);
+  assert.deepEqual(parsed.issues.map((issue) => issue.types), [["dynamicType"], ["contrast"]]);
+});
+
 test("Apple audit accepts completed checks with findings, zero findings, and unavailable elements", () => {
   for (const issues of [[issue()], [], [{ ...issue(), element: null }]]) {
     const result = record({ issues });
