@@ -1,6 +1,25 @@
 # Logging TTS capture
 
-Implementation contract for roadmap [#25](https://github.com/IRS-Public/aloud/issues/25).
+Engine-side evidence for roadmap [#25](https://github.com/IRS-Public/aloud/issues/25).
+
+## Run
+
+Use the Android 14 userdebug emulator and the same JDK 17, Gradle 8.14.3,
+and Android SDK 36 setup as the focus companion. Rebuild the companion to
+include the TTS request hooks:
+
+```bash
+aloud talkback get --build --companion --no-native
+aloud talkback install .aloud-cache/talkback.apk
+aloud tts build
+aloud tts install .aloud-cache/logging-tts.apk
+aloud android --talkback focus --tts logging --no-gate
+```
+
+Configuration: `android.tts` is `system` (default) or `logging`; logging requires
+`android.talkBack: "focus"`. The recording engine advertises an English voice
+and retains the exact requested Unicode text. It is a test engine for isolated
+emulators, not an everyday screen reader.
 
 The opt-in recording engine writes text to private, durable JSONL files before
 synthesis. It produces **synthetic silence**, not spoken words. Engine synthesis
@@ -28,6 +47,8 @@ Each process writes a new session file with a header, consecutive event
 numbers, and a final newline for each event. Every append is flushed to disk
 before it returns. Files are private to the producer; adb root exports them
 from the userdebug emulator. No public log-reading endpoint is exposed.
+Journals are bounded at 32 MiB per process/client file, with at most 10,000
+dispatches per client session. Exceeding a bound fails capture explicitly.
 
 Accounting requires complete JSONL records, matching identities and text,
 unique dispatches, dispatch results, and terminal callbacks. A completed
@@ -36,13 +57,17 @@ stopped request may have been flushed before reaching synthesis; its callback
 must establish that outcome. Missing records, failed writes, process changes,
 ambiguous identities, and unfinished requests remain explicit incomplete
 evidence. They cannot become a passing capture when reports are regenerated.
+Raw journals are exported under `<out>/android/tts-logging/<client-session>/`.
+The transcript artifact embeds the journals needed to revalidate accounting;
+the HTML report links to both independent streams. Failed and interrupted
+runs retain available device journals even when a terminal event is missing.
 
 The runner restores the original TTS engine and related secure settings,
 accessibility services, and TalkBack preferences after success, failure,
 SIGINT, or SIGTERM. As with focus capture, a disconnected device or forced
 process kill can prevent cleanup; retain the recovery snapshot.
 
-## Validation required before release
+## Validation
 
 - Full TalkBack traversal with independent engine receipts for every captured
   utterance, including repeated text and hints.

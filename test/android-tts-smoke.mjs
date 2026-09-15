@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { execFileSync, spawn } from "node:child_process";
 import { join, resolve } from "node:path";
-import { shell } from "../src/android/adb.mjs";
+import { adb, shell } from "../src/android/adb.mjs";
 import { enable, disable, findTalkBack } from "../src/android/talkback.mjs";
 import { saveAccessibilityState, restoreAccessibilityState, TTS_KEYS, stopTalkBack } from "../src/android/accessibility-state.mjs";
 import { createFocusCapturer, focusTranscript } from "../src/android/talkback-focus.mjs";
@@ -34,6 +34,25 @@ try {
     console.log(`${mode}: every captured request has a completed engine receipt`);
   }
   if (!process.env.ALOUD_TTS_SMOKE_MODES) {
+    shell("am", "force-stop", target);
+    shell("am", "start", "-n", target + "/.MainActivity", "--es", "mode", "nested");
+    await new Promise((r) => setTimeout(r, 3500));
+    let journalPath;
+    try {
+      await assert.rejects(createFocusCapturer({ out, target, loggingTts: true, runAdb: (args, opts) => {
+        if (journalPath && args.includes("next")) shell("chmod", "400", journalPath);
+        const output = adb(args, opts);
+        if (args.includes("hello")) {
+          const data = output.match(/data="([A-Za-z0-9+/=]+)"/);
+          if (data) {
+            const session = JSON.parse(Buffer.from(data[1], "base64")).tts?.clientSession;
+            if (session) journalPath = `/data/user_de/0/com.android.talkback/files/aloud-tts/${session}.jsonl`;
+          }
+        }
+        return output;
+      } })("write-failure"), /incomplete.*tts-journal-error/);
+      results.journalWriteFailure = "rejected";
+    } finally { if (journalPath) shell("chmod", "600", journalPath); }
     disable(); stopTalkBack(findTalkBack());
     const priorEngine = original.ttsSettings.tts_default_synth;
     if (priorEngine === "null") shell("settings", "delete", "secure", "tts_default_synth");

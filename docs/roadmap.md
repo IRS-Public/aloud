@@ -64,15 +64,16 @@ traversal evidence alone does not establish correct focus order or conformance.
 
 Tracking: [#25](https://github.com/IRS-Public/aloud/issues/25).
 
-Use the same capture identity and sequence protocol as focus stepping.
-Preserve speech requests, queue replacement/flush events, and completion or
-interruption events. Compare logs against TalkBack output under repeated
-rapid navigation, process restart, and output-buffer pressure.
+The opt-in `--talkback focus --tts logging` mode pairs a durable request ledger
+with independent engine receipts and Android completion/interruption callbacks.
+It keeps queued-but-flushed requests explicit, preserves incomplete evidence
+after process death, and restores the original engine and related settings.
+See [logging TTS capture](logging-tts.md).
 
-Do not call a stream lossless until the test can account for every request.
-A TTS request is evidence of what TalkBack asked to speak; it does not prove
-the user heard the whole utterance. Restore the original engine and device
-settings after both successful and failed runs.
+The native suite checks repeated IDs, 400 rapid requests with logcat overflow,
+queue replacement and stop, and engine/client restart recovery. The recording
+engine generates synthetic silence, not spoken words. Verified request
+accounting does not prove audible delivery or correct focus order.
 
 ## 5. Accessibility Test Framework and richer Android nodes
 

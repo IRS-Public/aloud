@@ -194,7 +194,7 @@ function validateScreens(screens, platform = "input") {
         if (!isRecord(l) || l.schemaVersion !== 1 || l.source !== "logging-tts" || l.output !== "synthetic-silence" ||
             l.complete !== true || l.engine !== "org.irs_public.aloud.tts" || !isCount(l.requests) || l.requests < 1 ||
             l.requests < s.utterances || !isCount(l.queueEvents) ||
-            ![l.clientSession, l.engineSession].every((v) => typeof v === "string" && /^[a-f0-9]{8}-[a-f0-9-]{27}$/.test(v))) invalid("logging TTS needs complete engine accounting");
+            ![l.clientSession, l.engineSession].every((v) => typeof v === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(v))) invalid("logging TTS needs complete engine accounting");
       } else if (t.loggingTts !== undefined) invalid("logging TTS accounting needs explicit speech provenance");
     }
     if (s.transcriptSource === "voiceover" || s.voiceOver !== undefined) {

@@ -1,7 +1,7 @@
-name: TalkBack focus smoke
+name: TalkBack focus and logging TTS smoke
 on:
   pull_request:
-    paths: ['src/android/**', 'src/report/**', 'src/config.mjs', 'bin/**', 'test/android-*', 'test/android-fixture/**', '.github/workflows/talkback-focus.yml']
+    paths: ['src/android/**', 'src/report/**', 'src/config.mjs', 'bin/**', 'test/android-*', 'test/android-fixture/**', 'test/android-tts-fixture/**', '.github/workflows/talkback-focus.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -51,7 +51,10 @@ jobs:
         if: steps.apk.outputs.cache-hit != 'true'
         run: bash src/android/get-talkback.sh --build --companion --no-native
       - name: Build native acceptance fixture
-        run: gradle -p test/android-fixture assembleDebug
+        run: |
+          gradle -p test/android-fixture assembleDebug
+          gradle -p test/android-tts-fixture assembleDebug
+          bash src/android/get-logging-tts.sh
       - uses: actions/cache/save@v5
         if: steps.gradle-cache.outputs.cache-hit != 'true'
         with:
@@ -71,12 +74,18 @@ jobs:
           "$ANDROID_HOME/platform-tools/adb" shell pm disable-user --user 0 com.google.android.googlequicksearchbox
           node bin/aloud.mjs talkback install .aloud-cache/talkback.apk
           "$ANDROID_HOME/platform-tools/adb" install -r -g test/android-fixture/build/outputs/apk/debug/AloudFocusFixture-debug.apk
+          "$ANDROID_HOME/platform-tools/adb" install -r -g test/android-tts-fixture/build/outputs/apk/debug/AloudTtsFixture-debug.apk
+          "$ANDROID_HOME/platform-tools/adb" install -r -g .aloud-cache/logging-tts.apk
           node test/android-focus-smoke.mjs
+          node test/android-tts-smoke.mjs
+          node test/android-tts-engine-smoke.mjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: talkback-focus-evidence
           path: |
             aloud-report/focus-smoke
+            aloud-report/tts-smoke
+            aloud-report/tts-engine-smoke
             ${{ runner.temp }}/emulator.log
           retention-days: 14

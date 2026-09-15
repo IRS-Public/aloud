@@ -82,11 +82,14 @@ export function accountTts(evidence, { requestId, screen, requireDone = false } 
     const synthesis = native.filter((e) => ["synthesis-complete", "synthesis-stopped", "synthesis-error"].includes(e.kind));
     for (const e of native) engineSessions.add(e.engineSession);
     if (result === undefined) problems.push(`${id}: missing dispatch result`);
+    if (result !== undefined && result < 0 && (receipts.length || terminals.length || starts.length)) problems.push(`${id}: rejected dispatch has downstream events`);
     if (receipts.length > 1 || synthesis.length > 1 || terminals.length > 1 || starts.length > 1) problems.push(`${id}: duplicate receipt or lifecycle event`);
     if (native.length && receipts.length !== 1) problems.push(`${id}: missing engine receipt`);
     if (r.operation === "stop" || r.queueMode !== 1) controls.push({ dispatchId: id, operation: r.operation, queueMode: r.queueMode, result });
     if (r.operation === "stop" || r.text === "") {
       if (result !== 0) problems.push(`${id}: queue control failed`);
+      if (r.operation === "stop" && native.length) problems.push(`${id}: stop control has synthesis events`);
+      if (r.wireId === null && events.length) problems.push(`${id}: callback for a control without a wire ID`);
       continue;
     }
     const terminal = terminals[0]?.kind ?? (result !== undefined && result < 0 ? "rejected" : "unresolved");
@@ -117,6 +120,8 @@ export function validateFocusTts(capture) {
   const accounting = accountTts(evidence, { requestId: capture.requestId, screen: capture.screen, requireDone: true });
   check(accounting.complete && accounting.requests.length > 0, `incomplete accounting: ${accounting.problems.join("; ")}`);
   const client = parseTtsJournal(evidence.client, "client");
+  check(client[0].data.packageName === "com.android.talkback" && client[0].data.pid === capture.commands[0].pid,
+    "focus journal belongs to another client process");
   check(accounting.requests.every((r) => integer(r.sequence) && r.sequence < capture.commands.length), "speech belongs to an unknown focus step");
   for (const command of capture.commands) {
     const t = command.tts, scope = { requestId: capture.requestId, screen: capture.screen,

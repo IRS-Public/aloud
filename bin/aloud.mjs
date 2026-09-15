@@ -66,6 +66,7 @@ Commands:
   ios          Run the iOS leg: computed VoiceOver transcript + tree checks + report + gate
   talkback     Manage TalkBack on the device: status | install <apk> | enable | disable |
                configure | get [--foss|--build]
+  tts          Build or install the optional silent recording TTS engine
   report       Re-aggregate an existing report dir (--dir, --baseline, --gate)
   baseline     Accept current counts into a baseline: aloud baseline <report-dir> [--baseline <file>]
   openacr      Emit a draft OpenACR (--android/--ios baselines or --report/--report-ios dirs)
