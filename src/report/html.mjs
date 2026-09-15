@@ -42,8 +42,8 @@ function statusOf(s) {
   }
   if (s.gate.errors === 0 && s.atfFindings?.length) return { key: "nodata", label: `Review · ${s.atfFindings.length} ATF finding(s)` };
   return s.gate.errors > 0
-    ? { key: "fail", label: `Fail · ${s.gate.errors} error${s.gate.errors === 1 ? "" : "s"}` }
-    : { key: "pass", label: "Pass" };
+    ? { key: "fail", label: `${s.atfSummary ? "Tree fail" : "Fail"} · ${s.gate.errors} error${s.gate.errors === 1 ? "" : "s"}` }
+    : { key: "pass", label: s.atfSummary ? "Tree pass" : "Pass" };
 }
 
 function findingsHtml(s) {
@@ -117,7 +117,7 @@ function androidAtfHtml(s, id) {
     const node = byId.get(f.elementId);
     return `<li class="finding warn"><p class="finding-head"><span class="sev sev-warn">${esc(f.type)}</span> <code>${esc(f.ruleId)}</code></p>
       <p>${esc(f.message)}</p><code class="el">Node ${esc(f.elementId ?? "whole hierarchy")} · ${esc(node?.className ?? "")} ${esc(node?.viewId ?? "")} ${esc(node?.text ?? node?.description ?? "")}</code>
-      ${f.potentialDuplicates.length ? `<p>Potential overlap with tree finding: ${esc(f.potentialDuplicates.join(", "))}. Counted only in the tree gate.</p>` : ""}</li>`;
+      ${f.potentialDuplicates.length ? `<p>Potential overlap with tree finding: ${esc(f.potentialDuplicates.join(", "))}. ATF findings do not add to the tree gate.</p>` : ""}</li>`;
   }).join("");
   const checks = s.atfSummary.checks.map((c) => `<li><code>${esc(c.ruleId)}</code>: executed; ${c.results.ERROR + c.results.WARNING + c.results.INFO} finding(s), ${c.results.NOT_RUN} skipped element result(s).</li>`).join("");
   const skipped = s.androidAtf ? JSON.parse(s.androidAtf.capture.raw).checks.flatMap((c) => c.results.filter((r) => r.type === "NOT_RUN")
@@ -408,7 +408,7 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
       ${shot}
       <div>
         ${transcriptHtml(s, id, audioManifest?.[id], id === firstAudioId)}
-        <h3>Findings (${s.violations?.length ?? 0})</h3>
+        <h3>${s.atfSummary ? "Tree findings" : "Findings"} (${s.violations?.length ?? 0})</h3>
         ${findingsHtml(s)}
         ${appleAuditHtml(s, id)}
         ${androidAtfHtml(s, id)}
@@ -437,8 +437,8 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
       <div><dt>Screens</dt><dd>${order.length}</dd></div>
       <div><dt>${hasAppleAudit || hasVoiceOver || hasAtf ? "Tree pass" : "Pass"}</dt><dd class="is-pass">${passCount}</dd></div>
       <div><dt>${hasAppleAudit || hasVoiceOver || hasAtf ? "Tree fail" : "Fail"}</dt><dd${failCount ? ` class="is-fail"` : ""}>${failCount}</dd></div>
-      <div><dt>Errors</dt><dd${errorTotal ? ` class="is-fail"` : ""}>${errorTotal}</dd></div>
-      <div><dt>Warnings</dt><dd>${warnTotal}</dd></div>
+      <div><dt>${hasAtf ? "Tree errors" : "Errors"}</dt><dd${errorTotal ? ` class="is-fail"` : ""}>${errorTotal}</dd></div>
+      <div><dt>${hasAtf ? "Tree warnings" : "Warnings"}</dt><dd>${warnTotal}</dd></div>
       ${hasAppleAudit ? `<div><dt>Apple findings to review</dt><dd>${appleIssueTotal}</dd></div>` : ""}
     </dl>
     ${legNote}
