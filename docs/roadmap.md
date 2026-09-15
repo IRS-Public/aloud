@@ -5,6 +5,8 @@ starting point; it does not establish complete audit coverage.
 
 ## 1. Apple accessibility audit
 
+Tracking: [#21](https://github.com/IRS-Public/aloud/issues/21).
+
 The first implementation is `aloud ios --apple-audit`:
 
 - Capture native findings on every navigated screen alongside tree checks.
@@ -19,6 +21,8 @@ screen. Only introduce gating or WCAG mappings with corresponding fixtures
 and explicit per-screen native-check coverage.
 
 ## 2. Real VoiceOver
+
+Tracking: [#23](https://github.com/IRS-Public/aloud/issues/23).
 
 The existing Xcode 27 harness is experimental. Before wiring it into the
 supported walker:
@@ -38,6 +42,8 @@ supported walker:
 
 ## 3. TalkBack focus stepping
 
+Tracking: [#24](https://github.com/IRS-Public/aloud/issues/24).
+
 Develop a companion with a documented command/response protocol. Prove on
 the pinned TalkBack build that commands advance TalkBack's own focus and
 produce its speech. A tree walker that merely sets accessibility focus is
@@ -50,6 +56,8 @@ Fail incomplete traversal rather than presenting it as a full transcript.
 
 ## 4. Logging TTS engine
 
+Tracking: [#25](https://github.com/IRS-Public/aloud/issues/25).
+
 Use the same capture identity and sequence protocol as focus stepping.
 Preserve speech requests, queue replacement/flush events, and completion or
 interruption events. Compare logs against TalkBack output under repeated
@@ -61,6 +69,8 @@ the user heard the whole utterance. Restore the original engine and device
 settings after both successful and failed runs.
 
 ## 5. Accessibility Test Framework and richer Android nodes
+
+Tracking: [#26](https://github.com/IRS-Public/aloud/issues/26).
 
 Capture node properties missing from `uiautomator`, including hints,
 `stateDescription`, and `paneTitle`, through a supported richer API.
