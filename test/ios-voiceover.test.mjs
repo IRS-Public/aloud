@@ -36,6 +36,13 @@ test("real iOS 27 captures retain announcements, missing initial speech, repeats
   assert.ok(speech("modal").filter((s) => s === "Modal value 12.50").length > 1);
   assert.deepEqual(speech("scroll").slice(1), Array.from({ length: 12 }, (_, i) => `Scroll row ${i + 1} Button`));
   assert.ok(speech("dynamic").some((s) => /^Live count \d+$/.test(s)));
+  assert.ok(speech("repeated").filter((s) => s.includes("Same label")).length >= 2);
+  assert.equal(fixture.captures.repeated.voiceOverWasEnabled, true);
+  assert.equal(fixture.captures.repeated.voiceOverRestored, true);
+  for (const failure of Object.values(fixture.failures)) {
+    assert.throws(() => parseVoiceOverCapture(encode(failure, failure.requestId), failure),
+      new RegExp(`capture failed \\(${failure.error.code}\\)`));
+  }
 });
 
 test("real speech keeps raw values, order, repeated labels and explicit partial coverage", () => {

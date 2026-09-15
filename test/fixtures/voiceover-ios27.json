@@ -267,6 +267,121 @@
         "xcode": "Xcode 27.0\nBuild version 27A5252f",
         "simulatorUdid": "35BDF225-C0A4-4109-B40A-8D2B8343268A"
       }
+    },
+    "repeated": {
+      "bundleId": "org.aloud.voiceover.VoiceOverFixture",
+      "coverage": {
+        "complete": false,
+        "elapsedMs": 21692,
+        "maxSteps": 12,
+        "reason": "step-limit",
+        "start": "current-focus"
+      },
+      "requestId": "824d8bef-8c10-4f27-b7a7-44fe78d2739f",
+      "runtime": "Version 27.0 (Build 24A5423a)",
+      "schemaVersion": 1,
+      "screen": "repeated",
+      "source": "voiceover",
+      "status": "captured",
+      "steps": [
+        {
+          "action": "current",
+          "sequence": 0,
+          "utterance": "VoiceOverFixture Fixture repeated Heading"
+        },
+        {
+          "action": "forward",
+          "sequence": 1,
+          "utterance": "Same label Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 2,
+          "utterance": "Same label Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 3,
+          "utterance": "Balance $1,234.50; rate 2.5%"
+        },
+        {
+          "action": "forward",
+          "sequence": 4,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 5,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 6,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 7,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 8,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 9,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 10,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 11,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 12,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        }
+      ],
+      "voiceOverRestored": true,
+      "voiceOverWasEnabled": true,
+      "toolchain": {
+        "xcode": "Xcode 27.0\nBuild version 27A5252f",
+        "simulatorUdid": "35BDF225-C0A4-4109-B40A-8D2B8343268A"
+      }
+    }
+  },
+  "failures": {
+    "system-alert": {
+      "bundleId": "org.aloud.voiceover.VoiceOverFixture",
+      "error": {
+        "code": "system-alert",
+        "message": "Dismiss system alerts before capturing the target"
+      },
+      "requestId": "e58aecfb-9914-45b7-b136-19f0b4cddf30",
+      "schemaVersion": 1,
+      "screen": "system-alert",
+      "source": "voiceover",
+      "status": "failed"
+    },
+    "stopped-target": {
+      "bundleId": "org.aloud.voiceover.VoiceOverFixture",
+      "error": {
+        "code": "target-unavailable",
+        "message": "Target app must already be running"
+      },
+      "requestId": "62aae992-1c24-408e-8833-3d7cefed44fc",
+      "schemaVersion": 1,
+      "screen": "stopped-target",
+      "source": "voiceover",
+      "status": "failed"
     }
   }
 }
