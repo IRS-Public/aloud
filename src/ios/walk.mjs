@@ -11,8 +11,8 @@
 // API ships. The Xcode 27 spike showed real speech differs slightly from
 // the computed format ("Order status Heading" vs "Order status, heading"),
 // so any future speech comparison needs an explicit policy (see
-// docs/ios.md). Tree-error baselines do not compare speech. Navigation comes from the platform-blind nav
-// adapter (src/nav/), same as the Android walker.
+// docs/ios.md). Tree-error baselines do not compare speech. Navigation comes
+// from the platform-blind nav adapter (src/nav/), same as the Android walker.
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";

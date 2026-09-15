@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { createAppleAuditor, parseAppleAudit } from "../src/ios/apple-audit.mjs";
 import { loadConfig } from "../src/config.mjs";
 import { renderReportHtml } from "../src/report/html.mjs";
 
 const expected = { requestId: "request-123", screen: "checkout", bundleId: "example.app" };
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const issue = () => ({
   typeMask: "1", types: ["contrast"], compactDescription: "Low contrast",
   detailedDescription: "Review the foreground and background colors.", element: {
@@ -122,4 +125,42 @@ test("native report labels findings for review, escapes content, and keeps compu
   assert.match(html, /apple-audit\/checkout.json/);
   assert.match(html, /&lt;script&gt;/);
   assert.doesNotMatch(html, /<script>alert/);
+});
+
+test("the public CLI forwards --apple-audit through the resolved config to the iOS leg", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "aloud-apple-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const bin = join(dir, "bin");
+  mkdirSync(bin);
+  writeFileSync(join(bin, "bash"), `#!/usr/bin/env node
+const fs = require("node:fs");
+console.log(fs.readFileSync(process.env.ALOUD_CONFIG, "utf8"));
+`, { mode: 0o755 });
+  const cfg = join(dir, "aloud.config.json");
+  writeFileSync(cfg, JSON.stringify({ app: { ios: { bundleId: expected.bundleId } } }));
+  const result = spawnSync(process.execPath, [join(ROOT, "bin/aloud.mjs"), "ios", "--config", cfg,
+    "--out", join(dir, "out"), "--apple-audit", "--no-gate"], {
+    encoding: "utf8", env: { ...process.env, PATH: `${bin}:${dirname(process.execPath)}:${process.env.PATH}` },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).ios.appleAudit, true);
+});
+
+test("report aggregation preserves native review counts without treating them as tree-gate errors", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "aloud-apple-report-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const gate = { errors: 0, ruleIds: [] };
+  writeFileSync(join(dir, "checkout.tree.json"), JSON.stringify({ screen: "checkout", gate, violations: [], appleAudit: record() }));
+  writeFileSync(join(dir, "checkout.transcript.json"), JSON.stringify({
+    screen: "checkout", source: "computed-voiceover", transcript: ["Continue, button"],
+  }));
+  const baseline = join(dir, "baseline.json");
+  writeFileSync(baseline, JSON.stringify({ checkout: gate }));
+  const result = spawnSync(process.execPath, [join(ROOT, "src/report/report.mjs"),
+    "--dir", dir, "--baseline", baseline, "--gate"], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const summary = JSON.parse(readFileSync(join(dir, "summary.json")));
+  assert.deepEqual(summary.screens.checkout.appleAudit, { status: "completed", issues: 1, reportOnly: true });
+  assert.equal(summary.screens.checkout.errors, 0);
+  assert.match(readFileSync(join(dir, "index.html"), "utf8"), /Review · 1 Apple finding/);
 });
