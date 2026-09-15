@@ -14,6 +14,7 @@ const DEFAULTS = {
     android: { activity: ".MainActivity" },
     ios: {},
   },
+  ios: { appleAudit: false },
   nav: {
     mode: "current-screen",
     bridge: {
@@ -78,6 +79,10 @@ function deepMerge(base, extra) {
 }
 
 export function validateConfig(cfg) {
+  if (cfg.ios !== undefined && (!isPlainObject(cfg.ios) ||
+      (cfg.ios.appleAudit !== undefined && typeof cfg.ios.appleAudit !== "boolean"))) {
+    throw new Error("ios.appleAudit must be a boolean");
+  }
   if (!NAV_MODES.includes(cfg.nav.mode)) {
     throw new Error(`unknown nav.mode "${cfg.nav.mode}" (use ${NAV_MODES.join(" | ")})`);
   }
