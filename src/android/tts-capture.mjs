@@ -6,9 +6,14 @@ import { UUID, TTS_ENGINE } from "./tts-evidence.mjs";
 export function collectTtsEvidence(capture, out, runAdb = adb) {
   const session = capture.commands.find((c) => UUID.test(c.tts?.clientSession))?.tts.clientSession;
   if (!session) throw new Error("logging TTS requires a rebuilt companion and the recording engine");
+  return collectClientTtsEvidence(session, "com.android.talkback", out, runAdb);
+}
+
+export function collectClientTtsEvidence(session, clientPackage, out, runAdb = adb) {
+  if (!UUID.test(session) || !/^[A-Za-z0-9_.]+$/.test(clientPackage)) throw new Error("invalid TTS producer identity");
   const dir = join(out, "tts-logging", session);
   mkdirSync(dir, { recursive: true });
-  const client = runAdb(["exec-out", "cat", `/data/user_de/0/com.android.talkback/files/aloud-tts/${session}.jsonl`], { trim: false, timeout: 15000 });
+  const client = runAdb(["exec-out", "cat", `/data/user_de/0/${clientPackage}/files/aloud-tts/${session}.jsonl`], { trim: false, timeout: 15000 });
   writeFileSync(join(dir, "client.jsonl"), client);
   const root = `/data/user_de/0/${TTS_ENGINE}/files/aloud-tts/${session}`;
   let names;
