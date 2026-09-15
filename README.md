@@ -180,6 +180,11 @@ sliced into a per-screen spoken transcript. Pass two: TalkBack is off, and
 Two passes because `uiautomator` evicts running accessibility services, so
 the tree pass would kill TalkBack mid-speech.
 
+Opt-in `aloud android --atf --pass tree --no-gate` captures richer native nodes
+through the companion and runs six pinned Google Accessibility Test Framework
+checks on the same snapshot. Native findings are report-only; skipped checks
+remain explicit. See [setup and coverage](docs/android-atf.md).
+
 **iOS** runs one pass. `idb` dumps the accessibility tree per screen. aloud
 computes the VoiceOver utterance for each element (label, value, trait,
 hint) and runs the iOS rule checks. The transcript is labeled
@@ -254,10 +259,11 @@ Roadmap, in implementation order:
    durable requests against engine receipts and queue/completion events.
    The test engine emits synthetic silence; request accounting does not
    prove audible delivery. [Setup and evidence](docs/logging-tts.md).
-5. **Deeper Android checks.** Integrate Google's Accessibility Test
-   Framework and richer node data after the capture protocol is stable.
-   Preserve check provenance and verify each rule's coverage before it can
-   change OpenACR results.
+5. **Deeper Android checks.** Opt-in `--atf` captures native hints, state
+   descriptions, pane titles, and role-description extras, and runs six ATF
+   4.1.1 checks. Reports preserve exact element identities, skipped results,
+   and overlap with tree findings. New results remain report-only.
+   [Setup and coverage](docs/android-atf.md).
 
 Acceptance criteria and dependencies: [technical roadmap](docs/roadmap.md).
 

@@ -4,7 +4,7 @@
 //
 // Scope note: the dump exposes text/content-desc/bounds/clickable etc. but
 // NOT stateDescription, roleDescription, hints, or paneTitle — those need an
-// AccessibilityNodeInfo harness (ATF), which is the planned phase-2 upgrade.
+// opt-in AccessibilityNodeInfo/ATF companion, whose adapter also uses these rules.
 // These rules are the high-confidence subset that the dump can prove.
 
 // ── parser ──

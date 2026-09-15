@@ -21,6 +21,14 @@ work on orgs with a strict action allowlist.
 The rest of this page is the list of runner facts the templates encode.
 Each one cost a broken run to learn. Keep them if you edit the templates.
 
+For native companion development, `.github/workflows/talkback-focus.yml`
+builds the pinned companion with ATF 4.1.1 and exercises four separate suites:
+focus traversal, native ATF capture/cleanup, logging-TTS traversal/cleanup, and
+TTS queue/process recovery. The `talkback-focus-evidence` artifact includes
+raw ATF snapshots, per-check results, failures, and restoration evidence in
+`atf-smoke/`. Its cache key includes all companion sources, so ATF changes
+cannot reuse an older companion APK.
+
 ## Schedule triggers only fire from the default branch
 
 A `schedule:` cron in a workflow that exists only on a feature branch
