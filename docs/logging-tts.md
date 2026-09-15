@@ -1,0 +1,57 @@
+# Logging TTS capture
+
+Implementation contract for roadmap [#25](https://github.com/IRS-Public/aloud/issues/25).
+
+The opt-in recording engine writes text to private, durable JSONL files before
+synthesis. It produces **synthetic silence**, not spoken words. Engine synthesis
+completion and Android playback completion are separate events; neither means
+that a user heard the text. The normal system-engine mode keeps its existing
+speech-request provenance.
+
+## Two records are necessary
+
+Android can flush queued speech before `TextToSpeechService.onSynthesizeText`
+receives it. The pinned TalkBack companion therefore records each TTS call
+before dispatch, including text, queue mode, original utterance ID, and the
+focus capture's request/screen/step/session identity. Each dispatch gets a
+unique wire ID, including when original utterance IDs repeat. Callbacks map
+back to the original ID before TalkBack handles them.
+
+The engine independently records the received text, dispatch identity, caller
+UID, synthesis result, generated silence bytes, and synthesis interruptions.
+The client records the API result and start/done/stop/error callbacks. Empty
+flush calls and explicit stop calls remain separate queue controls.
+
+## Durability and accounting
+
+Each process writes a new session file with a header, consecutive event
+numbers, and a final newline for each event. Every append is flushed to disk
+before it returns. Files are private to the producer; adb root exports them
+from the userdebug emulator. No public log-reading endpoint is exposed.
+
+Accounting requires complete JSONL records, matching identities and text,
+unique dispatches, dispatch results, and terminal callbacks. A completed
+speech request also needs an engine receipt and completed synthesis. A
+stopped request may have been flushed before reaching synthesis; its callback
+must establish that outcome. Missing records, failed writes, process changes,
+ambiguous identities, and unfinished requests remain explicit incomplete
+evidence. They cannot become a passing capture when reports are regenerated.
+
+The runner restores the original TTS engine and related secure settings,
+accessibility services, and TalkBack preferences after success, failure,
+SIGINT, or SIGTERM. As with focus capture, a disconnected device or forced
+process kill can prevent cleanup; retain the recovery snapshot.
+
+## Validation required before release
+
+- Full TalkBack traversal with independent engine receipts for every captured
+  utterance, including repeated text and hints.
+- Rapid requests, repeated original IDs, queue replacement and stop, and output
+  exceeding a deliberately constrained logcat buffer.
+- Engine and client process death: preserved records and explicit incomplete
+  accounting, followed by a new session that succeeds.
+- Original engine, settings, and preferences restored after successful, failed,
+  and interrupted runs; persisted-report tampering rejected.
+
+The release claim is verified request accounting for tested captures, not a
+universal claim of lossless audio delivery.
