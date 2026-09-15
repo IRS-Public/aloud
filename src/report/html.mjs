@@ -63,7 +63,7 @@ function findingsHtml(s) {
 
 function transcriptHtml(s, id, audioEntries, includeAudioNote) {
   const lines = s.transcript ?? [];
-  const speaker = speakerFor(s.source);
+  const speaker = s.loggingTts ? "TalkBack · recording TTS (silent)" : speakerFor(s.source);
   const byIndex = new Map((audioEntries ?? []).map((e) => [e.i, e]));
   const coverageNote = s.source === "talkback-focus"
     ? `<p><strong>TalkBack traversal:</strong> both native boundaries verified in the captured window. Speech requests do not prove audible delivery or correct focus order.</p>
@@ -73,7 +73,10 @@ function transcriptHtml(s, id, audioEntries, includeAudioNote) {
     ? `<p><strong>Partial traversal:</strong> ${esc(s.voiceOver?.coverage.reason ?? "unknown")}. Capture starts at current focus; it does not prove every element was visited.</p>
       ${s.voiceOver?.steps?.[0]?.utterance === null ? "<p>The initial speech read timed out; the transcript contains only speech returned by subsequent steps.</p>" : ""}
       <p><a href="voiceover/${esc(encodeURIComponent(id))}.json">Raw VoiceOver evidence and toolchain</a></p>` : "";
-  const note = coverageNote + (includeAudioNote ? `<p class="audio-note">${esc(AUDIO_NOTE)}</p>` : "");
+  const loggingNote = s.loggingTts ? `<p><strong>Recording TTS:</strong> every captured request has a matching engine receipt and completed synthetic silence. No spoken audio was generated; completion does not mean the text was heard.</p>
+    <p><a href="tts-logging/${esc(s.loggingTts.clientSession)}/client.jsonl">Durable request and callback log</a> ·
+    <a href="tts-logging/${esc(s.loggingTts.clientSession)}/engine-${esc(s.loggingTts.engineSession)}.jsonl">Independent engine receipts</a></p>` : "";
+  const note = coverageNote + loggingNote + (includeAudioNote ? `<p class="audio-note">${esc(AUDIO_NOTE)}</p>` : "");
   if (lines.length === 0) {
     return `<h3 class="speaker">${esc(speaker)}</h3>
       ${note}<p class="none">No speech captured in this run.</p>`;

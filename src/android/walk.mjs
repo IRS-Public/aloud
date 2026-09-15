@@ -128,7 +128,8 @@ async function walk() {
   };
 
   const captureFocus = PASS === "transcript" && cfg.android?.talkBack === "focus"
-    ? createFocusCapturer({ out: OUT, target: appPackage, maxSteps: cfg.android.talkBackMaxSteps ?? 100 }) : null;
+    ? createFocusCapturer({ out: OUT, target: appPackage, maxSteps: cfg.android.talkBackMaxSteps ?? 100,
+      loggingTts: cfg.android.tts === "logging" }) : null;
   const walked = [];
   for (const screen of nav.screens) {
     if (NAV_MODE !== "current-screen") setAppearance(!!screen.dark);
@@ -144,7 +145,8 @@ async function walk() {
       // A settled screen has no navigation event to make TalkBack speak.
       // Enable it inside the marker pair so its initial focus announcement
       // is captured without restarting the app or changing the screen.
-      execFileSync(process.execPath, [fileURLToPath(new URL("./talkback.mjs", import.meta.url)), "enable"], {
+      execFileSync(process.execPath, [fileURLToPath(new URL("./talkback.mjs", import.meta.url)), "enable",
+        ...(cfg.android?.tts === "logging" ? ["--logging-tts"] : [])], {
         stdio: "inherit",
       });
     }

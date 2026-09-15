@@ -133,3 +133,10 @@ export function validateFocusTts(capture) {
   }
   return accounting;
 }
+
+export function focusTtsSummary(capture) {
+  const a = validateFocusTts(capture);
+  return { schemaVersion: 1, source: a.source, output: a.output, complete: a.complete,
+    engine: TTS_ENGINE, clientSession: a.clientSession, engineSession: a.engineSession,
+    requests: a.requests.length, queueEvents: a.queueEvents.length };
+}

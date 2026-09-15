@@ -15,6 +15,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderReportHtml } from "./html.mjs";
 import { validateTalkBackFocusCapture, focusTranscript } from "../android/talkback-focus.mjs";
+import { focusTtsSummary } from "../android/tts-evidence.mjs";
 import { validateVoiceOverCapture } from "../ios/voiceover-capture.mjs";
 
 const args = process.argv.slice(2);
@@ -76,6 +77,7 @@ for (const f of readdirSync(OUT).sort()) {
     }
     screens[r.screen] = { ...screens[r.screen], transcript: r.transcript, source: r.source,
       ...(r.talkBackFocus ? { talkBackFocus: r.talkBackFocus } : {}),
+      ...(r.talkBackFocus?.speechSource === "logging-tts" ? { loggingTts: focusTtsSummary(r.talkBackFocus) } : {}),
       ...(r.voiceOver ? { voiceOver: r.voiceOver } : {}),
     };
   }
@@ -90,13 +92,15 @@ if (ids.length === 0) {
 const requirementsPath = join(OUT, "capture-requirements.json");
 if (existsSync(requirementsPath)) {
   const requirements = JSON.parse(readFileSync(requirementsPath, "utf8"));
-  if (requirements.schemaVersion !== 1 || requirements.talkBackFocus !== true) {
+  if (requirements.schemaVersion !== 1 || requirements.talkBackFocus !== true ||
+      (requirements.loggingTts !== undefined && requirements.loggingTts !== true)) {
     throw new Error("invalid capture requirements");
   }
   for (const id of ids) {
     if (screens[id].source !== "talkback-focus" || !screens[id].talkBackFocus?.coverage.complete) {
       throw new Error(`${id}: requested TalkBack traversal did not complete; raw evidence is retained`);
     }
+    if (requirements.loggingTts && !screens[id].loggingTts?.complete) throw new Error(`${id}: requested logging TTS capture did not complete`);
   }
 }
 
@@ -117,6 +121,7 @@ const summary = {
             coverage: s.talkBackFocus.coverage, requestId: s.talkBackFocus.requestId,
             target: s.talkBackFocus.target, speechSource: s.talkBackFocus.speechSource,
             talkbackCommit: s.talkBackFocus.commands[0].talkbackCommit,
+            ...(s.loggingTts ? { loggingTts: s.loggingTts } : {}),
           } } : {}),
           ...(s.voiceOver ? { voiceOver: { coverage: s.voiceOver.coverage,
             initialSpeechUnavailable: s.voiceOver.steps[0]?.utterance === null,

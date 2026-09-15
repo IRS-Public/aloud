@@ -96,12 +96,19 @@ export function configure(pkg) {
   console.log(`configured ${file} (diagnosis mode + tutorial suppressed)`);
 }
 
-export function enable() {
+export function enable({ tts = "system" } = {}) {
+  if (!["system", "logging"].includes(tts)) throw new Error("TTS mode must be system or logging");
   const pkg = findTalkBack();
   if (!pkg) {
     throw new Error("TalkBack is not installed — run: aloud talkback install <apk>");
   }
   configure(pkg);
+  if (tts === "logging") {
+    const engine = "org.irs_public.aloud.tts";
+    if (!shell("pm", "list", "packages").split(/\r?\n/).includes(`package:${engine}`)) throw new Error("recording TTS engine is not installed — run: aloud tts install <apk>");
+    stopTalkBack(engine);
+    shell("settings", "put", "secure", "tts_default_synth", engine);
+  }
   const services = shell("settings", "get", "secure", "enabled_accessibility_services");
   const enabled = services === "null" ? [] : services.split(":").filter((s) => s && !PACKAGES.some((p) => s === component(p)));
   shell("settings", "put", "secure", "enabled_accessibility_services", [...new Set([...enabled, component(pkg)])].join(":"));
@@ -115,13 +122,13 @@ export function enable() {
       "TalkBack service did not come up (dumpsys accessibility has no TalkBackService)",
     );
   }
-  const tts = shell("pm", "list", "packages").match(/package:[\w.]*tts[\w.]*/gi) ?? [];
-  if (tts.length === 0) {
+  const engines = shell("pm", "list", "packages").match(/package:[\w.]*tts[\w.]*/gi) ?? [];
+  if (engines.length === 0) {
     console.warn(
       "⚠ no TTS engine installed — TalkBack will log 'TTS is not ready' and speech capture will be EMPTY",
     );
   }
-  console.log(`TalkBack enabled (${pkg}); TTS engines: ${tts.join(", ") || "none"}`);
+  console.log(`TalkBack enabled (${pkg}); TTS engines: ${engines.join(", ") || "none"}`);
 }
 
 export function disable() {
@@ -149,9 +156,9 @@ const execSleep = (seconds) => execFileSync("sleep", [String(seconds)]);
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [cmd, arg] = process.argv.slice(2);
   try {
-    if (cmd === "snapshot") saveAccessibilityState(arg, findTalkBack(), { preferences: !process.argv.includes("--settings-only") });
+    if (cmd === "snapshot") saveAccessibilityState(arg, findTalkBack(), { preferences: !process.argv.includes("--settings-only"), tts: process.argv.includes("--tts") });
     else if (cmd === "restore") restoreAccessibilityState(arg);
-    else if (cmd === "enable") enable();
+    else if (cmd === "enable") enable({ tts: process.argv.includes("--logging-tts") ? "logging" : "system" });
     else if (cmd === "disable") disable();
     else if (cmd === "status") status();
     else if (cmd === "configure") {
