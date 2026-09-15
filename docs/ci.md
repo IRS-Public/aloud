@@ -101,9 +101,10 @@ echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
 - **google_apis image, not Play Store.** `aloud talkback enable` writes
   TalkBack's prefs with `adb root`, which Play-Store images refuse. See
   [docs/talkback.md](talkback.md).
-- **ARM-only TalkBack libs.** On the x86_64 emulator, install the
-  emitted `talkback-nolib.apk` fallback when the main APK fails with
-  `NO_MATCHING_ABIS`. See [docs/talkback.md](talkback.md).
+- **Emulator TalkBack builds.** Use `--build --companion --no-native` to
+  omit ARM braille libraries and disable their initialization. Merely
+  stripping the libraries can crash TalkBack 16.2. See
+  [docs/talkback.md](talkback.md).
 - **idb from the pinned tarball.** The brew formula breaks on runner
   image updates. See [docs/ios.md](ios.md).
 - **Keep the gate advisory at first.** Both templates run

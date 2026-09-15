@@ -34,6 +34,11 @@ src/report/report.mjs             summary.json + index.html evidence page +
 src/report/openacr.mjs            draft OpenACR (see docs/openacr.md)
 ```
 
+Android `--talkback focus` replaces the startup transcript pass with the
+pinned companion's actual gesture actions, focus events, and speech requests.
+It requires verified native boundaries and runs tree capture first, before
+scrolling. See [the protocol](talkback-focus.md).
+
 `aloud android` and `aloud ios` run the whole leg: install the build
 (`--apk` / `--app`), walk, report, gate. `aloud report` re-aggregates an
 existing report dir. `aloud baseline` accepts current counts. `aloud
@@ -209,17 +214,16 @@ facts are in [docs/ci.md](ci.md) and [`examples/ci/`](../examples/ci/).
 
 ## Known limits, on purpose
 
-- **Announcement transcripts, not traversal transcripts.** Without focus
-  stepping, TalkBack speaks window, title, and focus events per screen.
-  That is rich enough to catch regressions, but it is not a full
-  element-by-element read. Focus stepping is on the roadmap.
-- **`adb shell input` can never drive TalkBack.** Its events inject below
-  the accessibility layer (verified in AOSP `InputDispatcher`). Focus
-  stepping will use a broadcast-intent companion service, not synthetic
-  gestures.
-- **Logcat speech capture can drop a line now and then.** The
-  consecutive-duplicate dedupe plus the ratchet baselines absorb this. A
-  logging TTS engine for lossless capture is on the roadmap.
+- **The default Android transcript covers startup/navigation speech.** Full
+  traversal is opt-in through `--talkback focus`; incomplete traversal fails
+  and retains raw diagnostics.
+- **Shell input injection does not drive TalkBack's accessibility focus.**
+  Focus capture uses a restricted broadcast companion inside TalkBack's
+  service and invokes its actual gesture controller.
+- **Logcat speech capture can drop lines.** Baselines count tree errors and
+  cannot detect missing speech. Focus mode records TalkBack's own TTS request
+  callback and keeps duplicate speech. A separate logging TTS engine remains
+  on the roadmap for independent request and queue/completion accounting.
 - **The computed iOS transcript is a model, not a recording.** Every report
   labels it as computed. See [docs/ios.md](ios.md) for the path to real
   VoiceOver speech.
