@@ -1,0 +1,387 @@
+{
+  "run": "https://github.com/IRS-Public/aloud/actions/runs/34971773654",
+  "captures": {
+    "modal": {
+      "bundleId": "org.aloud.voiceover.VoiceOverFixture",
+      "coverage": {
+        "complete": false,
+        "elapsedMs": 30790,
+        "maxSteps": 12,
+        "reason": "step-limit",
+        "start": "current-focus"
+      },
+      "requestId": "2a0c4bdd-22e9-4526-9060-3b75d40ca55e",
+      "runtime": "Version 27.0 (Build 24A5423a)",
+      "schemaVersion": 1,
+      "screen": "modal",
+      "source": "voiceover",
+      "status": "captured",
+      "steps": [
+        {
+          "action": "current",
+          "sequence": 0,
+          "utterance": "VoiceOver on"
+        },
+        {
+          "action": "forward",
+          "sequence": 1,
+          "utterance": "Dismiss modal Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 2,
+          "utterance": "Modal value 12.50"
+        },
+        {
+          "action": "forward",
+          "sequence": 3,
+          "utterance": "Modal value 12.50"
+        },
+        {
+          "action": "forward",
+          "sequence": 4,
+          "utterance": "Modal value 12.50"
+        },
+        {
+          "action": "forward",
+          "sequence": 5,
+          "utterance": "Modal value 12.50"
+        },
+        {
+          "action": "forward",
+          "sequence": 6,
+          "utterance": "Modal value 12.50"
+        },
+        {
+          "action": "forward",
+          "sequence": 7,
+          "utterance": "Modal value 12.50"
+        },
+        {
+          "action": "forward",
+          "sequence": 8,
+          "utterance": "Modal value 12.50"
+        },
+        {
+          "action": "forward",
+          "sequence": 9,
+          "utterance": "Modal value 12.50"
+        },
+        {
+          "action": "forward",
+          "sequence": 10,
+          "utterance": "Modal value 12.50"
+        },
+        {
+          "action": "forward",
+          "sequence": 11,
+          "utterance": "Modal value 12.50"
+        },
+        {
+          "action": "forward",
+          "sequence": 12,
+          "utterance": "Modal value 12.50"
+        }
+      ],
+      "voiceOverRestored": true,
+      "voiceOverWasEnabled": false,
+      "toolchain": {
+        "xcode": "Xcode 27.0\nBuild version 27A5252f",
+        "simulatorUdid": "35BDF225-C0A4-4109-B40A-8D2B8343268A"
+      }
+    },
+    "dynamic": {
+      "bundleId": "org.aloud.voiceover.VoiceOverFixture",
+      "coverage": {
+        "complete": false,
+        "elapsedMs": 30483,
+        "maxSteps": 12,
+        "reason": "step-limit",
+        "start": "current-focus"
+      },
+      "requestId": "18074439-6d3c-49d6-b9e5-5a65c7f2c0bd",
+      "runtime": "Version 27.0 (Build 24A5423a)",
+      "schemaVersion": 1,
+      "screen": "dynamic",
+      "source": "voiceover",
+      "status": "captured",
+      "steps": [
+        {
+          "action": "current",
+          "sequence": 0,
+          "utterance": "VoiceOver on"
+        },
+        {
+          "action": "forward",
+          "sequence": 1,
+          "utterance": "Live count 51"
+        },
+        {
+          "action": "forward",
+          "sequence": 2,
+          "utterance": "Stable control Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 3,
+          "utterance": "Stable control Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 4,
+          "utterance": "Stable control Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 5,
+          "utterance": "Stable control Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 6,
+          "utterance": "Stable control Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 7,
+          "utterance": "Stable control Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 8,
+          "utterance": "Stable control Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 9,
+          "utterance": "Stable control Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 10,
+          "utterance": "Stable control Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 11,
+          "utterance": "Stable control Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 12,
+          "utterance": "Stable control Button"
+        }
+      ],
+      "voiceOverRestored": true,
+      "voiceOverWasEnabled": false,
+      "toolchain": {
+        "xcode": "Xcode 27.0\nBuild version 27A5252f",
+        "simulatorUdid": "35BDF225-C0A4-4109-B40A-8D2B8343268A"
+      }
+    },
+    "scroll": {
+      "bundleId": "org.aloud.voiceover.VoiceOverFixture",
+      "coverage": {
+        "complete": false,
+        "elapsedMs": 12865,
+        "maxSteps": 12,
+        "reason": "step-limit",
+        "start": "current-focus"
+      },
+      "requestId": "a4779986-a27b-424e-9456-693076e4aa8b",
+      "runtime": "Version 27.0 (Build 24A5423a)",
+      "schemaVersion": 1,
+      "screen": "scroll",
+      "source": "voiceover",
+      "status": "captured",
+      "steps": [
+        {
+          "action": "current",
+          "sequence": 0,
+          "utterance": "VoiceOver on"
+        },
+        {
+          "action": "forward",
+          "sequence": 1,
+          "utterance": "Scroll row 1 Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 2,
+          "utterance": "Scroll row 2 Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 3,
+          "utterance": "Scroll row 3 Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 4,
+          "utterance": "Scroll row 4 Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 5,
+          "utterance": "Scroll row 5 Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 6,
+          "utterance": "Scroll row 6 Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 7,
+          "utterance": "Scroll row 7 Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 8,
+          "utterance": "Scroll row 8 Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 9,
+          "utterance": "Scroll row 9 Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 10,
+          "utterance": "Scroll row 10 Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 11,
+          "utterance": "Scroll row 11 Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 12,
+          "utterance": "Scroll row 12 Button"
+        }
+      ],
+      "voiceOverRestored": true,
+      "voiceOverWasEnabled": false,
+      "toolchain": {
+        "xcode": "Xcode 27.0\nBuild version 27A5252f",
+        "simulatorUdid": "35BDF225-C0A4-4109-B40A-8D2B8343268A"
+      }
+    },
+    "repeated": {
+      "bundleId": "org.aloud.voiceover.VoiceOverFixture",
+      "coverage": {
+        "complete": false,
+        "elapsedMs": 21692,
+        "maxSteps": 12,
+        "reason": "step-limit",
+        "start": "current-focus"
+      },
+      "requestId": "824d8bef-8c10-4f27-b7a7-44fe78d2739f",
+      "runtime": "Version 27.0 (Build 24A5423a)",
+      "schemaVersion": 1,
+      "screen": "repeated",
+      "source": "voiceover",
+      "status": "captured",
+      "steps": [
+        {
+          "action": "current",
+          "sequence": 0,
+          "utterance": "VoiceOverFixture Fixture repeated Heading"
+        },
+        {
+          "action": "forward",
+          "sequence": 1,
+          "utterance": "Same label Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 2,
+          "utterance": "Same label Button"
+        },
+        {
+          "action": "forward",
+          "sequence": 3,
+          "utterance": "Balance $1,234.50; rate 2.5%"
+        },
+        {
+          "action": "forward",
+          "sequence": 4,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 5,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 6,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 7,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 8,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 9,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 10,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 11,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        },
+        {
+          "action": "forward",
+          "sequence": 12,
+          "utterance": "Notifications Switch button on Double tap to toggle setting."
+        }
+      ],
+      "voiceOverRestored": true,
+      "voiceOverWasEnabled": true,
+      "toolchain": {
+        "xcode": "Xcode 27.0\nBuild version 27A5252f",
+        "simulatorUdid": "35BDF225-C0A4-4109-B40A-8D2B8343268A"
+      }
+    }
+  },
+  "failures": {
+    "system-alert": {
+      "bundleId": "org.aloud.voiceover.VoiceOverFixture",
+      "error": {
+        "code": "system-alert",
+        "message": "Dismiss system alerts before capturing the target"
+      },
+      "requestId": "e58aecfb-9914-45b7-b136-19f0b4cddf30",
+      "schemaVersion": 1,
+      "screen": "system-alert",
+      "source": "voiceover",
+      "status": "failed"
+    },
+    "stopped-target": {
+      "bundleId": "org.aloud.voiceover.VoiceOverFixture",
+      "error": {
+        "code": "target-unavailable",
+        "message": "Target app must already be running"
+      },
+      "requestId": "62aae992-1c24-408e-8833-3d7cefed44fc",
+      "schemaVersion": 1,
+      "screen": "stopped-target",
+      "source": "voiceover",
+      "status": "failed"
+    }
+  }
+}

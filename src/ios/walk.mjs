@@ -6,13 +6,9 @@
 //   ALOUD_CONFIG=/path/to/config.resolved.json node src/ios/walk.mjs \
 //     [--flow ids] [--port 8081] [--out dir] [--screen-id id]
 //
-// One pass (unlike Android's two): the transcript here is COMPUTED from the
-// tree — VoiceOver itself cannot run in the Simulator until the Xcode 27
-// API ships. The Xcode 27 spike showed real speech differs slightly from
-// the computed format ("Order status Heading" vs "Order status, heading"),
-// so any future speech comparison needs an explicit policy (see
-// docs/ios.md). Tree-error baselines do not compare speech. Navigation comes
-// from the platform-blind nav adapter (src/nav/), same as the Android walker.
+// Computed speech is the default; optional real VoiceOver uses Xcode 27
+// and records partial traversal coverage. Tree baselines do not compare
+// speech. Navigation comes from the shared platform-blind adapter.
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -20,6 +16,7 @@ import { join } from "node:path";
 import { loadNavigator } from "../nav/index.mjs";
 import { computeTranscript, normalizeElements, runIosChecks, validateIosCapture } from "./tree.mjs";
 import { createAppleAuditor } from "./apple-audit.mjs";
+import { createVoiceOverCapturer } from "./voiceover-capture.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -77,6 +74,8 @@ async function walk() {
   const udid = bootedUdid();
   const appleAuditor = cfg.ios?.appleAudit
     ? createAppleAuditor({ out: OUT, udid, bundleId: BUNDLE_ID }) : null;
+  const voiceOverCapturer = cfg.ios?.voiceOver === "real"
+    ? createVoiceOverCapturer({ out: OUT, udid, bundleId: BUNDLE_ID, maxSteps: cfg.ios.voiceOverMaxSteps }) : null;
   // Navigators that can reconstruct a screen start clean. current-screen
   // must preserve the app state the user selected before running the audit.
   if (NAV_MODE !== "current-screen") {
@@ -127,7 +126,6 @@ async function walk() {
       if (NAV_MODE !== "bridge") await sleep(screen.settleMs ?? 2500);
 
       const elements = await settledElements(udid, screen.id);
-      const transcript = computeTranscript(elements);
       const violations = runIosChecks(elements);
       const errors = violations.filter((v) => v.severity === "error");
       // Apple's audits can temporarily change settings such as Dynamic Type.
@@ -144,6 +142,17 @@ async function walk() {
           throw new Error(`screen "${screen.id}": accessibility content changed during the Apple audit; refusing to pair findings with a different screen`);
         }
       }
+      const voiceOver = voiceOverCapturer?.capture(screen.id);
+      if (voiceOver) {
+        const afterSpeech = await settledElements(udid, screen.id);
+        const fingerprint = (els) => JSON.stringify(els.map(({ raw, ...el }) => el));
+        if (fingerprint(elements) !== fingerprint(afterSpeech)) {
+          throw new Error(`screen "${screen.id}": accessibility content changed during VoiceOver capture; raw speech is retained but cannot be paired with this tree or screenshot`);
+        }
+      }
+      const transcript = voiceOver
+        ? voiceOver.steps.flatMap((step) => step.utterance === null ? [] : [step.utterance])
+        : computeTranscript(elements);
       writeFileSync(
         join(OUT, `${screen.id}.tree.json`),
         JSON.stringify(
@@ -163,10 +172,13 @@ async function walk() {
       );
       writeFileSync(
         join(OUT, `${screen.id}.transcript.json`),
-        JSON.stringify({ screen: screen.id, source: "computed-voiceover", transcript }, null, 2),
+        JSON.stringify({ screen: screen.id, source: voiceOver ? "voiceover" : "computed-voiceover", transcript,
+          ...(voiceOver ? { voiceOver } : {}),
+        }, null, 2),
       );
       console.log(
-        `  ✓ ${screen.id} — ${transcript.length} utterances, ${errors.length} error(s), ${violations.length - errors.length} warn(s)`,
+        `  ${voiceOver ? "△" : "✓"} ${screen.id} — ${transcript.length} utterances, ${errors.length} error(s), ${violations.length - errors.length} warn(s)` +
+          (voiceOver ? `; VoiceOver traversal partial (${voiceOver.coverage.reason})` : ""),
       );
     }
   } finally {

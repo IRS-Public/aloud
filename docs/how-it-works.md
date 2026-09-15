@@ -160,10 +160,12 @@ until two consecutive dumps agree (up to six), because a dump can race the
 accessibility tree's realization and drop traits from rows that are still
 settling.
 
-The transcript is labeled `computed-voiceover` in every report. It is never
-passed off as real speech. Real VoiceOver capture through Xcode 27's
-`XCUIVoiceOverService` is experimental; the harness and its proven
-constraints are in [docs/ios.md](ios.md).
+The default transcript is labeled `computed-voiceover`. With
+`--voiceover real --no-gate`, Xcode 27's `XCUIVoiceOverService` supplies raw
+speech instead. Every native capture has explicit partial coverage; step
+limits and speech timeouts never establish completion. Changed screen
+content is rejected before pairing speech with tree evidence. See
+[docs/ios.md](ios.md) for requirements, artifacts, and remaining limits.
 
 ```bash
 npx aloud ios --app path/to/YourApp.app

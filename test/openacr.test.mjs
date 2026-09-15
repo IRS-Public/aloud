@@ -69,6 +69,50 @@ const eachAdherence = (acr) => {
 
 const findCriterion = (acr, num) => eachAdherence(acr).find((c) => c.num === num)?.adherence;
 
+describe("real VoiceOver provenance", () => {
+  const voiceOver = {
+    requestId: "request-1", bundleId: "org.example.app",
+    initialSpeechUnavailable: true,
+    toolchain: { xcode: "Xcode 27.0", simulatorUdid: "device-1" },
+    coverage: { complete: false, start: "current-focus", reason: "step-limit", maxSteps: 20, elapsedMs: 1000 },
+  };
+  const real = { errors: 0, ruleIds: [], utterances: 2, transcriptSource: "voiceover", voiceOver };
+  it("labels mixed real and computed iOS screens and keeps speech criteria unevaluated", () => {
+    const acr = build({ android: null, ios: { screens: {
+      actual: real,
+      computed: { errors: 0, ruleIds: [], utterances: 3, transcriptSource: "computed-voiceover" },
+    } } });
+    const notes = findCriterion(acr, "302.1").notes;
+    assert.match(notes, /iOS actual has 2 raw VoiceOver utterance/);
+    assert.match(notes, /partial traversal \(step-limit\)/);
+    assert.match(notes, /initial speech read timed out/);
+    assert.match(notes, /1 iOS screens.*computed utterances/);
+    assert.match(acr.evaluation_methods_used, /XCUIVoiceOverService/);
+    assert.equal(findCriterion(acr, "302.1").level, "not-evaluated");
+    assert.equal(findCriterion(acr, "2.4.3").level, "not-evaluated");
+    const computed = build({ android: null, ios: { screens: {
+      actual: { errors: 0, ruleIds: [], utterances: 2 },
+      computed: { errors: 0, ruleIds: [], utterances: 3 },
+    } } });
+    assert.deepEqual(eachAdherence(acr).map((c) => c.adherence.level), eachAdherence(computed).map((c) => c.adherence.level));
+  });
+  it("rejects missing, inconsistent, complete and wrong-platform real speech evidence", () => {
+    for (const mutate of [
+      (s) => { delete s.voiceOver; },
+      (s) => { delete s.voiceOver.toolchain; },
+      (s) => { s.voiceOver.coverage.complete = true; },
+      (s) => { s.transcriptSource = "computed-voiceover"; },
+      (s) => { s.utterances = null; },
+      (s) => { s.voiceOver.initialSpeechUnavailable = 1; },
+    ]) {
+      const screen = structuredClone(real);
+      mutate(screen);
+      assert.throws(() => build({ android: null, ios: { screens: { home: screen } } }), /invalid audit/);
+    }
+    assert.throws(() => build({ ios: null, android: { screens: { home: real } } }), /another platform/);
+  });
+});
+
 describe("report-only Apple audit evidence", () => {
   it("acknowledges native findings without expanding conformance coverage", () => {
     const screen = { errors: 0, ruleIds: [], utterances: 1 };

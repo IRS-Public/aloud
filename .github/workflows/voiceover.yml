@@ -1,0 +1,47 @@
+name: VoiceOver smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/ios/voiceover-native/**'
+      - 'src/ios/voiceover-capture.mjs'
+      - 'test/ios-voiceover-smoke.mjs'
+      - '.github/workflows/voiceover.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: voiceover-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    runs-on: xcode-27
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture: [repeated, modal, scroll, dynamic]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Capture real VoiceOver on navigated fixture screens
+        run: node test/ios-voiceover-smoke.mjs
+        env:
+          ALOUD_VO_SMOKE_CASE: ${{ matrix.fixture }}
+      - name: Keep native speech and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: voiceover-smoke-${{ matrix.fixture }}
+          path: |
+            aloud-report/voiceover-smoke/voiceover/*.log
+            aloud-report/voiceover-smoke/voiceover/*.json
+            aloud-report/voiceover-smoke/voiceover/*.xcresult
+          retention-days: 7

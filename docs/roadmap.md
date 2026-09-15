@@ -24,21 +24,26 @@ and explicit per-screen native-check coverage.
 
 Tracking: [#23](https://github.com/IRS-Public/aloud/issues/23).
 
-The existing Xcode 27 harness is experimental. Before wiring it into the
-supported walker:
+The Xcode 27 harness is integrated as opt-in partial capture through
+`--voiceover real --no-gate`. It preserves raw speech and identities,
+retains limits/timeouts explicitly, and rejects unavailable targets and
+system dialogs. Complete traversal is still unproven: Apple's `Output`
+contains no documented focus identity or end flag.
 
-- Remove fallback-to-host behavior and validate the intended app throughout
-  capture. Preserve the already-navigated screen.
-- Distinguish a speech timeout, a traversal limit, and successful completion.
-  The current 20-step cap and `noSpeech` exception do not prove completion.
-- Test repeated labels, dynamic content, scroll boundaries, and modal views.
-- Store raw speech with `source: "voiceover"`, explicit completion metadata,
-  and the toolchain version. Never substitute computed output silently.
-- Define comparison normalization with fixtures; preserve meaningful
-  punctuation, values, order, and repeated utterances. Tree-count baselines
-  need no transcript migration because they contain no transcript text.
-- Make real capture opt-in first. Promote it only after repeatable device
-  or simulator runs on the supported toolchain demonstrate the above.
+Implemented: strict capture identities, no fallback or target relaunch,
+raw `source: "voiceover"` evidence, toolchain versions, service-state
+restoration, explicit stopping reasons, report/OpenACR provenance, and
+conservative comparison policies. Tree-count baselines need no transcript
+migration because they contain no transcript text. The simulator workflow
+exercises repeated labels, dynamic content, scrolling, and modals.
+
+Still required before promotion to the default:
+
+- Establish a verified traversal-completion signal. Neither repeated
+  speech nor `noSpeech` establishes the end of a screen.
+- Pair moving or changing content with coherent tree/screenshot evidence;
+  the current walker rejects changed screens and retains raw diagnostics.
+- Validate repeatably on supported GA toolchains and external apps.
 
 ## 3. TalkBack focus stepping
 
