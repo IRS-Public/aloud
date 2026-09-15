@@ -295,3 +295,9 @@ attribution.
 ## Contributing and security
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+
+### Full TalkBack traversal (opt-in)
+
+`aloud android --talkback focus` uses a companion built from the pinned TalkBack
+source. It captures real focus steps and speech requests, including scrolling,
+and rejects incomplete traversal. See [setup, evidence, and limitations](docs/talkback-focus.md).

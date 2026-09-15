@@ -66,7 +66,12 @@ case "${1:---foss}" in
       node "$(dirname "$0")/talkback-companion/patch.mjs" "$CACHE/talkback-src" ${PATCH_ARGS[@]+"${PATCH_ARGS[@]}"}
     fi
     # build.sh wants ANDROID_SDK and a system gradle; it runs assembleDebug
-    ( cd "$CACHE/talkback-src" && ANDROID_SDK="$SDK" bash build.sh )
+    if [ "$COMPANION" -eq 1 ]; then
+      printf 'sdk.dir=%s\n' "$SDK" > "$CACHE/talkback-src/local.properties"
+      ( cd "$CACHE/talkback-src" && gradle assemblePhoneDebug )
+    else
+      ( cd "$CACHE/talkback-src" && ANDROID_SDK="$SDK" bash build.sh )
+    fi
     APK=$(find "$CACHE/talkback-src/build/outputs/apk" -name "*phone-debug*.apk" | head -1)
     [ -n "$APK" ] || { echo "build produced no phone-debug apk"; exit 1; }
     cp "$APK" "$CACHE/talkback.apk"

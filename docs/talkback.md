@@ -4,6 +4,9 @@ The Android transcript is real TalkBack speech, captured from TalkBack's
 own log. That only works if the TalkBack build on the device logs its
 utterances in a shape aloud can parse. So aloud pins the build.
 
+For full traversal, opt into [TalkBack focus stepping](talkback-focus.md).
+The default capture still records startup/navigation speech only.
+
 ## The pin
 
 Google ships no prebuilt TalkBack APKs (the GitHub releases are
