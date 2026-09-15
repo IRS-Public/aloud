@@ -1,6 +1,15 @@
 import XCTest
 
 final class VoiceOverTests: XCTestCase {
+  private struct CaptureFailure: Error {
+    let code: String
+    let message: String
+  }
+
+  private func require(_ condition: Bool, _ code: String, _ message: String) throws {
+    if !condition { throw CaptureFailure(code: code, message: message) }
+  }
+
   @MainActor
   func testCurrentScreen() throws {
     continueAfterFailure = false
@@ -17,15 +26,30 @@ final class VoiceOverTests: XCTestCase {
     XCTAssertFalse(screen.isEmpty)
     XCTAssertFalse(bundleID.isEmpty)
     XCTAssertTrue((1...100).contains(maxSteps))
+    do {
+      try capture(requestID: requestID, screen: screen, bundleID: bundleID, maxSteps: maxSteps)
+    } catch let error as CaptureFailure {
+      // Expected capture rejections are protocol failures. XCTest completed
+      // its work; the controller rejects this status and fails the command.
+      try emit([
+        "schemaVersion": 1, "source": "voiceover", "status": "failed",
+        "requestId": requestID, "screen": screen, "bundleId": bundleID,
+        "error": ["code": error.code, "message": error.message]
+      ], requestID: requestID)
+    }
+  }
 
+  @available(iOS 27.0, *)
+  @MainActor
+  private func capture(requestID: String, screen: String, bundleID: String, maxSteps: Int) throws {
     let app = XCUIApplication(bundleIdentifier: bundleID)
     // Installing the separate test host must not restart the navigated app.
-    XCTAssertTrue(app.state == .runningForeground || app.state == .runningBackground ||
-      app.state == .runningBackgroundSuspended, "Target app must already be running")
+    try require(app.state == .runningForeground || app.state == .runningBackground ||
+      app.state == .runningBackgroundSuspended, "target-unavailable", "Target app must already be running")
     app.activate()
-    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30), "Target app is not foreground")
+    try require(app.wait(for: .runningForeground, timeout: 30), "target-unavailable", "Target app is not foreground")
     let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-    XCTAssertFalse(system.alerts.firstMatch.exists, "Dismiss system alerts before capturing the target")
+    try require(!system.alerts.firstMatch.exists, "system-alert", "Dismiss system alerts before capturing the target")
 
     let service = XCUIDevice.shared.voiceOverService
     let wasEnabled = service.isEnabled
@@ -58,8 +82,8 @@ final class VoiceOverTests: XCTestCase {
         reason = "time-limit"
         break
       }
-      XCTAssertEqual(app.state, .runningForeground, "Target app left foreground")
-      XCTAssertFalse(system.alerts.firstMatch.exists, "System alert interrupted target speech")
+      try require(app.state == .runningForeground, "target-left-foreground", "Target app left foreground")
+      try require(!system.alerts.firstMatch.exists, "system-alert", "System alert interrupted target speech")
       let action = sequence == 0 ? "current" : "forward"
       do {
         let output = try sequence == 0 ? service.currentSpeech() : service.moveForward()
@@ -73,10 +97,10 @@ final class VoiceOverTests: XCTestCase {
         reason = "speech-timeout"
         break
       }
-      XCTAssertEqual(app.state, .runningForeground, "Target app left foreground")
+      try require(app.state == .runningForeground, "target-left-foreground", "Target app left foreground")
     }
-    XCTAssertEqual(app.state, .runningForeground, "Target app left foreground")
-    XCTAssertFalse(system.alerts.firstMatch.exists, "System alert interrupted target speech")
+    try require(app.state == .runningForeground, "target-left-foreground", "Target app left foreground")
+    try require(!system.alerts.firstMatch.exists, "system-alert", "System alert interrupted target speech")
     if service.isEnabled != wasEnabled {
       if wasEnabled { try service.enable() } else { try service.disable() }
     }
@@ -89,6 +113,11 @@ final class VoiceOverTests: XCTestCase {
         "maxSteps": maxSteps, "elapsedMs": Int((ProcessInfo.processInfo.systemUptime - started) * 1000)],
       "steps": steps
     ]
+    try emit(result, requestID: requestID)
+  }
+
+  @MainActor
+  private func emit(_ result: [String: Any], requestID: String) throws {
     let data = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
     let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
     attachment.name = "aloud-voiceover"

@@ -62,6 +62,14 @@ test("missing, stale, duplicate, malformed, host-app and unsupported records fai
   ]) assert.throws(() => parseVoiceOverCapture(log, expected));
 });
 
+test("successful XCTest execution with a native rejection is still a capture failure", () => {
+  const failure = { schemaVersion: 1, source: "voiceover", status: "failed", ...expected,
+    error: { code: "target-unavailable", message: "Target app must already be running" } };
+  assert.throws(() => parseVoiceOverCapture(encode(failure), expected), /capture failed \(target-unavailable\)/);
+  assert.throws(() => parseVoiceOverCapture(encode({ ...failure, screen: "wrong" }), expected), /does not match/);
+  assert.throws(() => parseVoiceOverCapture(encode({ ...failure, error: null }), expected), /invalid.*failure/);
+});
+
 test("contradictory stopping reasons, gaps, errors and fabricated completion are rejected", () => {
   const mutations = [
     (r) => { r.coverage.complete = true; },

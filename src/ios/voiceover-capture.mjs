@@ -34,6 +34,15 @@ export function parseVoiceOverCapture(log, expected) {
 }
 
 export function validateVoiceOverCapture(result, expected) {
+  if (record(result) && result.schemaVersion === 1 && result.source === "voiceover" && result.status === "failed") {
+    for (const key of ["requestId", "screen", "bundleId"]) {
+      if (!text(expected[key]) || result[key] !== expected[key]) throw new Error(`VoiceOver failure ${key} does not match request`);
+    }
+    if (!record(result.error) || !text(result.error.code) || !text(result.error.message)) {
+      throw new Error("invalid VoiceOver failure record");
+    }
+    throw new Error(`VoiceOver capture failed (${result.error.code}): ${result.error.message}`);
+  }
   if (!record(result) || result.schemaVersion !== 1 || result.source !== "voiceover" ||
       result.status !== "captured" || !text(result.runtime) ||
       typeof result.voiceOverWasEnabled !== "boolean" || result.voiceOverRestored !== true) {

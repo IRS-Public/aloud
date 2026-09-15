@@ -65,10 +65,10 @@ for (const mode of ["repeated", "modal", "scroll", "dynamic"]) {
 // The app can still report foreground while SpringBoard's Open/Cancel
 // dialog is speaking. This is the native regression for the first spike.
 simctl("openurl", device.udid, "aloud-voiceover-fixture://repeated");
-assert.throws(() => capturer.capture("system-alert"), /VoiceOver xcodebuild failed/);
-assert.match(readFileSync(join(out, "voiceover/system-alert.log"), "utf8"), /system alerts|System alert/);
+assert.throws(() => capturer.capture("system-alert"), /VoiceOver capture failed \(system-alert\)/);
+assert.match(readFileSync(join(out, "voiceover/system-alert.log"), "utf8"), /ALOUD-VOICEOVER:/);
 assert.equal(existsSync(join(out, "voiceover/system-alert.json")), false);
 simctl("terminate", device.udid, bundleId);
-assert.throws(() => capturer.capture("stopped-target"), /VoiceOver xcodebuild failed/);
+assert.throws(() => capturer.capture("stopped-target"), /VoiceOver capture failed \(target-unavailable\)/);
 assert.equal(existsSync(join(out, "voiceover/stopped-target.json")), false);
 console.log("VoiceOver simulator smoke passed: four real fixtures, initial service states preserved, system alert and unavailable target rejected.");
