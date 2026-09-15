@@ -58,9 +58,13 @@ for (const mode of selected ? [selected] : cases) {
     assert.ok(lines.filter((line) => line.includes("Same label")).length >= 2, "duplicate labels must be retained");
     assert.ok(lines.some((line) => line.includes("1,234.50")), "meaningful numeric punctuation must survive capture");
   } else if (mode === "modal") {
-    assert.ok(lines.some((line) => line.includes("Modal details")), "must read the presented modal");
+    // Enabling VoiceOver can replace the first element's speech with its
+    // own announcement. Verify actual modal content without inventing a
+    // complete traversal or requiring a heading the API did not return.
+    assert.ok(lines.some((line) => line.includes("Dismiss modal")) &&
+      lines.some((line) => line.includes("Modal value 12.50")), "must read the presented modal");
   } else if (mode === "scroll") {
-    assert.ok(lines.some((line) => line.includes("Scroll row")), "must capture scrollable content without claiming complete coverage");
+    assert.ok(lines.some((line) => line.includes("Scroll row 12")), "must advance through scrollable rows without claiming complete coverage");
   } else {
     assert.ok(lines.some((line) => line.includes("Live count")), "must retain dynamic values");
   }

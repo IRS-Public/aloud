@@ -140,7 +140,10 @@ The [Output](https://developer.apple.com/documentation/xcuiautomation/xcuivoiceo
 contains an utterance but has no documented focus identifier or
 traversal-complete flag. Identical labels can belong to different controls.
 Repeated speech is never used as a completion signal and is never removed.
-The initial output can include a service announcement such as “VoiceOver on.”
+The initial output can be a service announcement such as “VoiceOver on,”
+leaving the first focused element's speech absent. The modal fixture showed
+this on Xcode 27: subsequent calls returned the dismiss button and modal
+value, but the heading was not returned. No computed heading is inserted.
 
 Every capture starts at **current focus**, with at most the configured
 number of forward moves (1–100; default 20). Coverage is always partial:

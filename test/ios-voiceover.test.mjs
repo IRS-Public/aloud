@@ -22,6 +22,22 @@ const capture = (overrides = {}) => ({
 const encode = (result, requestId = expected.requestId) =>
   `ALOUD-VOICEOVER:${requestId}:${Buffer.from(JSON.stringify(result)).toString("base64")}\n`;
 
+test("real iOS 27 captures retain announcements, missing initial speech, repeats and scroll order", () => {
+  const fixture = JSON.parse(readFileSync(join(ROOT, "test/fixtures/voiceover-ios27.json")));
+  for (const result of Object.values(fixture.captures)) {
+    assert.deepEqual(parseVoiceOverCapture(encode(result, result.requestId), {
+      requestId: result.requestId, screen: result.screen, bundleId: result.bundleId, maxSteps: result.coverage.maxSteps,
+    }), result);
+  }
+  const speech = (mode) => fixture.captures[mode].steps.map((step) => step.utterance);
+  assert.equal(speech("modal")[0], "VoiceOver on");
+  assert.ok(speech("modal").includes("Dismiss modal Button"));
+  assert.ok(!speech("modal").includes("Modal details Heading"), "do not fill missing speech with computed content");
+  assert.ok(speech("modal").filter((s) => s === "Modal value 12.50").length > 1);
+  assert.deepEqual(speech("scroll").slice(1), Array.from({ length: 12 }, (_, i) => `Scroll row ${i + 1} Button`));
+  assert.ok(speech("dynamic").some((s) => /^Live count \d+$/.test(s)));
+});
+
 test("real speech keeps raw values, order, repeated labels and explicit partial coverage", () => {
   const progress = `ALOUD-VOICEOVER-STEP:${expected.requestId}:e30=\n`;
   const result = parseVoiceOverCapture(progress + encode(capture()), expected);
