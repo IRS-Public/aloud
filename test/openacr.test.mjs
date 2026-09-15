@@ -69,6 +69,28 @@ const eachAdherence = (acr) => {
 
 const findCriterion = (acr, num) => eachAdherence(acr).find((c) => c.num === num)?.adherence;
 
+describe("report-only Apple audit evidence", () => {
+  it("acknowledges native findings without expanding conformance coverage", () => {
+    const screen = { errors: 0, ruleIds: [], utterances: 1 };
+    const without = build({ android: null, ios: { screens: { home: screen } } });
+    const withApple = build({ android: null, ios: { screens: { home: {
+      ...screen, appleAudit: { status: "completed", issues: 2, reportOnly: true },
+    } } } });
+    assert.deepEqual(withApple.chapters, without.chapters);
+    assert.match(withApple.notes, /2 finding\(s\) requiring review/);
+    assert.match(withApple.evaluation_methods_used, /report-only and do not assign conformance levels/);
+    assert.match(findCriterion(withApple, "4.1.2").notes, /automated tree checks/);
+    assert.doesNotMatch(findCriterion(withApple, "4.1.2").notes, /native audit found no violations/);
+  });
+
+  it("rejects incomplete or malformed native summaries", () => {
+    for (const appleAudit of [null, {}, { status: "failed", issues: 0, reportOnly: true },
+      { status: "completed", issues: -1, reportOnly: true },
+      { status: "completed", issues: 0, reportOnly: false },
+    ]) assert.throws(() => normalizeAudit({ home: { errors: 0, ruleIds: [], appleAudit } }), /Apple audit/);
+  });
+});
+
 describe("normalizeAudit", () => {
   it("accepts the flat baseline map", () => {
     const a = normalizeAudit({ home: { errors: 1, ruleIds: ["native-touch-target-small"] } });
