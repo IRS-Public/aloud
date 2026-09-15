@@ -77,11 +77,31 @@ try {
   } })("process-change"), /incomplete.*target-process-changed/);
   results.processChange = "rejected";
 
+  await launch("nested");
+  let serviceRestarted = false;
+  await assert.rejects(createFocusCapturer({ out, target, runAdb: (args, opts) => {
+    const output = adb(args, opts);
+    if (!serviceRestarted && args.includes("first")) {
+      serviceRestarted = true;
+      enable();
+    }
+    return output;
+  } })("service-restart"), /incomplete.*(companion|session)/);
+  results.serviceRestart = "rejected";
+
   await launch("permission");
   const denied = adb(["logcat", "-d", "-s", "ALOUD_PERMISSION:I", "*:S"]);
   writeFileSync(join(out, "permission.log"), denied);
   assert.match(denied, /result=-17,data=receiver-not-invoked/);
   results.untrustedApp = "denied";
+
+  // Invalid subsequent commands must not act on another controller's capture.
+  const rejected = shell("am", "broadcast", "-a", "org.irs_public.aloud.TALKBACK_COMMAND", "-p", "com.android.talkback",
+    "--es", "op", "next", "--es", "requestId", "stale-controller", "--es", "screen", "fixture",
+    "--es", "target", target, "--ei", "sequence", "999", "--es", "session", "wrong-session");
+  writeFileSync(join(out, "stale-command.txt"), rejected);
+  assert.match(rejected, /result=409/);
+  results.staleCommand = "rejected";
 
   // Exercise the real shell runner's EXIT trap with TalkBack originally enabled and disabled.
   for (const enabled of [true, false]) {
@@ -93,14 +113,31 @@ try {
     const root = join(out, `runner-${enabled}`);
     writeFileSync(config, JSON.stringify({ out: root, app: { android: { package: target } },
       android: { talkBack: "focus", talkBackMaxSteps: 1 }, nav: { mode: "current-screen", screenId: "limited" } }));
-    assert.throws(() => execFileSync("bash", ["src/android/run.sh", "--pass", "transcript", "--no-gate"], {
-      env: { ...process.env, ALOUD_CONFIG: config }, timeout: 60000, stdio: "pipe",
-    }));
+    try {
+      execFileSync("bash", ["src/android/run.sh", "--pass", "transcript", "--no-gate"], {
+        env: { ...process.env, ALOUD_CONFIG: config }, timeout: 60000, stdio: "pipe",
+      });
+      assert.fail("truncated runner unexpectedly passed");
+    } catch (error) {
+      writeFileSync(join(out, `runner-${enabled}.log`), String(error.stdout ?? "") + String(error.stderr ?? ""));
+      assert.match(String(error.stderr), /incomplete TalkBack traversal/);
+    }
     assert.deepEqual(settings(), before);
     assert.equal(shell("cat", "/data/user_de/0/com.android.talkback/shared_prefs/com.android.talkback_preferences.xml"), prefs);
     assert.equal(existsSync(join(root, "android/accessibility-state.json")), false);
     results[`restoreAfterFailureOriginally${enabled ? "On" : "Off"}`] = "verified";
   }
+  await launch("nested");
+  const successBefore = settings();
+  const successConfig = join(out, "runner-success.json");
+  writeFileSync(successConfig, JSON.stringify({ out: join(out, "runner-success"), app: { android: { package: target } },
+    android: { talkBack: "focus", talkBackMaxSteps: 40 }, nav: { mode: "current-screen", screenId: "nested" } }));
+  const successLog = execFileSync("bash", ["src/android/run.sh", "--pass", "transcript", "--no-gate"], {
+    env: { ...process.env, ALOUD_CONFIG: successConfig }, timeout: 90000, stdio: "pipe",
+  });
+  writeFileSync(join(out, "runner-success.log"), successLog);
+  assert.deepEqual(settings(), successBefore);
+  results.restoreAfterSuccess = "verified";
 } finally {
   restoreAccessibilityState(originalFile);
   assert.deepEqual(settings(), original.settings);

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -115,3 +116,28 @@ test("validates opt-in Android traversal configuration", () => {
     assert.throws(() => loadConfig(null, { android }), /android.talkBack/);
   }
 });
+
+for (const mutation of ["none", "incomplete", "missing-step", "different-transcript", "different-screen"]) {
+  test(`report verifies persisted TalkBack evidence: ${mutation}`, (t) => {
+    const out = mkdtempSync(join(tmpdir(), "aloud-focus-report-")); t.after(() => rmSync(out, { recursive: true, force: true }));
+    const c = capture(), transcript = focusTranscript(c);
+    if (mutation === "incomplete") { c.coverage.complete = false; c.coverage.reason = "step-limit"; }
+    if (mutation === "missing-step") c.commands.pop();
+    if (mutation === "different-transcript") transcript.pop();
+    if (mutation === "different-screen") c.screen = "another";
+    writeFileSync(join(out, "fixture.transcript.json"), JSON.stringify({ screen: "fixture", source: "talkback-focus", transcript, talkBackFocus: c }));
+    const result = spawnSync(process.execPath, ["src/report/report.mjs", "--dir", out], {
+      env: { ...process.env, ALOUD_CONFIG: "" }, encoding: "utf8",
+    });
+    assert.equal(result.status === 0, mutation === "none", result.stderr);
+    if (mutation === "none") {
+      const summary = JSON.parse(readFileSync(join(out, "summary.json")));
+      assert.equal(summary.screens.fixture.transcriptSource, "talkback-focus");
+      assert.equal(summary.screens.fixture.talkBackFocus.coverage.complete, true);
+      const html = readFileSync(join(out, "index.html"), "utf8");
+      assert.match(html, /TalkBack speech requests/);
+      assert.match(html, /do not prove audible delivery or correct focus order/);
+      assert.match(html, /talkback-focus\/fixture.json/);
+    }
+  });
+}
