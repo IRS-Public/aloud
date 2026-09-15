@@ -89,6 +89,10 @@ adb shell am broadcast -a org.irs_public.aloud.TALKBACK_COMMAND \
   --es screen <screen-id> --es target <package> --ei sequence 0
 ```
 
+The initial `hello` handshake can poll up to 30 times, one second apart, while
+the service or TTS engine initializes. Unavailable/not-ready attempts remain
+in raw evidence. Movement commands are never retried.
+
 Subsequent operations are `reset` (First item, before the backward sweep),
 `previous`, `first` (First item, starting the recorded forward sweep), and `next`, with consecutive
 sequence numbers and `--es session <hello-session>`. Every response echoes
@@ -98,7 +102,7 @@ Android runtime, and TalkBack commit. Code `200` carries base64 UTF-8 JSON;
 A service restart generates a new session and invalidates the capture.
 
 Responses contain `before`, `after`, `focusEvents`, `speech`, `signals`,
-`elapsedMs`, and `status`. `ready`, `focused`, and `edge` require matching
+`elapsedMs`, and `status`. `not-ready` is an initial handshake response. `ready`, `focused`, and `edge` require matching
 focus identity; failure statuses include `wrap`, `scroll-failed`,
 `target-changed`, `window-changed`, `service-stopped`, `step-timeout`, and
 `speech-limit`. Speech entries contain `utteranceId` and `text`; their array

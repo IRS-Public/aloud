@@ -61,7 +61,7 @@ for (const mode of ["complete", "limit", "restart", "exit", "unavailable", "miss
     const out = mkdtempSync(join(tmpdir(), "aloud-focus-")); t.after(() => rmSync(out, { recursive: true, force: true }));
     let count = 0;
     const source = capture().commands;
-    const capturer = createFocusCapturer({ out, target, maxSteps: 3,
+    const capturer = createFocusCapturer({ out, target, maxSteps: 3, startupAttempts: 1,
       runShell: () => {
         if (mode === "unavailable" || (mode === "exit" && count > 2)) throw new Error("pidof found no process");
         return mode === "restart" && count > 2 ? "21" : "20";
@@ -167,4 +167,24 @@ test("re-aggregation rejects trees left by an interrupted requested traversal", 
   });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /requested TalkBack traversal did not complete/);
+});
+
+test("waits for cold service readiness without retrying a focus move", async (t) => {
+  const out = mkdtempSync(join(tmpdir(), "aloud-focus-startup-")); t.after(() => rmSync(out, { recursive: true, force: true }));
+  const sent = []; let hellos = 0;
+  const capturer = createFocusCapturer({ out, target, sleep: async () => {}, runShell: () => "20",
+    runAdb: (args) => {
+      if (args[0] === "logcat") return "startup diagnostics";
+      const value = (name) => args[args.indexOf(name) + 1];
+      const action = value("op"), sequence = Number(value("sequence")); sent.push(action);
+      if (action === "hello" && ++hellos === 1) return "Broadcast completed: result=0";
+      const r = structuredClone(capture().commands[sequence]); r.requestId = value("requestId");
+      if (action === "hello" && hellos === 2) { r.status = "not-ready"; r.after = {}; }
+      return `Broadcast completed: result=200, data="${Buffer.from(JSON.stringify(r)).toString("base64")}"`;
+    },
+  });
+  const result = await capturer("fixture");
+  assert.equal(result.coverage.complete, true);
+  assert.equal(result.startupAttempts.length, 2);
+  assert.deepEqual(sent, ["hello", "hello", "hello", "reset", "previous", "first", "next", "next"]);
 });

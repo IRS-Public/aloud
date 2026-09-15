@@ -169,7 +169,12 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
     failure = null; focused = false; started = changed = SystemClock.uptimeMillis();
     pending = goAsync();
     if (!targetMatches()) { finish("target-changed"); return; }
-    if ("hello".equals(op)) { finish("ready"); return; }
+    if ("hello".equals(op)) {
+      AccessibilityNodeInfo current = focus();
+      boolean ready = current != null && service.getSpeechController().getFailoverTts().isReady();
+      if (current != null) current.recycle();
+      finish(ready ? "ready" : "not-ready"); return;
+    }
     int action = "next".equals(op) ? R.string.shortcut_value_next :
         "previous".equals(op) ? R.string.shortcut_value_previous : R.string.shortcut_value_first_in_screen;
     service.gestureController.performAction(service.getString(action), Performance.EVENT_ID_UNTRACKED);

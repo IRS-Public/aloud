@@ -7,7 +7,7 @@ import { validateScreenId } from "../screen-id.mjs";
 import { TALKBACK_COMMIT } from "./talkback-companion/patch.mjs";
 
 export const FOCUS_ACTION = "org.irs_public.aloud.TALKBACK_COMMAND";
-const statuses = ["ready", "focused", "edge", "wrap", "scroll-failed", "target-changed", "window-changed",
+const statuses = ["not-ready", "ready", "focused", "edge", "wrap", "scroll-failed", "target-changed", "window-changed",
   "service-stopped", "step-timeout", "speech-limit"];
 const isText = (x) => typeof x === "string" && x.length > 0;
 const nodeMatches = (node, target, windowId) => node && isText(node.id) &&
@@ -36,6 +36,7 @@ export function validateFocusResponse(value, expected) {
       !Array.isArray(value.focusEvents) || !value.before || !value.after) {
     throw new Error("invalid TalkBack companion response");
   }
+  if (value.status === "not-ready" && value.action !== "hello") throw new Error("readiness is only valid for hello");
   if (expected.session && (value.session !== expected.session || value.pid !== expected.pid ||
       value.windowId !== expected.windowId)) throw new Error("TalkBack companion session or window changed");
   if (["ready", "focused", "edge"].includes(value.status) &&
@@ -96,7 +97,8 @@ export const focusTranscript = (capture) => {
   return first < 0 ? [] : capture.commands.slice(first).flatMap((c) => c.speech.map((s) => s.text));
 };
 
-export function createFocusCapturer({ out, target, maxSteps = 100, runShell = shell, runAdb = adb }) {
+export function createFocusCapturer({ out, target, maxSteps = 100, runShell = shell, runAdb = adb,
+  startupAttempts = 30, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   if (!/^[A-Za-z0-9_.]+$/.test(target)) throw new Error("invalid Android target package");
   if (!Number.isInteger(maxSteps) || maxSteps < 1 || maxSteps > 200) throw new Error("TalkBack maxSteps must be 1–200");
   const dir = join(out, "talkback-focus");
@@ -110,7 +112,7 @@ export function createFocusCapturer({ out, target, maxSteps = 100, runShell = sh
     const log = join(dir, `${screen}.commands.jsonl`);
     const raw = join(dir, `${screen}.broadcasts.txt`);
     const result = { schemaVersion: 1, source: "talkback-focus", speechSource: "talkback-tts-request-listener",
-      requestId, screen, target, targetPid: "", commands: [],
+      requestId, screen, target, targetPid: "", commands: [], startupAttempts: [],
       coverage: { complete: false, start: "backward-edge", reason: "controller-failed", maxSteps } };
     writeFileSync(log, ""); writeFileSync(raw, "");
     let hello;
@@ -121,10 +123,23 @@ export function createFocusCapturer({ out, target, maxSteps = 100, runShell = sh
         "--es", "op", action, "--es", "requestId", requestId, "--es", "screen", screen,
         "--es", "target", target, "--ei", "sequence", String(sequence)];
       if (hello) args.push("--es", "session", hello.session);
-      const output = runAdb(args, { timeout: 15_000 });
-      appendFileSync(raw, output + "\n");
-      const response = parseFocusResponse(output, { requestId, screen, target, sequence, action,
-        ...(hello ? { session: hello.session, pid: hello.pid, windowId: hello.windowId } : {}) });
+      let response;
+      for (let attempt = 0; attempt < (action === "hello" ? startupAttempts : 1); attempt++) {
+        if (currentPid() !== result.targetPid) throw new Error("target-process-changed");
+        const output = runAdb(args, { timeout: 15_000 });
+        appendFileSync(raw, `# ${action} attempt ${attempt + 1}\n${output}\n`);
+        const absent = /Broadcast completed: result=0\s*$/.test(output);
+        if (!absent || action !== "hello") {
+          response = parseFocusResponse(output, { requestId, screen, target, sequence, action,
+            ...(hello ? { session: hello.session, pid: hello.pid, windowId: hello.windowId } : {}) });
+        }
+        if (action !== "hello" || (response && response.status !== "not-ready")) break;
+        result.startupAttempts.push({ attempt: attempt + 1, status: absent ? "receiver-unavailable" : "not-ready",
+          ...(response ? { response } : {}) });
+        response = undefined;
+        if (attempt < startupAttempts - 1) await sleep(1000);
+      }
+      if (!response) throw new Error("companion-startup-timeout (install a --companion build and check TalkBack/TTS startup)");
       const previous = result.commands.at(-1);
       result.commands.push(response);
       appendFileSync(log, JSON.stringify(response) + "\n");
