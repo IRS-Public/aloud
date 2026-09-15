@@ -109,7 +109,7 @@ A service restart generates a new session and invalidates the capture.
 Responses contain `before`, `after`, `focusEvents`, `speech`, `signals`,
 `elapsedMs`, and `status`. `not-ready` is an initial handshake response. `ready`, `focused`, and `edge` require matching
 focus identity; failure statuses include `wrap`, `scroll-failed`,
-`target-changed`, `window-changed`, `service-stopped`, `step-timeout`, and
+`target-changed`, `window-changed`, `service-stopped`, `external-notification`, `step-timeout`, and
 `speech-limit`. Speech entries contain `utteranceId` and `text`; their array
 position preserves order within a step. The identity tuple
 `requestId / screen / sequence / utteranceId` is the join point for future
@@ -120,7 +120,9 @@ engine-side records. The final capture explicitly states
 
 The native smoke suite uses Android Views with nested containers, two identical
 labels, a disabled button, 30 scrollable rows, and a dialog. It also exercises
-truncation, app/process changes, permission denial, and state restoration.
+truncation, app/process changes, permission denial, external notifications,
+and state restoration. CI disables Assistant onboarding on its disposable
+emulator, then deliberately posts a foreign notification in a negative test.
 The workflow retains raw evidence for investigation. JavaScript tests reject
 truncated records, missing focus or speech, stale sessions, guessed boundaries,
 and mismatched transcripts before report generation.
