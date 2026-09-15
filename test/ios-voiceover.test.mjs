@@ -83,6 +83,9 @@ test("initial reads can be retried without moving focus and missing initial spee
   }
   result.steps[1].readErrors = [error];
   assert.throws(() => parseVoiceOverCapture(encode(result), expected), /retry evidence/);
+  delete result.steps[1].readErrors;
+  result.steps[0].readErrors[2] = { ...error, code: 4 };
+  assert.throws(() => parseVoiceOverCapture(encode(result), expected));
 });
 
 test("a time budget can stop between steps without pretending the step budget was exhausted", () => {
@@ -271,6 +274,19 @@ test("partial real speech produces honest summary/HTML but fails a requested gat
     assert.doesNotMatch(html, /TalkBack said|Computed VoiceOver|<script>"/);
     if (gate) assert.match(result.stderr, /VoiceOver traversal is partial/);
   }
+});
+
+test("a missing initial speech read is visible in the report and summary", (t) => {
+  const result = report(t, { mutate(r) {
+    const error = { domain: "com.apple.xctest.voiceoverservice", code: 3, description: "No speech available" };
+    r.voiceOver.steps[0] = { sequence: 0, action: "current", utterance: null, error, readErrors: Array(3).fill(error) };
+    r.transcript = r.voiceOver.steps.slice(1).map((step) => step.utterance);
+  } });
+  assert.equal(result.status, 0, result.stderr);
+  const screen = JSON.parse(readFileSync(join(result.dir, "summary.json"))).screens.checkout;
+  assert.equal(screen.voiceOver.initialSpeechUnavailable, true);
+  assert.equal(screen.utterances, 2);
+  assert.match(readFileSync(join(result.dir, "index.html"), "utf8"), /initial speech read timed out/);
 });
 
 test("report refuses raw/transcript disagreement, missing provenance and invented complete coverage", (t) => {

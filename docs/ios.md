@@ -145,14 +145,21 @@ leaving the first focused element's speech absent. The modal fixture showed
 this on Xcode 27: subsequent calls returned the dismiss button and modal
 value, but the heading was not returned. No computed heading is inserted.
 
+Startup can also produce `noSpeech` before any announcement. The harness
+retries `currentSpeech()` up to three times; these reads do not move focus.
+Each timeout is retained in the current step's `readErrors`. If none returns
+speech, the current step remains `null` with its error, and forward
+traversal still runs. Reports and OpenACR notes identify that initial gap.
+
 Every capture starts at **current focus**, with at most the configured
 number of forward moves (1–100; default 20). Coverage is always partial:
 
 - `step-limit`: all requested forward calls returned; this does not prove
   the last element was reached.
-- `speech-timeout`: Apple's `noSpeech` error occurred. The failed step and
-  error are retained. The harness stops rather than retrying a forward
-  action that could silently skip an element.
+- `speech-timeout`: a forward action returned Apple's `noSpeech` error.
+  The failed step and error are retained. The harness stops rather than
+  retrying an action that could silently skip an element. An initial read
+  timeout alone is retained as a gap and does not stop forward traversal.
 - `time-limit`: the 120-second capture budget elapsed between API calls.
   An in-flight native call can exceed that budget; a 300-second process
   timeout then fails the capture and retains diagnostics.

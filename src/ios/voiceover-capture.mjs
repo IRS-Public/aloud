@@ -11,7 +11,8 @@ const HARNESS = join(dirname(fileURLToPath(import.meta.url)), "voiceover-native"
 const record = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const text = (v) => typeof v === "string" && v.trim().length > 0;
 const count = (v) => Number.isSafeInteger(v) && v >= 0;
-const speechError = (v) => record(v) && text(v.domain) && Number.isInteger(v.code) && text(v.description);
+// XCUIVoiceOverService.Error.Code.noSpeech is 3 on the verified toolchain.
+const speechError = (v) => record(v) && text(v.domain) && v.code === 3 && text(v.description);
 export const VOICEOVER_STOP_REASONS = ["step-limit", "speech-timeout", "time-limit"];
 
 export function validateVoiceOverCoverage(c) {
@@ -73,6 +74,9 @@ export function validateVoiceOverCapture(result, expected) {
       const terminalTimeout = reason === "speech-timeout" && i === result.steps.length - 1;
       if ((!initialGap && !terminalTimeout) || !speechError(step.error)) {
         throw new Error("invalid VoiceOver speech-timeout evidence");
+      }
+      if (initialGap && !["domain", "code", "description"].every((key) => step.error[key] === step.readErrors.at(-1)[key])) {
+        throw new Error("VoiceOver initial gap does not match the last read error");
       }
     } else if (typeof step.utterance !== "string" || step.error !== undefined) {
       throw new Error("invalid VoiceOver utterance");

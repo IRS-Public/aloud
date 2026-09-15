@@ -72,6 +72,7 @@ const findCriterion = (acr, num) => eachAdherence(acr).find((c) => c.num === num
 describe("real VoiceOver provenance", () => {
   const voiceOver = {
     requestId: "request-1", bundleId: "org.example.app",
+    initialSpeechUnavailable: true,
     toolchain: { xcode: "Xcode 27.0", simulatorUdid: "device-1" },
     coverage: { complete: false, start: "current-focus", reason: "step-limit", maxSteps: 20, elapsedMs: 1000 },
   };
@@ -84,6 +85,7 @@ describe("real VoiceOver provenance", () => {
     const notes = findCriterion(acr, "302.1").notes;
     assert.match(notes, /iOS actual has 2 raw VoiceOver utterance/);
     assert.match(notes, /partial traversal \(step-limit\)/);
+    assert.match(notes, /initial speech read timed out/);
     assert.match(notes, /1 iOS screens.*computed utterances/);
     assert.match(acr.evaluation_methods_used, /XCUIVoiceOverService/);
     assert.equal(findCriterion(acr, "302.1").level, "not-evaluated");
@@ -101,6 +103,7 @@ describe("real VoiceOver provenance", () => {
       (s) => { s.voiceOver.coverage.complete = true; },
       (s) => { s.transcriptSource = "computed-voiceover"; },
       (s) => { s.utterances = null; },
+      (s) => { s.voiceOver.initialSpeechUnavailable = 1; },
     ]) {
       const screen = structuredClone(real);
       mutate(screen);
