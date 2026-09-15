@@ -171,7 +171,9 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
     if (!targetMatches()) { finish("target-changed"); return; }
     if ("hello".equals(op)) {
       AccessibilityNodeInfo current = focus();
-      boolean ready = current != null && service.getSpeechController().getFailoverTts().isReady();
+      boolean ready = current != null && current.getWindowId() == windowId
+          && target.contentEquals(safe(current.getPackageName()))
+          && service.getSpeechController().getFailoverTts().isReady();
       if (current != null) current.recycle();
       finish(ready ? "ready" : "not-ready"); return;
     }
