@@ -85,8 +85,34 @@ final class VoiceOverTests: XCTestCase {
       try require(app.state == .runningForeground, "target-left-foreground", "Target app left foreground")
       try require(!system.alerts.firstMatch.exists, "system-alert", "System alert interrupted target speech")
       let action = sequence == 0 ? "current" : "forward"
+      if sequence == 0 {
+        // A fresh service can time out before its initial announcement.
+        // Retrying this read cannot move focus. If all reads time out, keep
+        // the gap and let the first forward action request new speech.
+        var readErrors: [[String: Any]] = []
+        for attempt in 1...3 {
+          try require(app.state == .runningForeground, "target-left-foreground", "Target app left foreground")
+          try require(!system.alerts.firstMatch.exists, "system-alert", "System alert interrupted target speech")
+          do {
+            let output = try service.currentSpeech()
+            try recordStep(["sequence": 0, "action": "current", "utterance": output.utterance,
+              "readErrors": readErrors])
+            break
+          } catch let error as XCUIVoiceOverService.Error where error.code == .noSpeech {
+            let detail: [String: Any] = ["domain": (error as NSError).domain, "code": (error as NSError).code,
+              "description": error.localizedDescription]
+            readErrors.append(detail)
+            print("ALOUD-VOICEOVER-READ-TIMEOUT:\(requestID):\(attempt)")
+            if attempt == 3 {
+              try recordStep(["sequence": 0, "action": "current", "utterance": NSNull(),
+                "error": detail, "readErrors": readErrors])
+            }
+          }
+        }
+        continue
+      }
       do {
-        let output = try sequence == 0 ? service.currentSpeech() : service.moveForward()
+        let output = try service.moveForward()
         try recordStep(["sequence": sequence, "action": action, "utterance": output.utterance])
       } catch let error as XCUIVoiceOverService.Error where error.code == .noSpeech {
         // Retrying moveForward could silently skip a focused element. Keep

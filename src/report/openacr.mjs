@@ -143,7 +143,7 @@ function transcriptCoverage(audits) {
     ...silent.map((audit) =>
       `${screenCoverage([audit])} have no ${audit.platform === "iOS" ? "computed utterances" : "captured speech"}.`),
     ...real.flatMap((audit) => Object.entries(audit.screens).map(([id, s]) =>
-      `iOS ${id} has ${s.utterances} raw VoiceOver utterance(s) with partial traversal (${s.voiceOver.coverage.reason}); complete traversal and focus order have not been established.`)),
+      `iOS ${id} has ${s.utterances} raw VoiceOver utterance(s) with partial traversal (${s.voiceOver.coverage.reason}); complete traversal and focus order have not been established.${s.voiceOver.initialSpeechUnavailable ? " The initial speech read timed out." : ""}`)),
     unknown.length ? `Transcript coverage is unavailable for ${screenCoverage(unknown)}.` : "",
   ].filter(Boolean).join(" ");
 }
@@ -187,6 +187,9 @@ function validateScreens(screens, platform = "input") {
       }
       try { validateVoiceOverCoverage(s.voiceOver.coverage); }
       catch { invalid("real VoiceOver needs valid partial-coverage metadata"); }
+      if (s.voiceOver.initialSpeechUnavailable !== undefined && typeof s.voiceOver.initialSpeechUnavailable !== "boolean") {
+        invalid("real VoiceOver initial-read coverage must be a boolean");
+      }
       for (const value of [s.voiceOver.requestId, s.voiceOver.bundleId,
         s.voiceOver.toolchain?.xcode, s.voiceOver.toolchain?.simulatorUdid]) {
         if (typeof value !== "string" || !value.trim()) invalid("real VoiceOver needs capture identity and toolchain");

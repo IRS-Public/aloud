@@ -92,6 +92,7 @@ const summary = {
           utterances: s.transcript?.length ?? null,
           ...(s.source ? { transcriptSource: s.source } : {}),
           ...(s.voiceOver ? { voiceOver: { coverage: s.voiceOver.coverage,
+            initialSpeechUnavailable: s.voiceOver.steps[0]?.utterance === null,
             requestId: s.voiceOver.requestId, bundleId: s.voiceOver.bundleId, toolchain: s.voiceOver.toolchain,
           } } : {}),
           ...(s.appleAudit ? { appleAudit: {

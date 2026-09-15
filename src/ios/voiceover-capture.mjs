@@ -11,6 +11,7 @@ const HARNESS = join(dirname(fileURLToPath(import.meta.url)), "voiceover-native"
 const record = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const text = (v) => typeof v === "string" && v.trim().length > 0;
 const count = (v) => Number.isSafeInteger(v) && v >= 0;
+const speechError = (v) => record(v) && text(v.domain) && Number.isInteger(v.code) && text(v.description);
 export const VOICEOVER_STOP_REASONS = ["step-limit", "speech-timeout", "time-limit"];
 
 export function validateVoiceOverCoverage(c) {
@@ -63,9 +64,14 @@ export function validateVoiceOverCapture(result, expected) {
     if (!record(step) || step.sequence !== i || step.action !== (i === 0 ? "current" : "forward")) {
       throw new Error("VoiceOver step sequence is incomplete or out of order");
     }
+    if (step.readErrors !== undefined && (i !== 0 || !Array.isArray(step.readErrors) ||
+        step.readErrors.length > (step.utterance === null ? 3 : 2) || !step.readErrors.every(speechError))) {
+      throw new Error("invalid VoiceOver initial-read retry evidence");
+    }
     if (step.utterance === null) {
-      if (reason !== "speech-timeout" || i !== result.steps.length - 1 || !record(step.error) ||
-          !text(step.error.domain) || !Number.isInteger(step.error.code) || !text(step.error.description)) {
+      const initialGap = i === 0 && step.readErrors?.length === 3;
+      const terminalTimeout = reason === "speech-timeout" && i === result.steps.length - 1;
+      if ((!initialGap && !terminalTimeout) || !speechError(step.error)) {
         throw new Error("invalid VoiceOver speech-timeout evidence");
       }
     } else if (typeof step.utterance !== "string" || step.error !== undefined) {

@@ -65,6 +65,26 @@ test("speech timeout records preserve prior speech and never imply traversal com
   }
 });
 
+test("initial reads can be retried without moving focus and missing initial speech stays explicit", () => {
+  const error = { domain: "XCUIVoiceOverServiceErrorDomain", code: 3, description: "No speech available" };
+  for (const reads of [0, 1, 2]) {
+    const result = capture();
+    result.steps[0].readErrors = Array(reads).fill(error);
+    assert.deepEqual(parseVoiceOverCapture(encode(result), expected), result);
+  }
+  const result = capture();
+  result.steps[0] = { sequence: 0, action: "current", utterance: null, error, readErrors: Array(3).fill(error) };
+  assert.deepEqual(parseVoiceOverCapture(encode(result), expected), result);
+  assert.equal(result.coverage.complete, false);
+  for (const readErrors of [[], [error], Array(4).fill(error), [null, null, null]]) {
+    const invalid = structuredClone(result);
+    invalid.steps[0].readErrors = readErrors;
+    assert.throws(() => parseVoiceOverCapture(encode(invalid), expected));
+  }
+  result.steps[1].readErrors = [error];
+  assert.throws(() => parseVoiceOverCapture(encode(result), expected), /retry evidence/);
+});
+
 test("a time budget can stop between steps without pretending the step budget was exhausted", () => {
   const result = capture();
   result.coverage.reason = "time-limit";

@@ -67,6 +67,7 @@ function transcriptHtml(s, id, audioEntries, includeAudioNote) {
   const byIndex = new Map((audioEntries ?? []).map((e) => [e.i, e]));
   const coverageNote = s.source === "voiceover"
     ? `<p><strong>Partial traversal:</strong> ${esc(s.voiceOver?.coverage.reason ?? "unknown")}. Capture starts at current focus; it does not prove every element was visited.</p>
+      ${s.voiceOver?.steps?.[0]?.utterance === null ? "<p>The initial speech read timed out; the transcript contains only speech returned by subsequent steps.</p>" : ""}
       <p><a href="voiceover/${esc(encodeURIComponent(id))}.json">Raw VoiceOver evidence and toolchain</a></p>` : "";
   const note = coverageNote + (includeAudioNote ? `<p class="audio-note">${esc(AUDIO_NOTE)}</p>` : "");
   if (lines.length === 0) {
