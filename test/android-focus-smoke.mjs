@@ -178,8 +178,9 @@ try {
   let notification;
   await assert.rejects(createFocusCapturer({ out, target, runAdb: (args, opts) => {
     if (!notification && args.includes("next")) {
+      // Root has no installed package to own a notification; use adb shell's UID.
       const post = spawn(ADB, ["shell", "sh", "-c",
-        "'sleep 0.3; cmd notification post -t AloudInterrupt aloud-interrupt External-interruption'"], { stdio: "ignore" });
+        "'sleep 0.3; su 2000 cmd notification post -t AloudInterrupt aloud-interrupt External-interruption'"], { stdio: "ignore" });
       notification = new Promise((resolve) => {
         post.on("error", () => resolve(-1)); post.on("close", resolve);
       });
