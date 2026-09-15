@@ -1,7 +1,7 @@
 // Real Xcode 27 simulator checks; excluded from device-free *.test.mjs.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createVoiceOverCapturer } from "../src/ios/voiceover-capture.mjs";
 
@@ -45,6 +45,7 @@ for (const mode of ["repeated", "modal", "scroll", "dynamic"]) {
   const result = capturer.capture(mode);
   assert.equal(result.coverage.complete, false);
   assert.equal(result.voiceOverRestored, true);
+  assert.equal(result.voiceOverWasEnabled, mode === "repeated", "must preserve the fixture's initial VoiceOver state");
   const lines = result.steps.flatMap((step) => step.utterance === null ? [] : [step.utterance]);
   console.log(`${mode}: ${result.coverage.reason}, ${JSON.stringify(lines)}`);
   assert.ok(lines.length > 0, `${mode} must capture actual speech`);
@@ -60,7 +61,13 @@ for (const mode of ["repeated", "modal", "scroll", "dynamic"]) {
     assert.ok(lines.some((line) => line.includes("Live count")), "must retain dynamic values");
   }
 }
+// The app can still report foreground while SpringBoard's Open/Cancel
+// dialog is speaking. This is the native regression for the first spike.
+simctl("openurl", device.udid, "aloud-voiceover-fixture://repeated");
+assert.throws(() => capturer.capture("system-alert"), /VoiceOver xcodebuild failed/);
+assert.match(readFileSync(join(out, "voiceover/system-alert.log"), "utf8"), /system alerts|System alert/);
+assert.equal(existsSync(join(out, "voiceover/system-alert.json")), false);
 simctl("terminate", device.udid, bundleId);
 assert.throws(() => capturer.capture("stopped-target"), /VoiceOver xcodebuild failed/);
 assert.equal(existsSync(join(out, "voiceover/stopped-target.json")), false);
-console.log("VoiceOver simulator smoke passed: four real fixtures and unavailable target rejected.");
+console.log("VoiceOver simulator smoke passed: four real fixtures, initial service states preserved, system alert and unavailable target rejected.");
