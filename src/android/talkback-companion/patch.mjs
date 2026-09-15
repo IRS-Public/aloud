@@ -26,6 +26,11 @@ export function patchLoggingTts(root) {
     replace(signature, `${signature}\n      utteranceId = ${ledger}.originalId(utteranceId);`);
   }
   writeFileSync(source, text);
+  const manifest = join(root, "talkback/src/main/AndroidManifest.xml");
+  const xml = readFileSync(manifest, "utf8");
+  if (xml.includes("<queries>") || xml.split("</manifest>").length !== 2) throw new Error("TalkBack manifest pin mismatch");
+  writeFileSync(manifest, xml.replace("</manifest>",
+    '<queries><intent><action android:name="android.intent.action.TTS_SERVICE"/></intent></queries>\n</manifest>'));
   const target = join(root, "utils/src/main/java/org/irs_public/aloud/tts");
   mkdirSync(target, { recursive: true });
   for (const file of ["Journal.java", "RequestLedger.java"]) {

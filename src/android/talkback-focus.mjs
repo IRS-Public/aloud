@@ -5,10 +5,12 @@ import { join } from "node:path";
 import { adb, shell } from "./adb.mjs";
 import { validateScreenId } from "../screen-id.mjs";
 import { TALKBACK_COMMIT } from "./talkback-companion/patch.mjs";
+import { collectTtsEvidence } from "./tts-capture.mjs";
+import { validateFocusTts } from "./tts-evidence.mjs";
 
 export const FOCUS_ACTION = "org.irs_public.aloud.TALKBACK_COMMAND";
 const statuses = ["not-ready", "ready", "focused", "edge", "wrap", "scroll-failed", "target-changed", "window-changed",
-  "service-stopped", "step-timeout", "speech-limit", "external-notification"];
+  "service-stopped", "step-timeout", "speech-limit", "external-notification", "tts-journal-error"];
 const isText = (x) => typeof x === "string" && x.length > 0;
 const nodeMatches = (node, target, windowId) => node && isText(node.id) &&
   node.packageName === target && node.windowId === windowId;
@@ -59,7 +61,7 @@ export function validateTalkBackFocusCapture(capture) {
       !isText(capture.requestId) || !isText(capture.screen) || !isText(capture.target) ||
       !isText(capture.targetPid) || !Array.isArray(capture.commands) || !capture.commands.length ||
       !Number.isInteger(capture.coverage?.maxSteps) || capture.coverage.maxSteps < 1 || capture.coverage.maxSteps > 200 ||
-      capture.speechSource !== "talkback-tts-request-listener" ||
+      !["talkback-tts-request-listener", "logging-tts"].includes(capture.speechSource) ||
       capture.coverage.start !== "backward-edge" || typeof capture.coverage.complete !== "boolean") {
     throw new Error("invalid TalkBack focus capture");
   }
@@ -89,16 +91,20 @@ export function validateTalkBackFocusCapture(capture) {
   } else if (!isText(capture.coverage.reason) || capture.coverage.reason === "forward-edge") {
     throw new Error("invalid incomplete TalkBack stopping reason");
   }
+  if (capture.speechSource === "logging-tts") validateFocusTts(capture);
+  else if (capture.loggingTts !== undefined) throw new Error("logging TTS evidence needs explicit provenance");
   return capture;
 }
 
 export const focusTranscript = (capture) => {
   const first = capture.commands.findIndex((c) => c.action === "first");
+  if (capture.speechSource === "logging-tts") return validateFocusTts(capture).requests
+    .filter((r) => r.sequence >= first).map((r) => r.text);
   return first < 0 ? [] : capture.commands.slice(first).flatMap((c) => c.speech.map((s) => s.text));
 };
 
 export function createFocusCapturer({ out, target, maxSteps = 100, runShell = shell, runAdb = adb,
-  startupAttempts = 30, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+  loggingTts = false, startupAttempts = 30, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   if (!/^[A-Za-z0-9_.]+$/.test(target)) throw new Error("invalid Android target package");
   if (!Number.isInteger(maxSteps) || maxSteps < 1 || maxSteps > 200) throw new Error("TalkBack maxSteps must be 1–200");
   const dir = join(out, "talkback-focus");
@@ -111,7 +117,7 @@ export function createFocusCapturer({ out, target, maxSteps = 100, runShell = sh
     const requestId = randomUUID();
     const log = join(dir, `${screen}.commands.jsonl`);
     const raw = join(dir, `${screen}.broadcasts.txt`);
-    const result = { schemaVersion: 1, source: "talkback-focus", speechSource: "talkback-tts-request-listener",
+    const result = { schemaVersion: 1, source: "talkback-focus", speechSource: loggingTts ? "logging-tts" : "talkback-tts-request-listener",
       requestId, screen, target, targetPid: "", commands: [], startupAttempts: [],
       coverage: { complete: false, start: "backward-edge", reason: "controller-failed", maxSteps } };
     writeFileSync(log, ""); writeFileSync(raw, "");
@@ -176,10 +182,15 @@ export function createFocusCapturer({ out, target, maxSteps = 100, runShell = sh
         if (step.status !== "focused") throw new Error(step.status);
       }
       if (!result.coverage.complete) throw new Error("forward-step-limit");
+      if (loggingTts) result.loggingTts = collectTtsEvidence(result, out, runAdb);
       validateTalkBackFocusCapture(result);
     } catch (error) {
       result.coverage = { ...result.coverage, complete: false, reason: error.message };
     } finally {
+      if (loggingTts && !result.loggingTts) {
+        try { result.loggingTts = collectTtsEvidence(result, out, runAdb); }
+        catch (error) { result.loggingTtsReadError = error.message; }
+      }
       writeFileSync(join(dir, `${screen}.json`), JSON.stringify(result, null, 2));
       // Also retain unstructured diagnostics for startup, events outside commands, and crashes.
       try { writeFileSync(join(dir, `${screen}.logcat.txt`), runAdb(["logcat", "-d", "-v", "threadtime"])); }

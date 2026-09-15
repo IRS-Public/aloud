@@ -70,11 +70,11 @@ public final class RecordingTtsService extends TextToSpeechService {
         journals.put(clientSession, journal);
       }
       current = new Active(journal, dispatchId);
-      active = current;
       journal.append("received", Journal.object("dispatchId", dispatchId, "metadata", metadata,
           "text", request.getCharSequenceText().toString(), "callerUid", request.getCallerUid(),
           "language", request.getLanguage(), "country", request.getCountry(), "variant", request.getVariant(),
           "speechRate", request.getSpeechRate(), "pitch", request.getPitch()));
+      active = current;
       int result = callback.start(16000, AudioFormat.ENCODING_PCM_16BIT, 1);
       journal.append("synthesis-start", Journal.object("dispatchId", dispatchId, "result", result,
           "sampleRate", 16000, "channels", 1, "encoding", "pcm16", "output", "synthetic-silence"));
