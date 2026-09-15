@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { adb, shell } from "./adb.mjs";
 
 const KEYS = ["enabled_accessibility_services", "accessibility_enabled"];
+export const TTS_KEYS = ["tts_default_synth", "tts_default_rate", "tts_default_pitch", "tts_default_locale", "tts_enabled_plugins"];
 const quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
 export function stopTalkBack(pkg, runShell = shell) {
   runShell("am", "force-stop", pkg);
@@ -13,9 +14,10 @@ export function stopTalkBack(pkg, runShell = shell) {
   runShell("timeout", "45", "am", "wait-for-broadcast-barrier", "--flush-broadcast-loopers");
 }
 
-export function saveAccessibilityState(file, pkg, { preferences = true, runShell = shell, runAdb = adb } = {}) {
+export function saveAccessibilityState(file, pkg, { preferences = true, tts = false, runShell = shell, runAdb = adb } = {}) {
   const state = { schemaVersion: 1, settings: Object.fromEntries(KEYS.map((key) =>
     [key, runShell("settings", "get", "secure", key)])), pkg: preferences ? pkg : null };
+  if (tts) state.ttsSettings = Object.fromEntries(TTS_KEYS.map((key) => [key, runShell("settings", "get", "secure", key)]));
   if (state.pkg) {
     if (!["com.android.talkback", "com.google.android.marvin.talkback"].includes(pkg)) throw new Error("invalid TalkBack package");
     if (/cannot run as root/i.test(runAdb(["root"]))) throw new Error("saving TalkBack preferences requires a userdebug emulator");
@@ -40,6 +42,7 @@ export function saveAccessibilityState(file, pkg, { preferences = true, runShell
 export function restoreAccessibilityState(file, { runShell = shell } = {}) {
   const state = JSON.parse(readFileSync(file, "utf8"));
   if (state.schemaVersion !== 1 || !KEYS.every((key) => typeof state.settings?.[key] === "string")) throw new Error("invalid accessibility snapshot");
+  if (state.ttsSettings && !TTS_KEYS.every((key) => typeof state.ttsSettings[key] === "string")) throw new Error("invalid TTS settings snapshot");
   if (state.pkg) {
     if (!["com.android.talkback", "com.google.android.marvin.talkback"].includes(state.pkg) ||
         !/^\/data\/local\/tmp\/aloud-state-[a-f0-9-]+$/.test(state.backup) ||
@@ -54,6 +57,14 @@ export function restoreAccessibilityState(file, { runShell = shell } = {}) {
     }
     runShell("chown", `${state.uid}:${state.uid}`, state.dir);
     runShell("chmod", "771", state.dir);
+  }
+  if (state.ttsSettings) {
+    stopTalkBack("org.irs_public.aloud.tts", runShell);
+    for (const key of TTS_KEYS) {
+      if (state.ttsSettings[key] === "null") runShell("settings", "delete", "secure", key);
+      else runShell("settings", "put", "secure", key, quote(state.ttsSettings[key]));
+      if (runShell("settings", "get", "secure", key) !== state.ttsSettings[key]) throw new Error(`failed to restore ${key}; snapshot retained at ${file}`);
+    }
   }
   // Clear the temporary service list first so the framework reconnects an originally enabled service.
   runShell("settings", "delete", "secure", "enabled_accessibility_services");

@@ -21,6 +21,7 @@ import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.irs_public.aloud.tts.RequestLedger;
 
 /** Shell-only ordered broadcasts invoke TalkBack's own gesture actions on its main thread. */
 public final class AloudBridge extends BroadcastReceiver implements FailoverTtsListener {
@@ -171,6 +172,8 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
     if (before != null) before.recycle();
     failure = null; focused = false; started = changed = SystemClock.uptimeMillis();
     pending = goAsync();
+    RequestLedger.begin(requestId, screen, sequence, session);
+    if (RequestLedger.failure() != null) { finish("tts-journal-error"); return; }
     if (!targetMatches()) { finish("target-changed"); return; }
     if ("hello".equals(op)) {
       AccessibilityNodeInfo current = focus();
@@ -188,6 +191,7 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
 
   private void poll() {
     if (pending == null) return;
+    if (RequestLedger.failure() != null) failure = "tts-journal-error";
     if (!targetMatches()) failure = "target-changed";
     long now = SystemClock.uptimeMillis();
     if (failure != null) { finish(failure); return; }
@@ -206,6 +210,11 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
     put(response, "status", status); put(response, "signals", signals);
     put(response, "speech", speech); put(response, "focusEvents", events);
     put(response, "elapsedMs", SystemClock.uptimeMillis() - started);
+    JSONObject tts = RequestLedger.end();
+    if (tts != null) {
+      put(response, "tts", tts);
+      if (RequestLedger.failure() != null) put(response, "status", "tts-journal-error");
+    }
     String encoded = Base64.encodeToString(response.toString().getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
     pending.setResultCode(200); pending.setResultData(encoded); pending.finish(); pending = null;
   }

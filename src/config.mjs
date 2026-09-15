@@ -14,7 +14,7 @@ const DEFAULTS = {
     android: { activity: ".MainActivity" },
     ios: {},
   },
-  android: { talkBack: "startup", talkBackMaxSteps: 100 },
+  android: { talkBack: "startup", talkBackMaxSteps: 100, tts: "system" },
   ios: { appleAudit: false, voiceOver: "computed", voiceOverMaxSteps: 20 },
   nav: {
     mode: "current-screen",
@@ -88,6 +88,8 @@ export function validateConfig(cfg) {
       cfg.android.talkBackMaxSteps < 1 || cfg.android.talkBackMaxSteps > 200)) {
     throw new Error("android.talkBackMaxSteps must be an integer from 1 to 200");
   }
+  if (cfg.android?.tts !== undefined && !["system", "logging"].includes(cfg.android.tts)) throw new Error("android.tts must be system or logging");
+  if (cfg.android?.tts === "logging" && cfg.android.talkBack !== "focus") throw new Error("android.tts logging requires android.talkBack focus");
   if (cfg.ios !== undefined && (!isPlainObject(cfg.ios) ||
       (cfg.ios.appleAudit !== undefined && typeof cfg.ios.appleAudit !== "boolean"))) {
     throw new Error("ios.appleAudit must be a boolean");

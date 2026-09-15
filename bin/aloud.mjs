@@ -33,7 +33,7 @@ const LEG_OPTIONS = {
 
 const OPTIONS = {
   android: { ...LEG_OPTIONS, apk: { type: "string" }, pass: { type: "string" },
-    talkback: { type: "string" }, "talkback-max-steps": { type: "string" } },
+    talkback: { type: "string" }, "talkback-max-steps": { type: "string" }, tts: { type: "string" } },
   ios: { ...LEG_OPTIONS, app: { type: "string" }, "apple-audit": { type: "boolean" },
     voiceover: { type: "string" }, "voiceover-max-steps": { type: "string" } },
   report: {
@@ -66,6 +66,7 @@ Commands:
   ios          Run the iOS leg: computed VoiceOver transcript + tree checks + report + gate
   talkback     Manage TalkBack on the device: status | install <apk> | enable | disable |
                configure | get [--foss|--build]
+  tts          Build or install the optional silent recording TTS engine
   report       Re-aggregate an existing report dir (--dir, --baseline, --gate)
   baseline     Accept current counts into a baseline: aloud baseline <report-dir> [--baseline <file>]
   openacr      Emit a draft OpenACR (--android/--ios baselines or --report/--report-ios dirs)
@@ -86,6 +87,7 @@ Leg flags (android, ios):
   --screen-id <id>              current-screen mode report key (default "current")
   --talkback startup|focus      Android transcript mode (focus requires a companion build)
   --talkback-max-steps N        Limit per rewind/forward traversal (1–200, default: 100)
+  --tts system|logging         Android TTS mode (logging requires focus; emits silence)
   --apple-audit                 iOS only: add report-only Apple accessibility audit evidence
   --voiceover computed|real     iOS speech source (default: computed; real needs Xcode 27)
   --voiceover-max-steps N       Maximum forward moves for real speech (1–100, default: 20)
@@ -172,6 +174,7 @@ function runLeg(platform, argv) {
   if (platform === "ios") setPath(overrides, ["app", "ios", "app"], values.app);
   if (platform === "android") {
     setPath(overrides, ["android", "talkBack"], values.talkback);
+    setPath(overrides, ["android", "tts"], values.tts);
     if (values["talkback-max-steps"] !== undefined) setPath(overrides, ["android", "talkBackMaxSteps"], Number(values["talkback-max-steps"]));
   }
   if (platform === "ios") setPath(overrides, ["ios", "appleAudit"], values["apple-audit"]);
@@ -304,6 +307,11 @@ switch (command) {
     break;
   case "talkback":
     runTalkback(rest);
+    break;
+  case "tts":
+    if (rest[0] === "build") run("bash", [join(ALOUD_HOME, "src/android/get-logging-tts.sh"), ...rest.slice(1)]);
+    else if (rest[0] === "install" && rest[1]) run(process.execPath, [join(ALOUD_HOME, "src/android/talkback.mjs"), "install", rest[1]]);
+    else console.log("Usage: aloud tts build | install <apk>");
     break;
   case "report":
     runReport(rest);

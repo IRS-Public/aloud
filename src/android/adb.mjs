@@ -20,10 +20,9 @@ function resolveAdb() {
 
 export const ADB = resolveAdb();
 
-export function adb(args, opts = {}) {
-  return execFileSync(ADB, args, { stdio: "pipe", maxBuffer: 64 * 1024 * 1024, ...opts })
-    .toString()
-    .trim();
+export function adb(args, { trim = true, ...opts } = {}) {
+  const output = execFileSync(ADB, args, { stdio: "pipe", maxBuffer: 64 * 1024 * 1024, ...opts }).toString();
+  return trim ? output.trim() : output;
 }
 
 export const shell = (...cmd) => adb(["shell", ...cmd]);

@@ -250,9 +250,10 @@ Roadmap, in implementation order:
    TalkBack gesture pipeline and captures focus and speech requests, including
    scrolling and duplicate labels. Native backward/forward boundaries are
    required; incomplete traversal fails. [Setup and limits](docs/talkback-focus.md).
-4. **A logging TTS engine.** Capture speech requests with sequence IDs,
-   screen boundaries, and queue/flush events. Prove that requests survive
-   stress and distinguish requested speech from audio actually played.
+4. **A logging TTS engine.** Opt-in `--talkback focus --tts logging` verifies
+   durable requests against engine receipts and queue/completion events.
+   The test engine emits synthetic silence; request accounting does not
+   prove audible delivery. [Setup and evidence](docs/logging-tts.md).
 5. **Deeper Android checks.** Integrate Google's Accessibility Test
    Framework and richer node data after the capture protocol is stable.
    Preserve check provenance and verify each rule's coverage before it can
