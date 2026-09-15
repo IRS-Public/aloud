@@ -18,9 +18,9 @@ VoiceOver composes speech (`src/ios/voiceover.mjs`) and runs the iOS rules
 (`src/ios/tree.mjs`), including the 44x44pt touch-target rule (the Apple
 platform bar; WCAG 2.5.8 asks less, aloud holds the platform bar).
 
-Honesty rule: every transcript from this leg carries
+Honesty rule: every computed transcript carries
 `source: "computed-voiceover"` and the evidence page labels it
-"VoiceOver transcript (computed)". It is a model of what VoiceOver would
+"Computed VoiceOver". It is a model of what VoiceOver would
 say, not a recording.
 
 ### idb, pinned
