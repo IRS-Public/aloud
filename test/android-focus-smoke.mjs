@@ -25,7 +25,7 @@ function settings() {
 }
 try {
   enable();
-  for (const mode of ["nested", "scroll", "dialog"]) {
+  for (const mode of (process.env.ALOUD_SMOKE_ONLY_FAILURES ? [] : ["nested", "scroll", "dialog"])) {
     await launch(mode);
     const capture = await createFocusCapturer({ out, target, maxSteps: 80 })(mode);
     assert.equal(capture.coverage.complete, true);
@@ -132,11 +132,15 @@ try {
   const successConfig = join(out, "runner-success.json");
   writeFileSync(successConfig, JSON.stringify({ out: join(out, "runner-success"), app: { android: { package: target } },
     android: { talkBack: "focus", talkBackMaxSteps: 40 }, nav: { mode: "current-screen", screenId: "nested" } }));
-  const successLog = execFileSync("bash", ["src/android/run.sh", "--pass", "transcript", "--no-gate"], {
+  const successLog = execFileSync("bash", ["src/android/run.sh", "--no-gate"], {
     env: { ...process.env, ALOUD_CONFIG: successConfig }, timeout: 90000, stdio: "pipe",
   });
   writeFileSync(join(out, "runner-success.log"), successLog);
   assert.deepEqual(settings(), successBefore);
+  assert.ok(String(successLog).indexOf("tree pass") < String(successLog).indexOf("transcript pass"));
+  const successSummary = JSON.parse(readFileSync(join(out, "runner-success/android/summary.json")));
+  assert.equal(successSummary.screens.nested.talkBackFocus.coverage.complete, true);
+  assert.equal(existsSync(join(out, "runner-success/android/shots/nested.png")), true);
   results.restoreAfterSuccess = "verified";
   // Send TERM to the runner and its device-command child once the native session is active.
   await launch("scroll");
