@@ -64,6 +64,10 @@ while [ $# -gt 0 ]; do
     *) echo "unknown flag $1"; exit 1 ;;
   esac
 done
+# Capture tree/screenshot at the requested viewport before focus traversal scrolls it.
+if [ "$(cfg 'c.android?.talkBack')" = "focus" ] && [ "$PASSES" = "transcript tree" ]; then
+  PASSES="tree transcript"
+fi
 FLOW_ARGS=(); [ -n "$FLOW" ] && FLOW_ARGS=(--flow "$FLOW")
 # Fresh report dir per run — stale per-screen reports from a previous run
 # would pollute the gate, the evidence page, and baseline merges.
@@ -86,17 +90,28 @@ if [ -n "$APK" ]; then
   fi
 fi
 
+STATE_FILE="$ALOUD_OUT/accessibility-state.json"
+STATE_ARGS=(); [[ " $PASSES " == *" transcript "* ]] || STATE_ARGS=(--settings-only)
+node "$ALOUD_HOME/src/android/talkback.mjs" snapshot "$STATE_FILE" ${STATE_ARGS[@]+"${STATE_ARGS[@]}"}
 APP_SERVER_PID=""
 cleanup() {
-  # TalkBack must never outlive the audit — a talking emulator surprises the
-  # next person to use it.
-  node "$ALOUD_HOME/src/android/talkback.mjs" disable || true
+  local result=$?
+  trap - EXIT
+  if ! node "$ALOUD_HOME/src/android/talkback.mjs" restore "$STATE_FILE"; then
+    echo "accessibility settings restoration failed; retain $STATE_FILE" >&2
+    result=1
+  else
+    rm -f "$STATE_FILE"
+  fi
   if [ -n "$APP_SERVER_PID" ]; then
     kill "$APP_SERVER_PID" 2>/dev/null || true
     wait "$APP_SERVER_PID" 2>/dev/null || true
   fi
+  exit "$result"
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 if [ "$NAV_MODE" = "bridge" ] && [ -n "$APP_SERVER_CMD" ] && [ "$SKIP_APP_SERVER" -eq 0 ]; then
   # Any HTTP response (even an error status) means something is listening.

@@ -32,7 +32,8 @@ const LEG_OPTIONS = {
 };
 
 const OPTIONS = {
-  android: { ...LEG_OPTIONS, apk: { type: "string" }, pass: { type: "string" } },
+  android: { ...LEG_OPTIONS, apk: { type: "string" }, pass: { type: "string" },
+    talkback: { type: "string" }, "talkback-max-steps": { type: "string" } },
   ios: { ...LEG_OPTIONS, app: { type: "string" }, "apple-audit": { type: "boolean" },
     voiceover: { type: "string" }, "voiceover-max-steps": { type: "string" } },
   report: {
@@ -83,6 +84,8 @@ Leg flags (android, ios):
   --no-gate                     Skip the ratchet gate
   --skip-app-server             Do not spawn nav.bridge.appServer.command
   --screen-id <id>              current-screen mode report key (default "current")
+  --talkback startup|focus      Android transcript mode (focus requires a companion build)
+  --talkback-max-steps N        Limit per rewind/forward traversal (1–200, default: 100)
   --apple-audit                 iOS only: add report-only Apple accessibility audit evidence
   --voiceover computed|real     iOS speech source (default: computed; real needs Xcode 27)
   --voiceover-max-steps N       Maximum forward moves for real speech (1–100, default: 20)
@@ -167,6 +170,10 @@ function runLeg(platform, argv) {
   setPath(overrides, ["nav", "screenId"], values["screen-id"]);
   if (platform === "android") setPath(overrides, ["app", "android", "apk"], values.apk);
   if (platform === "ios") setPath(overrides, ["app", "ios", "app"], values.app);
+  if (platform === "android") {
+    setPath(overrides, ["android", "talkBack"], values.talkback);
+    if (values["talkback-max-steps"] !== undefined) setPath(overrides, ["android", "talkBackMaxSteps"], Number(values["talkback-max-steps"]));
+  }
   if (platform === "ios") setPath(overrides, ["ios", "appleAudit"], values["apple-audit"]);
   if (platform === "ios") setPath(overrides, ["ios", "voiceOver"], values.voiceover);
   if (platform === "ios" && values["voiceover-max-steps"] !== undefined) {

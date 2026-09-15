@@ -24,6 +24,8 @@
 //   initialized ("TTS is not ready" otherwise) — enable() health-checks for
 //   an installed engine and for that error line.
 
+import { fileURLToPath } from "node:url";
+import { saveAccessibilityState, restoreAccessibilityState } from "./accessibility-state.mjs";
 import { execFileSync } from "node:child_process";
 import { adb, shell } from "./adb.mjs";
 
@@ -100,7 +102,9 @@ export function enable() {
     throw new Error("TalkBack is not installed — run: aloud talkback install <apk>");
   }
   configure(pkg);
-  shell("settings", "put", "secure", "enabled_accessibility_services", component(pkg));
+  const services = shell("settings", "get", "secure", "enabled_accessibility_services");
+  const enabled = services === "null" ? [] : services.split(":").filter((s) => s && !PACKAGES.some((p) => s === component(p)));
+  shell("settings", "put", "secure", "enabled_accessibility_services", [...new Set([...enabled, component(pkg)])].join(":"));
   shell("settings", "put", "secure", "accessibility_enabled", "1");
   execSleep(3);
   // Health checks — fail loud now, not with a walk's worth of empty
@@ -121,8 +125,11 @@ export function enable() {
 }
 
 export function disable() {
-  shell("settings", "delete", "secure", "enabled_accessibility_services");
-  shell("settings", "put", "secure", "accessibility_enabled", "0");
+  const value = shell("settings", "get", "secure", "enabled_accessibility_services");
+  const remaining = (value === "null" ? [] : value.split(":")).filter((s) => s && !PACKAGES.some((p) => s === component(p)));
+  if (remaining.length) shell("settings", "put", "secure", "enabled_accessibility_services", remaining.join(":"));
+  else shell("settings", "delete", "secure", "enabled_accessibility_services");
+  shell("settings", "put", "secure", "accessibility_enabled", remaining.length ? "1" : "0");
   console.log("TalkBack disabled");
 }
 
@@ -139,9 +146,12 @@ export function status() {
 
 const execSleep = (seconds) => execFileSync("sleep", [String(seconds)]);
 
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
 const [cmd, arg] = process.argv.slice(2);
 try {
-  if (cmd === "enable") enable();
+  if (cmd === "snapshot") saveAccessibilityState(arg, findTalkBack(), { preferences: !process.argv.includes("--settings-only") });
+  else if (cmd === "restore") restoreAccessibilityState(arg);
+  else if (cmd === "enable") enable();
   else if (cmd === "disable") disable();
   else if (cmd === "status") status();
   else if (cmd === "configure") {
@@ -158,4 +168,6 @@ try {
 } catch (err) {
   console.error(err.message || err);
   process.exit(1);
+}
+
 }

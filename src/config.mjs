@@ -14,6 +14,7 @@ const DEFAULTS = {
     android: { activity: ".MainActivity" },
     ios: {},
   },
+  android: { talkBack: "startup", talkBackMaxSteps: 100 },
   ios: { appleAudit: false, voiceOver: "computed", voiceOverMaxSteps: 20 },
   nav: {
     mode: "current-screen",
@@ -79,6 +80,14 @@ function deepMerge(base, extra) {
 }
 
 export function validateConfig(cfg) {
+  if (cfg.android !== undefined && (!isPlainObject(cfg.android) ||
+      (cfg.android.talkBack !== undefined && !["startup", "focus"].includes(cfg.android.talkBack)))) {
+    throw new Error("android.talkBack must be startup or focus");
+  }
+  if (cfg.android?.talkBackMaxSteps !== undefined && (!Number.isInteger(cfg.android.talkBackMaxSteps) ||
+      cfg.android.talkBackMaxSteps < 1 || cfg.android.talkBackMaxSteps > 200)) {
+    throw new Error("android.talkBackMaxSteps must be an integer from 1 to 200");
+  }
   if (cfg.ios !== undefined && (!isPlainObject(cfg.ios) ||
       (cfg.ios.appleAudit !== undefined && typeof cfg.ios.appleAudit !== "boolean"))) {
     throw new Error("ios.appleAudit must be a boolean");
