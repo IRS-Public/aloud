@@ -14,7 +14,7 @@ const DEFAULTS = {
     android: { activity: ".MainActivity" },
     ios: {},
   },
-  android: { talkBack: "startup", talkBackMaxSteps: 100, tts: "system" },
+  android: { talkBack: "startup", talkBackMaxSteps: 100, tts: "system", atf: false },
   ios: { appleAudit: false, voiceOver: "computed", voiceOverMaxSteps: 20 },
   nav: {
     mode: "current-screen",
@@ -80,6 +80,7 @@ function deepMerge(base, extra) {
 }
 
 export function validateConfig(cfg) {
+  if (cfg.android?.atf !== undefined && typeof cfg.android.atf !== "boolean") throw new Error("android.atf must be a boolean");
   if (cfg.android !== undefined && (!isPlainObject(cfg.android) ||
       (cfg.android.talkBack !== undefined && !["startup", "focus"].includes(cfg.android.talkBack)))) {
     throw new Error("android.talkBack must be startup or focus");

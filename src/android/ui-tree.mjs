@@ -113,7 +113,7 @@ const clippedByScroll = (n) => {
   }
   return false;
 };
-const speakableSelf = (n) => Boolean((n.text || "").trim() || (n["content-desc"] || "").trim());
+const speakableSelf = (n) => Boolean((n.text || "").trim() || (n["content-desc"] || "").trim() || (n.hint || "").trim());
 const speakableDeep = (n) => speakableSelf(n) || n.children.some(speakableDeep);
 
 // Finding no violations only means something after capturing app content.
@@ -151,7 +151,8 @@ export function runChecks(nodes, { densityDpi, appPackage }) {
   // (duplicate labels are genuinely ambiguous but list-heavy screens repeat
   // labels legitimately — a warn keeps the signal without gating on it).
   const add = (ruleId, wcag, node, detail, severity = "error") =>
-    violations.push({ ruleId, wcag, severity, element: describe(node), detail });
+    violations.push({ ruleId, wcag, severity, element: describe(node), detail,
+      ...(node.nativeId !== undefined ? { nativeId: node.nativeId, source: "accessibility-node-info" } : {}) });
 
   for (const n of app) {
     const interactive = truthy(n.clickable) || truthy(n["long-clickable"]) || truthy(n.checkable);
@@ -223,6 +224,7 @@ export function runChecks(nodes, { densityDpi, appPackage }) {
     if (
       (n.class || "").endsWith("EditText") &&
       !(n.text || "").trim() &&
+      !(n.hint || "").trim() &&
       !(n["content-desc"] || "").trim()
     ) {
       add(

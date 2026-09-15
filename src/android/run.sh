@@ -64,6 +64,10 @@ while [ $# -gt 0 ]; do
     *) echo "unknown flag $1"; exit 1 ;;
   esac
 done
+ATF="$(cfg 'c.android?.atf')"
+if [ "$ATF" = "true" ] && [[ " $PASSES " != *" tree "* ]]; then
+  echo "android.atf requires the tree pass (--pass tree or both)" >&2; exit 1
+fi
 # Capture tree/screenshot at the requested viewport before focus traversal scrolls it.
 if [ "$(cfg 'c.android?.talkBack')" = "focus" ] && [ "$PASSES" = "transcript tree" ]; then
   PASSES="tree transcript"
@@ -75,8 +79,8 @@ rm -rf "$ALOUD_OUT"
 mkdir -p "$ALOUD_OUT"
 # Persist requested coverage so re-aggregating an interrupted run cannot pass
 # using only the trees that were captured before focus traversal started.
-if [ "$(cfg 'c.android?.talkBack')" = "focus" ] && [[ " $PASSES " == *" transcript "* ]]; then
-  node -e 'const c=require(process.env.ALOUD_CONFIG); require("fs").writeFileSync(process.env.ALOUD_OUT+"/capture-requirements.json", JSON.stringify({schemaVersion:1,talkBackFocus:true,...(c.android?.tts==="logging"?{loggingTts:true}:{})}))'
+if { [ "$(cfg 'c.android?.talkBack')" = "focus" ] && [[ " $PASSES " == *" transcript "* ]]; } || [ "$ATF" = "true" ]; then
+  ALOUD_PASSES="$PASSES" node -e 'const c=require(process.env.ALOUD_CONFIG); const focus=c.android?.talkBack==="focus"&&process.env.ALOUD_PASSES.includes("transcript"); require("fs").writeFileSync(process.env.ALOUD_OUT+"/capture-requirements.json", JSON.stringify({schemaVersion:1,...(focus?{talkBackFocus:true,...(c.android?.tts==="logging"?{loggingTts:true}:{})}:{}),...(c.android?.atf?{androidAtf:true}:{})}))'
 fi
 
 echo "── device ──"
@@ -97,6 +101,7 @@ fi
 
 STATE_FILE="$ALOUD_OUT/accessibility-state.json"
 STATE_ARGS=(); [[ " $PASSES " == *" transcript "* ]] || STATE_ARGS=(--settings-only)
+if [ "$ATF" = "true" ]; then STATE_ARGS=(); fi
 TTS_ARGS=()
 if [ "$(cfg 'c.android?.tts')" = "logging" ] && [[ " $PASSES " == *" transcript "* ]]; then
   STATE_ARGS+=(--tts)
@@ -158,8 +163,13 @@ for PASS in $PASSES; do
     node "$ALOUD_HOME/src/android/walk.mjs" --pass transcript --port "$PORT" ${FLOW_ARGS[@]+"${FLOW_ARGS[@]}"}
     node "$ALOUD_HOME/src/android/talkback.mjs" disable
   else
-    echo "── tree pass (TalkBack off) ──"
-    node "$ALOUD_HOME/src/android/talkback.mjs" disable || true
+    if [ "$ATF" = "true" ]; then
+      echo "── native tree and ATF pass (companion on) ──"
+      node "$ALOUD_HOME/src/android/talkback.mjs" enable
+    else
+      echo "── tree pass (TalkBack off) ──"
+      node "$ALOUD_HOME/src/android/talkback.mjs" disable || true
+    fi
     node "$ALOUD_HOME/src/android/walk.mjs" --pass tree --port "$PORT" ${FLOW_ARGS[@]+"${FLOW_ARGS[@]}"}
   fi
 done

@@ -33,7 +33,7 @@ const LEG_OPTIONS = {
 
 const OPTIONS = {
   android: { ...LEG_OPTIONS, apk: { type: "string" }, pass: { type: "string" },
-    talkback: { type: "string" }, "talkback-max-steps": { type: "string" }, tts: { type: "string" } },
+    talkback: { type: "string" }, "talkback-max-steps": { type: "string" }, tts: { type: "string" }, atf: { type: "boolean" } },
   ios: { ...LEG_OPTIONS, app: { type: "string" }, "apple-audit": { type: "boolean" },
     voiceover: { type: "string" }, "voiceover-max-steps": { type: "string" } },
   report: {
@@ -87,6 +87,7 @@ Leg flags (android, ios):
   --screen-id <id>              current-screen mode report key (default "current")
   --talkback startup|focus      Android transcript mode (focus requires a companion build)
   --talkback-max-steps N        Limit per rewind/forward traversal (1–200, default: 100)
+  --atf                        Android native node capture and report-only ATF checks
   --tts system|logging         Android TTS mode (logging requires focus; emits silence)
   --apple-audit                 iOS only: add report-only Apple accessibility audit evidence
   --voiceover computed|real     iOS speech source (default: computed; real needs Xcode 27)
@@ -175,6 +176,7 @@ function runLeg(platform, argv) {
   if (platform === "android") {
     setPath(overrides, ["android", "talkBack"], values.talkback);
     setPath(overrides, ["android", "tts"], values.tts);
+    setPath(overrides, ["android", "atf"], values.atf);
     if (values["talkback-max-steps"] !== undefined) setPath(overrides, ["android", "talkBackMaxSteps"], Number(values["talkback-max-steps"]));
   }
   if (platform === "ios") setPath(overrides, ["ios", "appleAudit"], values["apple-audit"]);

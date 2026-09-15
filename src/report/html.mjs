@@ -40,6 +40,7 @@ function statusOf(s) {
   if (s.gate.errors === 0 && s.appleAudit?.issues.length) {
     return { key: "nodata", label: `Review · ${s.appleAudit.issues.length} Apple finding(s)` };
   }
+  if (s.gate.errors === 0 && s.atfFindings?.length) return { key: "nodata", label: `Review · ${s.atfFindings.length} ATF finding(s)` };
   return s.gate.errors > 0
     ? { key: "fail", label: `Fail · ${s.gate.errors} error${s.gate.errors === 1 ? "" : "s"}` }
     : { key: "pass", label: "Pass" };
@@ -107,6 +108,32 @@ function appleAuditHtml(s, id) {
     <p>Completed on this screen. These findings need review; they do not affect the tree-check gate or OpenACR conformance levels.</p>
     ${items ? `<ul class="findings">${items}</ul>` : `<p class="none">Apple reported no issues on this screen.</p>`}
     <p><a href="apple-audit/${esc(encodeURIComponent(id))}.json">Raw Apple audit evidence</a></p>`;
+}
+
+function androidAtfHtml(s, id) {
+  if (!s.atfSummary) return "";
+  const byId = new Map(s.atfNodes.map((n) => [n.id, n]));
+  const findings = s.atfFindings.map((f) => {
+    const node = byId.get(f.elementId);
+    return `<li class="finding warn"><p class="finding-head"><span class="sev sev-warn">${esc(f.type)}</span> <code>${esc(f.ruleId)}</code></p>
+      <p>${esc(f.message)}</p><code class="el">Node ${esc(f.elementId ?? "whole hierarchy")} · ${esc(node?.className ?? "")} ${esc(node?.viewId ?? "")} ${esc(node?.text ?? node?.description ?? "")}</code>
+      ${f.potentialDuplicates.length ? `<p>Potential overlap with tree finding: ${esc(f.potentialDuplicates.join(", "))}. Counted only in the tree gate.</p>` : ""}</li>`;
+  }).join("");
+  const checks = s.atfSummary.checks.map((c) => `<li><code>${esc(c.ruleId)}</code>: executed; ${c.results.ERROR + c.results.WARNING + c.results.INFO} finding(s), ${c.results.NOT_RUN} skipped element result(s).</li>`).join("");
+  const skipped = s.androidAtf ? JSON.parse(s.androidAtf.capture.raw).checks.flatMap((c) => c.results.filter((r) => r.type === "NOT_RUN")
+    .map((r) => `<li><code>${esc(c.ruleId)}</code> · node ${esc(r.elementId ?? "hierarchy")}: ${esc(r.message)}</li>`)).join("") : "";
+  const rich = s.atfNodes.filter((n) => ["hintText", "stateDescription", "paneTitle", "roleDescription"].some((k) => n[k] !== null))
+    .map((n) => `<li>Node ${esc(n.id)}: ${["hintText", "stateDescription", "paneTitle", "roleDescription"].filter((k) => n[k] !== null).map((k) => `${esc(k)} = ${esc(n[k])}`).join("; ")}</li>`).join("");
+  return `<h3>Android Accessibility Test Framework (${s.atfFindings.length})</h3>
+    <p>ATF ${esc(s.atfSummary.framework.version)} · ${esc(s.atfSummary.framework.suite)} · ${s.atfSummary.nodeCount} exposed nodes in the active window.
+    Results are report-only and add no OpenACR conformance claims. Skipped results are not passes; offscreen content and unselected checks are not evaluated.</p>
+    ${findings ? `<ul class="findings">${findings}</ul>` : "<p>No findings were reported by the selected checks. Review the skipped results below.</p>"}
+    <details><summary>Check execution and applicability</summary><ul>${checks}</ul>
+      ${skipped ? `<h4>Skipped results</h4><ul>${skipped}</ul>` : ""}
+      <p>Unselected: ${s.atfSummary.unselected.map((c) => esc(c.className.split(".").at(-1))).join(", ")}.</p></details>
+    <details><summary>Captured native properties</summary><p>Supported but unset properties are null in the raw evidence. Role descriptions come from the AndroidX compatibility extra.</p>
+      ${rich ? `<ul>${rich}</ul>` : "<p>No rich properties were set.</p>"}</details>
+    <p><a href="atf/${esc(encodeURIComponent(id))}.json">Raw native snapshots and receipts</a></p>`;
 }
 
 const CSS = `
@@ -335,6 +362,7 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
 
   const appleIssueTotal = order.reduce((n, id) => n + (screens[id].appleAudit?.issues.length ?? 0), 0);
   const hasAppleAudit = order.some((id) => screens[id].appleAudit);
+  const hasAtf = order.some((id) => screens[id].atfSummary);
   const legLabel = isIosLeg ? (hasVoiceOver ? "iOS · VoiceOver evidence" : "iOS · Computed VoiceOver") : "Android · TalkBack";
   const legNote = (hasComputed
     ? `<p class="callout"><strong>Honest label:</strong> Transcripts labeled Computed VoiceOver are computed from the accessibility tree, not spoken by a device. Real speech can differ slightly.</p>`
@@ -383,6 +411,7 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
         <h3>Findings (${s.violations?.length ?? 0})</h3>
         ${findingsHtml(s)}
         ${appleAuditHtml(s, id)}
+        ${androidAtfHtml(s, id)}
       </div>
     </div>
   </section>`;
@@ -406,8 +435,8 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
     <p class="meta">${order.length} screen${order.length === 1 ? "" : "s"} · generated ${esc(generated)}</p>
     <dl class="stats">
       <div><dt>Screens</dt><dd>${order.length}</dd></div>
-      <div><dt>${hasAppleAudit || hasVoiceOver ? "Tree pass" : "Pass"}</dt><dd class="is-pass">${passCount}</dd></div>
-      <div><dt>${hasAppleAudit || hasVoiceOver ? "Tree fail" : "Fail"}</dt><dd${failCount ? ` class="is-fail"` : ""}>${failCount}</dd></div>
+      <div><dt>${hasAppleAudit || hasVoiceOver || hasAtf ? "Tree pass" : "Pass"}</dt><dd class="is-pass">${passCount}</dd></div>
+      <div><dt>${hasAppleAudit || hasVoiceOver || hasAtf ? "Tree fail" : "Fail"}</dt><dd${failCount ? ` class="is-fail"` : ""}>${failCount}</dd></div>
       <div><dt>Errors</dt><dd${errorTotal ? ` class="is-fail"` : ""}>${errorTotal}</dd></div>
       <div><dt>Warnings</dt><dd>${warnTotal}</dd></div>
       ${hasAppleAudit ? `<div><dt>Apple findings to review</dt><dd>${appleIssueTotal}</dd></div>` : ""}
