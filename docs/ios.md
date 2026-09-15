@@ -78,9 +78,10 @@ or invalid record stops the run before passing screen artifacts are written.
 
 Apple may temporarily change settings such as Dynamic Type during an
 audit. The screenshot is taken first so it matches the tree evidence.
-The test runner briefly takes foreground focus between captures; validate
-apps that reset their navigation state when backgrounded before relying on
-this mode for unattended audits.
+The test runner briefly takes foreground focus between captures. The walker
+compares normalized accessibility content and geometry before and after the
+native audit and rejects changed screens. Live content that changes during
+an audit can also trigger this check; use a stable app state for this mode.
 
 The evidence report includes a separate **Apple accessibility audit**
 section. Apple findings are report-only while the integration is calibrated:

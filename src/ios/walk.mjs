@@ -134,6 +134,16 @@ async function walk() {
       // Keep the tree screenshot paired with the dump captured above.
       simctl("io", udid, "screenshot", join(SHOTS_DIR, `${screen.id}.png`));
       const appleAudit = appleAuditor?.capture(screen.id);
+      if (appleAudit) {
+        const afterAudit = await settledElements(udid, screen.id);
+        // XCTest briefly backgrounds the app. Reject apps that reset their
+        // screen on activation, or audits that leave changed content behind.
+        // Raw idb metadata can vary; compare normalized content and geometry.
+        const fingerprint = (els) => JSON.stringify(els.map(({ raw, ...el }) => el));
+        if (fingerprint(elements) !== fingerprint(afterAudit)) {
+          throw new Error(`screen "${screen.id}": accessibility content changed during the Apple audit; refusing to pair findings with a different screen`);
+        }
+      }
       writeFileSync(
         join(OUT, `${screen.id}.tree.json`),
         JSON.stringify(

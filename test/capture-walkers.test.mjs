@@ -160,6 +160,16 @@ describe("iOS capture validation", { concurrency: 4 }, () => {
     assert.doesNotMatch(result.stdout, /✓ capture/);
   });
 
+  it("rejects a screen that changes when XCTest backgrounds and reactivates the app", async (t) => {
+    const before = JSON.stringify([iosButton]);
+    const after = JSON.stringify([{ ...iosButton, AXLabel: "Back to home" }]);
+    const result = await capture(t, "ios", [before, before, after, after], { appleAudit: true });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /accessibility content changed during the Apple audit/);
+    assert.equal(existsSync(join(result.out, "capture.tree.json")), false);
+    assert.equal(existsSync(join(result.out, "capture.transcript.json")), false);
+  });
+
   const invalid = [
     ["empty arrays", "[]"],
     ["empty command output", ""],
