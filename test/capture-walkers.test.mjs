@@ -53,18 +53,33 @@ if (command === "idb" && args.join(" ") === "ui describe-all --udid test-device"
   else if (!(text === "wait-for-device" || /^(shell (am|uiautomator|rm|screencap|cmd) )/.test(text))) {
     throw Error("unexpected adb call: " + text);
   }
+} else if (command === "xcodegen") {
+  console.log("generated mock project");
+} else if (command === "xcodebuild") {
+  if (args[0] === "test-without-building") {
+    if (process.env.ALOUD_MOCK_NATIVE_FAILURE) throw Error("native audit unavailable");
+    const requestId = process.env.TEST_RUNNER_ALOUD_AUDIT_REQUEST_ID;
+    const result = {
+      schemaVersion: 1, source: "apple-accessibility-audit", status: "completed", auditTypes: "all",
+      requestId, screen: process.env.TEST_RUNNER_ALOUD_AUDIT_SCREEN,
+      bundleId: process.env.TEST_RUNNER_ALOUD_AUDIT_BUNDLE_ID,
+      issues: [{ typeMask: "1", types: ["contrast"], compactDescription: "Low contrast",
+        detailedDescription: "Check colors", element: null }],
+    };
+    console.log("ALOUD-APPLE-AUDIT:" + requestId + ":" + Buffer.from(JSON.stringify(result)).toString("base64"));
+  }
 } else {
   throw Error("unexpected device command: " + command + " " + args.join(" "));
 }
 `;
 
-async function capture(t, platform, dumps) {
+async function capture(t, platform, dumps, { appleAudit = false, nativeFailure = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), "aloud-capture-test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const bin = join(root, "bin");
   const out = join(root, platform);
   mkdirSync(bin);
-  for (const command of ["adb", "idb", "xcrun"]) {
+  for (const command of ["adb", "idb", "xcrun", "xcodegen", "xcodebuild"]) {
     writeFileSync(join(bin, command), DEVICE_MOCK, { mode: 0o755 });
   }
   writeFileSync(join(root, "dumps.json"), JSON.stringify(dumps));
@@ -76,6 +91,7 @@ async function capture(t, platform, dumps) {
   writeFileSync(config, JSON.stringify({
     out: root,
     app: { android: { package: APP_PACKAGE }, ios: { bundleId: APP_PACKAGE } },
+    ios: { appleAudit },
     nav: { mode: "deeplinks", screens },
   }));
   const result = await new Promise((resolveResult, reject) => {
@@ -86,6 +102,7 @@ async function capture(t, platform, dumps) {
         ADB_PATH: join(bin, "adb"),
         ALOUD_CONFIG: config,
         ALOUD_MOCK_ROOT: root,
+        ALOUD_MOCK_NATIVE_FAILURE: nativeFailure ? "1" : "",
       },
       timeout: 20_000,
     });
@@ -118,6 +135,31 @@ function assertCapturePassed(result, errors = 0) {
 }
 
 describe("iOS capture validation", { concurrency: 4 }, () => {
+  it("attaches native findings to the selected screen while retaining computed speech and tree counts", async (t) => {
+    const result = await capture(t, "ios", [JSON.stringify([iosButton])], { appleAudit: true });
+    assertCapturePassed(result);
+    const tree = JSON.parse(readFileSync(join(result.out, "capture.tree.json")));
+    assert.equal(tree.appleAudit.screen, "capture");
+    assert.equal(tree.appleAudit.issues.length, 1);
+    assert.deepEqual(tree.gate, { errors: 0, ruleIds: [] });
+    const transcript = JSON.parse(readFileSync(join(result.out, "capture.transcript.json")));
+    assert.equal(transcript.source, "computed-voiceover");
+    const calls = readFileSync(join(result.root, "calls.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+    const navigation = calls.findIndex((c) => c.args.includes("openurl"));
+    const shot = calls.findIndex((c) => c.args.includes("screenshot"));
+    const native = calls.findIndex((c) => c.args.includes("test-without-building"));
+    assert.ok(navigation < shot && shot < native, "native audit must run on the navigated screen after tree evidence");
+  });
+
+  it("does not write passing screen artifacts when a requested native audit fails", async (t) => {
+    const result = await capture(t, "ios", [JSON.stringify([iosButton])], { appleAudit: true, nativeFailure: true });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Apple audit xcodebuild failed/);
+    assert.equal(existsSync(join(result.out, "capture.tree.json")), false);
+    assert.equal(existsSync(join(result.out, "capture.transcript.json")), false);
+    assert.doesNotMatch(result.stdout, /✓ capture/);
+  });
+
   const invalid = [
     ["empty arrays", "[]"],
     ["empty command output", ""],

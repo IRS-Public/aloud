@@ -33,7 +33,7 @@ const LEG_OPTIONS = {
 
 const OPTIONS = {
   android: { ...LEG_OPTIONS, apk: { type: "string" }, pass: { type: "string" } },
-  ios: { ...LEG_OPTIONS, app: { type: "string" } },
+  ios: { ...LEG_OPTIONS, app: { type: "string" }, "apple-audit": { type: "boolean" } },
   report: {
     ...GLOBAL_OPTIONS,
     dir: { type: "string" },
@@ -82,6 +82,7 @@ Leg flags (android, ios):
   --no-gate                     Skip the ratchet gate
   --skip-app-server             Do not spawn nav.bridge.appServer.command
   --screen-id <id>              current-screen mode report key (default "current")
+  --apple-audit                 iOS only: add report-only Apple accessibility audit evidence
 
   aloud --help          Show this help
   aloud --version       Show the aloud version
@@ -163,6 +164,7 @@ function runLeg(platform, argv) {
   setPath(overrides, ["nav", "screenId"], values["screen-id"]);
   if (platform === "android") setPath(overrides, ["app", "android", "apk"], values.apk);
   if (platform === "ios") setPath(overrides, ["app", "ios", "app"], values.app);
+  if (platform === "ios") setPath(overrides, ["ios", "appleAudit"], values["apple-audit"]);
 
   const { cfg, resolvedPath } = resolveAndWriteConfig(values, overrides);
   try {

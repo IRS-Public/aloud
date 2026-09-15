@@ -34,6 +34,9 @@ export function displayOrder(ids, screens) {
 
 function statusOf(s) {
   if (!s.gate) return { key: "nodata", label: "No tree check" };
+  if (s.gate.errors === 0 && s.appleAudit?.issues.length) {
+    return { key: "nodata", label: `Review · ${s.appleAudit.issues.length} Apple finding(s)` };
+  }
   return s.gate.errors > 0
     ? { key: "fail", label: `Fail · ${s.gate.errors} error${s.gate.errors === 1 ? "" : "s"}` }
     : { key: "pass", label: "Pass" };
@@ -75,6 +78,21 @@ function transcriptHtml(s, id, audioEntries, includeAudioNote) {
     .join("\n");
   return `<h3 class="speaker">${esc(speaker)}${s.source === "computed-voiceover" ? ` <span class="computed-tag">computed, not recorded</span>` : ""}</h3>
     ${note}<ol class="dialogue">${items}</ol>`;
+}
+
+function appleAuditHtml(s, id) {
+  if (!s.appleAudit) return "";
+  const issues = s.appleAudit.issues;
+  const items = issues.map((issue) => `<li class="finding warn">
+    <p class="finding-head"><span class="sev sev-warn">Review</span> ${esc(issue.types.join(", "))}</p>
+    <p class="finding-detail">${esc(issue.compactDescription)}</p>
+    ${issue.detailedDescription ? `<p>${esc(issue.detailedDescription)}</p>` : ""}
+    ${issue.element ? `<code class="el">${esc(issue.element.label || issue.element.identifier || "Unlabeled element")}</code>` : ""}
+  </li>`).join("\n");
+  return `<h3>Apple accessibility audit (${issues.length})</h3>
+    <p>Completed on this screen. These findings need review; they do not affect the tree-check gate or OpenACR conformance levels.</p>
+    ${items ? `<ul class="findings">${items}</ul>` : `<p class="none">Apple reported no issues on this screen.</p>`}
+    <p><a href="apple-audit/${esc(encodeURIComponent(id))}.json">Raw Apple audit evidence</a></p>`;
 }
 
 const CSS = `
@@ -299,6 +317,8 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
     0,
   );
 
+  const appleIssueTotal = order.reduce((n, id) => n + (screens[id].appleAudit?.issues.length ?? 0), 0);
+  const hasAppleAudit = order.some((id) => screens[id].appleAudit);
   const legLabel = isIosLeg ? "iOS · Computed VoiceOver" : "Android · TalkBack";
   const legNote = isIosLeg
     ? `<p class="callout"><strong>Honest label:</strong> VoiceOver output on this leg is computed from the accessibility tree, not spoken by a device. Real speech can differ slightly.</p>`
@@ -346,6 +366,7 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
         ${transcriptHtml(s, id, audioManifest?.[id], id === firstAudioId)}
         <h3>Findings (${s.violations?.length ?? 0})</h3>
         ${findingsHtml(s)}
+        ${appleAuditHtml(s, id)}
       </div>
     </div>
   </section>`;
@@ -369,10 +390,11 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
     <p class="meta">${order.length} screen${order.length === 1 ? "" : "s"} · generated ${esc(generated)}</p>
     <dl class="stats">
       <div><dt>Screens</dt><dd>${order.length}</dd></div>
-      <div><dt>Pass</dt><dd class="is-pass">${passCount}</dd></div>
-      <div><dt>Fail</dt><dd${failCount ? ` class="is-fail"` : ""}>${failCount}</dd></div>
+      <div><dt>${hasAppleAudit ? "Tree pass" : "Pass"}</dt><dd class="is-pass">${passCount}</dd></div>
+      <div><dt>${hasAppleAudit ? "Tree fail" : "Fail"}</dt><dd${failCount ? ` class="is-fail"` : ""}>${failCount}</dd></div>
       <div><dt>Errors</dt><dd${errorTotal ? ` class="is-fail"` : ""}>${errorTotal}</dd></div>
       <div><dt>Warnings</dt><dd>${warnTotal}</dd></div>
+      ${hasAppleAudit ? `<div><dt>Apple findings to review</dt><dd>${appleIssueTotal}</dd></div>` : ""}
     </dl>
     ${legNote}
   </div>

@@ -37,6 +37,13 @@ APP="$(cfgget 'c.app?.ios?.app')"
 NAV_MODE="$(cfgget 'c.nav?.mode')"; [ -n "$NAV_MODE" ] || NAV_MODE="current-screen"
 BASELINE="$(cfgget 'c.baseline?.ios')"; [ -n "$BASELINE" ] || BASELINE="aloud-baseline-ios.json"
 APP_SERVER_CMD="$(cfgget 'c.nav?.bridge?.appServer?.command')"
+if [ "$(cfgget 'c.ios?.appleAudit')" = "true" ]; then
+  command -v xcodegen > /dev/null || { echo "--apple-audit needs xcodegen: brew install xcodegen"; exit 1; }
+  xcodebuild -checkFirstLaunchStatus > /dev/null 2>&1 || {
+    echo "--apple-audit needs configured Xcode: open Xcode, accept its license, and install an iOS 17+ Simulator runtime"
+    exit 1
+  }
+fi
 
 FLOW=""; GATE="--gate"; SKIP_APP_SERVER=0; SCREEN_ID=""
 while [ $# -gt 0 ]; do
