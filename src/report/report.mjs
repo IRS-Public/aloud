@@ -14,7 +14,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderReportHtml } from "./html.mjs";
-import { parseVoiceOverCapture } from "../ios/voiceover-capture.mjs";
+import { validateVoiceOverCapture } from "../ios/voiceover-capture.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -58,7 +58,7 @@ for (const f of readdirSync(OUT).sort()) {
       const v = r.voiceOver;
       // Revalidate persisted data: a hand-edited or incomplete transcript
       // must not turn an unverified traversal into a passing report.
-      parseVoiceOverCapture(`ALOUD-VOICEOVER:${v.requestId}:${Buffer.from(JSON.stringify(v)).toString("base64")}`,
+      validateVoiceOverCapture(v,
         { requestId: v.requestId, screen: r.screen, bundleId: v.bundleId, maxSteps: v.coverage?.maxSteps });
       const raw = v.steps.flatMap((step) => step.utterance === null ? [] : [step.utterance]);
       if (JSON.stringify(raw) !== JSON.stringify(r.transcript) || typeof v.toolchain?.xcode !== "string" ||

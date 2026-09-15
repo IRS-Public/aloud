@@ -30,6 +30,10 @@ export function parseVoiceOverCapture(log, expected) {
   let result;
   try { result = JSON.parse(Buffer.from(payload, "base64").toString("utf8")); }
   catch { throw new Error("invalid VoiceOver JSON"); }
+  return validateVoiceOverCapture(result, expected);
+}
+
+export function validateVoiceOverCapture(result, expected) {
   if (!record(result) || result.schemaVersion !== 1 || result.source !== "voiceover" ||
       result.status !== "captured" || !text(result.runtime) ||
       typeof result.voiceOverWasEnabled !== "boolean" || result.voiceOverRestored !== true) {
@@ -61,7 +65,7 @@ export function parseVoiceOverCapture(log, expected) {
   }
   if ((reason === "step-limit" && result.steps.length !== maxSteps + 1) ||
       (reason === "speech-timeout" && result.steps.at(-1)?.utterance !== null) ||
-      (reason === "time-limit" && result.coverage.elapsedMs < 120_000)) {
+      (reason === "time-limit" && (result.coverage.elapsedMs < 120_000 || result.steps.length > maxSteps))) {
     throw new Error("VoiceOver stopping reason contradicts captured steps");
   }
   return result;
