@@ -17,6 +17,8 @@ npm test
 
 ## Ground rules
 
+- Keep each roadmap milestone in its own pull request. Commit completed,
+  reviewable steps frequently so the work is easy to follow and recover.
 - The audit logic is conservative on purpose. It never passes a screen silently. Changes that weaken that guarantee will not be merged.
 - The TalkBack build is pinned to a specific commit because the speech extractors are verified against it. If you bump the pin, re-verify the extractors. See `docs/talkback.md`.
 - New checks need a unit test in `test/`.
