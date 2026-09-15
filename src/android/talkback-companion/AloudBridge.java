@@ -152,7 +152,7 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
       if (root != null) root.recycle();
     } else if (!incoming.equals(requestId) || !incomingScreen.equals(screen) || !incomingTarget.equals(target) ||
         !session.equals(intent.getStringExtra("session")) || next != sequence + 1 ||
-        !("previous".equals(op) || "first".equals(op) || "next".equals(op))) {
+        !("previous".equals(op) || "first".equals(op) || "reset".equals(op) || "next".equals(op))) {
       setResultCode(409); setResultData("stale session or command sequence"); return;
     } else { sequence = next; }
     response = new JSONObject(); signals = new JSONArray(); speech = new JSONArray(); events = new JSONArray();

@@ -20,9 +20,9 @@ function capture() {
   return { schemaVersion: 1, source: "talkback-focus", speechSource: "talkback-tts-request-listener",
     requestId: "test-request", screen: "fixture", target, targetPid: "20", coverage: {
       complete: true, start: "backward-edge", reason: "forward-edge", maxSteps: 3 }, commands: [
-      response(0, "hello", "ready", "a"), response(1, "previous", "edge", "a"),
-      response(2, "first", "focused", "a"), response(3, "next", "focused", "a", "b"),
-      response(4, "next", "edge", "b"),
+      response(0, "hello", "ready", "a"), response(1, "reset", "focused", "a"),
+      response(2, "previous", "edge", "a"), response(3, "first", "focused", "a"),
+      response(4, "next", "focused", "a", "b"), response(5, "next", "edge", "b"),
     ] };
 }
 
@@ -30,7 +30,7 @@ test("preserves distinct focuses with duplicate speech and verifies native bound
   const c = capture();
   validateTalkBackFocusCapture(c);
   assert.deepEqual(focusTranscript(c), ["Same label, Button", "Same label, Button"]);
-  assert.notEqual(c.commands[2].after.id, c.commands[3].after.id);
+  assert.notEqual(c.commands[3].after.id, c.commands[4].after.id);
 });
 
 for (const [name, mutate] of Object.entries({
@@ -44,7 +44,7 @@ for (const [name, mutate] of Object.entries({
   "wrap disguised as complete": (c) => { c.commands[3].signals.push("wrap"); },
   "edge guessed from repeated focus": (c) => { c.commands.at(-1).signals = []; },
   "truncated forward pass": (c) => { c.commands.pop(); },
-  "missing rewind": (c) => { c.commands[1].status = "step-timeout"; },
+  "missing rewind": (c) => { c.commands[2].status = "step-timeout"; },
   "different speech source": (c) => { c.speechSource = "computed"; },
   "wrong pin": (c) => { c.commands[0].talkbackCommit = "new-build"; },
 })) test(`rejects ${name}`, () => { const c = capture(); mutate(c); assert.throws(() => validateTalkBackFocusCapture(c)); });

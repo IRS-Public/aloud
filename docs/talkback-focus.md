@@ -19,7 +19,8 @@ screen reader. It is built from TalkBack commit
 
 ## What completion means
 
-The controller moves backward using TalkBack's **Previous item** action until
+The controller first invokes First item on screen to clear a prior screen’s
+boundary state, then moves backward using TalkBack's **Previous item** action until
 TalkBack reports its native boundary. It then invokes **First item on screen**
 to record the first focus and its speech, and advances with **Next item** until
 the forward boundary. These are the actions in the pinned
@@ -84,7 +85,8 @@ adb shell am broadcast -a org.irs_public.aloud.TALKBACK_COMMAND \
   --es screen <screen-id> --es target <package> --ei sequence 0
 ```
 
-Subsequent operations are `previous`, `first`, and `next`, with consecutive
+Subsequent operations are `reset` (First item, before the backward sweep),
+`previous`, `first` (First item, starting the recorded forward sweep), and `next`, with consecutive
 sequence numbers and `--es session <hello-session>`. Every response echoes
 request ID, screen, target, sequence, action, service session/PID, window ID,
 Android runtime, and TalkBack commit. Code `200` carries base64 UTF-8 JSON;

@@ -71,9 +71,9 @@ export function validateTalkBackFocusCapture(capture) {
   if (hello.action !== "hello" || hello.status !== "ready") throw new Error("TalkBack capture lacks a ready session");
   if (capture.coverage.complete) {
     const first = capture.commands.findIndex((c) => c.action === "first");
-    const rewind = capture.commands.slice(1, first);
+    const rewind = capture.commands.slice(2, first);
     const forward = capture.commands.slice(first + 1);
-    if (capture.coverage.reason !== "forward-edge" || first < 2 ||
+    if (capture.coverage.reason !== "forward-edge" || first < 3 || capture.commands[1].action !== "reset" || capture.commands[1].status !== "focused" ||
         rewind.length > capture.coverage.maxSteps || forward.length > capture.coverage.maxSteps ||
         rewind.some((c, i) => c.action !== "previous" || c.status !== (i === rewind.length - 1 ? "edge" : "focused")) ||
         capture.commands[first].status !== "focused" || !forward.length ||
@@ -126,6 +126,10 @@ export function createFocusCapturer({ out, target, maxSteps = 100, runShell = sh
     try {
       hello = await command("hello");
       if (hello.status !== "ready") throw new Error(hello.status);
+      // A previous screen can leave TalkBack's reachEdge flag set. Its First item action
+      // establishes a fresh pivot and clears that flag before the backward sweep.
+      const reset = await command("reset");
+      if (reset.status !== "focused") throw new Error(reset.status);
       let rewindEdge = false;
       for (let i = 0; i < maxSteps; i++) {
         const step = await command("previous");
