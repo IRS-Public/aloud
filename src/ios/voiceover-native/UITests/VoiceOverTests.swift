@@ -42,6 +42,13 @@ final class VoiceOverTests: XCTestCase {
     }
     if !wasEnabled { try service.enable() }
     var steps: [[String: Any]] = []
+    func recordStep(_ step: [String: Any]) throws {
+      steps.append(step)
+      // Keep speech already received in the log even if a later native
+      // operation fails. Only the final capture marker is reportable data.
+      let data = try JSONSerialization.data(withJSONObject: step, options: [.sortedKeys])
+      print("ALOUD-VOICEOVER-STEP:\(requestID):\(data.base64EncodedString())")
+    }
     var reason = "step-limit"
     let started = ProcessInfo.processInfo.systemUptime
     // Current focus plus at most maxSteps forward moves. Neither repeated
@@ -56,11 +63,11 @@ final class VoiceOverTests: XCTestCase {
       let action = sequence == 0 ? "current" : "forward"
       do {
         let output = try sequence == 0 ? service.currentSpeech() : service.moveForward()
-        steps.append(["sequence": sequence, "action": action, "utterance": output.utterance])
+        try recordStep(["sequence": sequence, "action": action, "utterance": output.utterance])
       } catch let error as XCUIVoiceOverService.Error where error.code == .noSpeech {
         // Retrying moveForward could silently skip a focused element. Keep
         // the timeout as evidence and stop, without claiming completion.
-        steps.append(["sequence": sequence, "action": action, "utterance": NSNull(),
+        try recordStep(["sequence": sequence, "action": action, "utterance": NSNull(),
           "error": ["domain": (error as NSError).domain, "code": (error as NSError).code,
             "description": error.localizedDescription]])
         reason = "speech-timeout"

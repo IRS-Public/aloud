@@ -23,10 +23,12 @@ const encode = (result, requestId = expected.requestId) =>
   `ALOUD-VOICEOVER:${requestId}:${Buffer.from(JSON.stringify(result)).toString("base64")}\n`;
 
 test("real speech keeps raw values, order, repeated labels and explicit partial coverage", () => {
-  const result = parseVoiceOverCapture(encode(capture()), expected);
+  const progress = `ALOUD-VOICEOVER-STEP:${expected.requestId}:e30=\n`;
+  const result = parseVoiceOverCapture(progress + encode(capture()), expected);
   assert.deepEqual(result, capture());
   assert.equal(result.coverage.complete, false);
   assert.equal(result.steps[1].utterance, result.steps[2].utterance);
+  assert.throws(() => parseVoiceOverCapture(progress, expected), /exactly one capture record/);
 });
 
 test("speech timeout records preserve prior speech and never imply traversal completion", () => {
