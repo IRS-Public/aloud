@@ -146,3 +146,14 @@ for (const mutation of ["none", "incomplete", "missing-step", "different-transcr
     }
   });
 }
+
+test("validates recorded native Android 14 captures without deduplicating speech", () => {
+  const fixture = JSON.parse(readFileSync(new URL("./fixtures/talkback-focus-android14.json", import.meta.url)));
+  for (const capture of Object.values(fixture.captures)) validateTalkBackFocusCapture(capture);
+  const nested = focusTranscript(fixture.captures.nested);
+  assert.equal(nested.filter((text) => text === "SAME LABEL, Button").length, 2);
+  assert.ok(nested.some((text) => /disabled/.test(text)));
+  assert.ok(fixture.captures.scroll.commands.some((c) => c.signals.includes("scroll-complete")));
+  assert.ok(focusTranscript(fixture.captures.scroll).some((s) => /ROW 30/.test(s)));
+  assert.ok(focusTranscript(fixture.captures.dialog).some((s) => /Dialog value 12.50/.test(s)));
+});
