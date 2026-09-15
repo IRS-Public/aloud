@@ -87,6 +87,19 @@ if (ids.length === 0) {
   process.exit(1);
 }
 
+const requirementsPath = join(OUT, "capture-requirements.json");
+if (existsSync(requirementsPath)) {
+  const requirements = JSON.parse(readFileSync(requirementsPath, "utf8"));
+  if (requirements.schemaVersion !== 1 || requirements.talkBackFocus !== true) {
+    throw new Error("invalid capture requirements");
+  }
+  for (const id of ids) {
+    if (screens[id].source !== "talkback-focus" || !screens[id].talkBackFocus?.coverage.complete) {
+      throw new Error(`${id}: requested TalkBack traversal did not complete; raw evidence is retained`);
+    }
+  }
+}
+
 const summary = {
   generated: new Date().toISOString(),
   screens: Object.fromEntries(

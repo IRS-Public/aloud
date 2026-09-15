@@ -157,3 +157,14 @@ test("validates recorded native Android 14 captures without deduplicating speech
   assert.ok(focusTranscript(fixture.captures.scroll).some((s) => /ROW 30/.test(s)));
   assert.ok(focusTranscript(fixture.captures.dialog).some((s) => /Dialog value 12.50/.test(s)));
 });
+
+test("re-aggregation rejects trees left by an interrupted requested traversal", (t) => {
+  const out = mkdtempSync(join(tmpdir(), "aloud-focus-interrupted-")); t.after(() => rmSync(out, { recursive: true, force: true }));
+  writeFileSync(join(out, "capture-requirements.json"), JSON.stringify({ schemaVersion: 1, talkBackFocus: true }));
+  writeFileSync(join(out, "fixture.tree.json"), JSON.stringify({ screen: "fixture", violations: [], gate: { errors: 0, ruleIds: [] } }));
+  const result = spawnSync(process.execPath, ["src/report/report.mjs", "--dir", out], {
+    env: { ...process.env, ALOUD_CONFIG: "" }, encoding: "utf8",
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /requested TalkBack traversal did not complete/);
+});

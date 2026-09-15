@@ -73,6 +73,11 @@ FLOW_ARGS=(); [ -n "$FLOW" ] && FLOW_ARGS=(--flow "$FLOW")
 # would pollute the gate, the evidence page, and baseline merges.
 rm -rf "$ALOUD_OUT"
 mkdir -p "$ALOUD_OUT"
+# Persist requested coverage so re-aggregating an interrupted run cannot pass
+# using only the trees that were captured before focus traversal started.
+if [ "$(cfg 'c.android?.talkBack')" = "focus" ] && [[ " $PASSES " == *" transcript "* ]]; then
+  node -e 'require("fs").writeFileSync(process.env.ALOUD_OUT+"/capture-requirements.json", JSON.stringify({schemaVersion:1,talkBackFocus:true}))'
+fi
 
 echo "── device ──"
 "$ADB" wait-for-device

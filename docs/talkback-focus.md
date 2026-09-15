@@ -51,7 +51,9 @@ log even when it refuses to produce a passing transcript.
 ## Evidence and device state
 
 `<out>/android/talkback-focus/` contains per-screen JSON, command JSONL,
-broadcast responses, and logcat diagnostics. Transcript JSON includes the
+broadcast responses, and logcat diagnostics. A run-level requirements file
+also prevents interrupted runs from passing on tree evidence alone when
+re-aggregated. Transcript JSON includes the
 validated raw command records. Duplicate labels and repeated speech remain
 separate; node tokens come from Android node equality within this request,
 never from text matching. Tokens are not persistent IDs or baseline keys.
