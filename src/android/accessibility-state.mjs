@@ -5,6 +5,14 @@ import { adb, shell } from "./adb.mjs";
 
 const KEYS = ["enabled_accessibility_services", "accessibility_enabled"];
 const quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
+export function stopTalkBack(pkg, runShell = shell) {
+  runShell("am", "force-stop", pkg);
+  // Android's PackageMonitor handles force-stop asynchronously and removes
+  // TalkBack from enabled_accessibility_services. Drain that broadcast before
+  // re-enabling/restoring it, or the delayed callback can undo our settings.
+  runShell("timeout", "45", "am", "wait-for-broadcast-barrier", "--flush-broadcast-loopers");
+}
+
 export function saveAccessibilityState(file, pkg, { preferences = true, runShell = shell, runAdb = adb } = {}) {
   const state = { schemaVersion: 1, settings: Object.fromEntries(KEYS.map((key) =>
     [key, runShell("settings", "get", "secure", key)])), pkg: preferences ? pkg : null };
@@ -36,7 +44,7 @@ export function restoreAccessibilityState(file, { runShell = shell } = {}) {
     if (!["com.android.talkback", "com.google.android.marvin.talkback"].includes(state.pkg) ||
         !/^\/data\/local\/tmp\/aloud-state-[a-f0-9-]+$/.test(state.backup) ||
         state.dir !== `/data/user_de/0/${state.pkg}/shared_prefs` || !/^\d+$/.test(state.uid)) throw new Error("invalid preferences snapshot");
-    runShell("am", "force-stop", state.pkg);
+    stopTalkBack(state.pkg, runShell);
     runShell("mkdir", "-p", state.dir);
     for (const suffix of [".xml", ".xml.bak"]) {
       const name = `${state.pkg}_preferences${suffix}`;

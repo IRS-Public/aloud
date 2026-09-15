@@ -101,6 +101,8 @@ test("restores absent and present secure settings and original TalkBack preferen
       if (args[1] === "put") settings[args[3]] = args[4].slice(1, -1);
     }
     if (args[0] === "stat") return "12345";
+    // A delayed PackageMonitor callback clears services after force-stop.
+    if (args.includes("wait-for-broadcast-barrier")) settings.enabled_accessibility_services = "null";
     if (args[0] === "sh") return args.at(-1).includes(".xml.bak") ? "no" : "yes";
     return "";
   };
@@ -111,6 +113,8 @@ test("restores absent and present secure settings and original TalkBack preferen
   const stop = calls.findIndex((a) => a[0] === "am");
   const restore = calls.findIndex((a) => a[0] === "cp" && a[2].startsWith("/data/local/tmp"));
   assert.ok(stop >= 0 && restore > stop, "stop the running service before restoring cached preferences");
+  const barrier = calls.findIndex((a) => a.includes("wait-for-broadcast-barrier"));
+  assert.ok(barrier > stop && barrier < restore, "finish force-stop broadcasts before restoring state");
   assert.ok(calls.some((a) => a[0] === "rm" && a.at(-1).endsWith(".xml.bak")));
 });
 

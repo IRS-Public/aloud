@@ -71,6 +71,11 @@ service list, enabled flag, and TalkBack preference XML on success and failure,
 including SIGINT/SIGTERM. A forced process kill or disconnected device can
 prevent cleanup; the retained state snapshot identifies the recovery data.
 Other accessibility services remain in the enabled list while TalkBack runs.
+After force-stopping TalkBack, setup and restoration wait for Android's
+broadcast barrier (up to 45 seconds). Android's
+[package monitor](https://android.googlesource.com/platform/frameworks/base/+/android-14.0.0_r1/services/accessibility/java/com/android/server/accessibility/AccessibilityManagerService.java)
+removes force-stopped services asynchronously; waiting prevents that callback
+from undoing the newly enabled or restored service list on a busy emulator.
 
 ## Protocol v1
 

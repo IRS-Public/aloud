@@ -25,7 +25,7 @@
 //   an installed engine and for that error line.
 
 import { fileURLToPath } from "node:url";
-import { saveAccessibilityState, restoreAccessibilityState } from "./accessibility-state.mjs";
+import { saveAccessibilityState, restoreAccessibilityState, stopTalkBack } from "./accessibility-state.mjs";
 import { execFileSync } from "node:child_process";
 import { adb, shell } from "./adb.mjs";
 
@@ -82,7 +82,7 @@ function ensureRoot() {
 export function configure(pkg) {
   ensureRoot();
   // Write BEFORE the service runs — a live service never re-reads the file.
-  shell("am", "force-stop", pkg);
+  stopTalkBack(pkg);
   const dir = `/data/user_de/0/${pkg}/shared_prefs`;
   const file = `${dir}/${pkg}_preferences.xml`;
   const b64 = Buffer.from(prefsXml()).toString("base64");
