@@ -1,0 +1,2974 @@
+{
+  "provenance": {
+    "source": "native Android 14 ARM64 emulator capture",
+    "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+    "companionCommit": "fefd76d",
+    "build": "JDK 17, Gradle 8.14.3, SDK 36, companion without braille native libraries",
+    "fixture": "test/android-fixture",
+    "note": "Speech requests from TalkBack listener; no synthesized fixture speech."
+  },
+  "captures": {
+    "nested": {
+      "schemaVersion": 1,
+      "source": "talkback-focus",
+      "speechSource": "talkback-tts-request-listener",
+      "requestId": "a4ceb933-a09f-48a8-b5f6-bd316867f597",
+      "screen": "nested",
+      "target": "org.irs_public.aloud.fixture",
+      "targetPid": "9105",
+      "commands": [
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "a4ceb933-a09f-48a8-b5f6-bd316867f597",
+          "screen": "nested",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 0,
+          "action": "hello",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 275,
+          "runtime": "14",
+          "before": {
+            "id": "node-0",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.TextView",
+            "text": "Focus fixture",
+            "description": "",
+            "enabled": true,
+            "bounds": "20 148 1060 233"
+          },
+          "after": {
+            "id": "node-0",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.TextView",
+            "text": "Focus fixture",
+            "description": "",
+            "enabled": true,
+            "bounds": "20 148 1060 233"
+          },
+          "status": "ready",
+          "signals": [],
+          "speech": [],
+          "focusEvents": [],
+          "elapsedMs": 0
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "a4ceb933-a09f-48a8-b5f6-bd316867f597",
+          "screen": "nested",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 1,
+          "action": "reset",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 275,
+          "runtime": "14",
+          "before": {
+            "id": "node-0",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.TextView",
+            "text": "Focus fixture",
+            "description": "",
+            "enabled": true,
+            "bounds": "20 148 1060 233"
+          },
+          "after": {
+            "id": "node-0",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.TextView",
+            "text": "Focus fixture",
+            "description": "",
+            "enabled": true,
+            "bounds": "20 148 1060 233"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_4",
+              "text": "Focus fixture"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-0",
+              "windowId": 275,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.TextView",
+              "text": "Focus fixture",
+              "description": "",
+              "enabled": true,
+              "bounds": "20 148 1060 233"
+            }
+          ],
+          "elapsedMs": 1955
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "a4ceb933-a09f-48a8-b5f6-bd316867f597",
+          "screen": "nested",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 2,
+          "action": "previous",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 275,
+          "runtime": "14",
+          "before": {
+            "id": "node-0",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.TextView",
+            "text": "Focus fixture",
+            "description": "",
+            "enabled": true,
+            "bounds": "20 148 1060 233"
+          },
+          "after": {
+            "id": "node-0",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.TextView",
+            "text": "Focus fixture",
+            "description": "",
+            "enabled": true,
+            "bounds": "20 148 1060 233"
+          },
+          "status": "edge",
+          "signals": [
+            "edge"
+          ],
+          "speech": [],
+          "focusEvents": [],
+          "elapsedMs": 623
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "a4ceb933-a09f-48a8-b5f6-bd316867f597",
+          "screen": "nested",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 3,
+          "action": "first",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 275,
+          "runtime": "14",
+          "before": {
+            "id": "node-0",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.TextView",
+            "text": "Focus fixture",
+            "description": "",
+            "enabled": true,
+            "bounds": "20 148 1060 233"
+          },
+          "after": {
+            "id": "node-0",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.TextView",
+            "text": "Focus fixture",
+            "description": "",
+            "enabled": true,
+            "bounds": "20 148 1060 233"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_5",
+              "text": "Focus fixture"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-0",
+              "windowId": 275,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.TextView",
+              "text": "Focus fixture",
+              "description": "",
+              "enabled": true,
+              "bounds": "20 148 1060 233"
+            }
+          ],
+          "elapsedMs": 1949
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "a4ceb933-a09f-48a8-b5f6-bd316867f597",
+          "screen": "nested",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 4,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 275,
+          "runtime": "14",
+          "before": {
+            "id": "node-0",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.TextView",
+            "text": "Focus fixture",
+            "description": "",
+            "enabled": true,
+            "bounds": "20 148 1060 233"
+          },
+          "after": {
+            "id": "node-1",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "SAME LABEL",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 245 1040 385"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_6",
+              "text": "SAME LABEL, Button"
+            },
+            {
+              "utteranceId": "talkback_7",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-1",
+              "windowId": 275,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "SAME LABEL",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 245 1040 385"
+            }
+          ],
+          "elapsedMs": 4288
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "a4ceb933-a09f-48a8-b5f6-bd316867f597",
+          "screen": "nested",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 5,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 275,
+          "runtime": "14",
+          "before": {
+            "id": "node-1",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "SAME LABEL",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 245 1040 385"
+          },
+          "after": {
+            "id": "node-2",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "SAME LABEL",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 385 1040 525"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_8",
+              "text": "SAME LABEL, Button"
+            },
+            {
+              "utteranceId": "talkback_9",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-2",
+              "windowId": 275,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "SAME LABEL",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 385 1040 525"
+            }
+          ],
+          "elapsedMs": 4219
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "a4ceb933-a09f-48a8-b5f6-bd316867f597",
+          "screen": "nested",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 6,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 275,
+          "runtime": "14",
+          "before": {
+            "id": "node-2",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "SAME LABEL",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 385 1040 525"
+          },
+          "after": {
+            "id": "node-3",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "UNAVAILABLE CONTROL",
+            "description": "",
+            "enabled": false,
+            "bounds": "20 537 1060 677"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_10",
+              "text": "UNAVAILABLE CONTROL, Button, disabled"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-3",
+              "windowId": 275,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "UNAVAILABLE CONTROL",
+              "description": "",
+              "enabled": false,
+              "bounds": "20 537 1060 677"
+            }
+          ],
+          "elapsedMs": 3604
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "a4ceb933-a09f-48a8-b5f6-bd316867f597",
+          "screen": "nested",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 7,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 275,
+          "runtime": "14",
+          "before": {
+            "id": "node-3",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "UNAVAILABLE CONTROL",
+            "description": "",
+            "enabled": false,
+            "bounds": "20 537 1060 677"
+          },
+          "after": {
+            "id": "node-4",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "FINAL CONTROL",
+            "description": "",
+            "enabled": true,
+            "bounds": "20 677 1060 817"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_11",
+              "text": "FINAL CONTROL, Button"
+            },
+            {
+              "utteranceId": "talkback_12",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-4",
+              "windowId": 275,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "FINAL CONTROL",
+              "description": "",
+              "enabled": true,
+              "bounds": "20 677 1060 817"
+            }
+          ],
+          "elapsedMs": 4389
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "a4ceb933-a09f-48a8-b5f6-bd316867f597",
+          "screen": "nested",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 8,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 275,
+          "runtime": "14",
+          "before": {
+            "id": "node-4",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "FINAL CONTROL",
+            "description": "",
+            "enabled": true,
+            "bounds": "20 677 1060 817"
+          },
+          "after": {
+            "id": "node-4",
+            "windowId": 275,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "FINAL CONTROL",
+            "description": "",
+            "enabled": true,
+            "bounds": "20 677 1060 817"
+          },
+          "status": "edge",
+          "signals": [
+            "edge"
+          ],
+          "speech": [],
+          "focusEvents": [],
+          "elapsedMs": 623
+        }
+      ],
+      "coverage": {
+        "complete": true,
+        "start": "backward-edge",
+        "reason": "forward-edge",
+        "maxSteps": 80
+      }
+    },
+    "scroll": {
+      "schemaVersion": 1,
+      "source": "talkback-focus",
+      "speechSource": "talkback-tts-request-listener",
+      "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+      "screen": "scroll",
+      "target": "org.irs_public.aloud.fixture",
+      "targetPid": "9273",
+      "commands": [
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 0,
+          "action": "hello",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-0",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 1",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 160 1040 300"
+          },
+          "after": {
+            "id": "node-0",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 1",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 160 1040 300"
+          },
+          "status": "ready",
+          "signals": [],
+          "speech": [],
+          "focusEvents": [],
+          "elapsedMs": 0
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 1,
+          "action": "reset",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-0",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 1",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 160 1040 300"
+          },
+          "after": {
+            "id": "node-0",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 1",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 160 1040 300"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_15",
+              "text": "ROW 1, Button"
+            },
+            {
+              "utteranceId": "talkback_16",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-0",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 1",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 160 1040 300"
+            }
+          ],
+          "elapsedMs": 4094
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 2,
+          "action": "previous",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-0",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 1",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 160 1040 300"
+          },
+          "after": {
+            "id": "node-0",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 1",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 160 1040 300"
+          },
+          "status": "edge",
+          "signals": [
+            "edge"
+          ],
+          "speech": [],
+          "focusEvents": [],
+          "elapsedMs": 631
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 3,
+          "action": "first",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-0",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 1",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 160 1040 300"
+          },
+          "after": {
+            "id": "node-0",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 1",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 160 1040 300"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_17",
+              "text": "ROW 1, Button"
+            },
+            {
+              "utteranceId": "talkback_18",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-0",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 1",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 160 1040 300"
+            }
+          ],
+          "elapsedMs": 4093
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 4,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-0",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 1",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 160 1040 300"
+          },
+          "after": {
+            "id": "node-1",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 2",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 300 1040 440"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_19",
+              "text": "ROW 2, Button"
+            },
+            {
+              "utteranceId": "talkback_20",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-1",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 2",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 300 1040 440"
+            }
+          ],
+          "elapsedMs": 4086
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 5,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-1",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 2",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 300 1040 440"
+          },
+          "after": {
+            "id": "node-2",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 3",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 440 1040 580"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_21",
+              "text": "ROW 3, Button"
+            },
+            {
+              "utteranceId": "talkback_22",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-2",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 3",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 440 1040 580"
+            }
+          ],
+          "elapsedMs": 4136
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 6,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-2",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 3",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 440 1040 580"
+          },
+          "after": {
+            "id": "node-3",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 4",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 580 1040 720"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_23",
+              "text": "ROW 4, Button"
+            },
+            {
+              "utteranceId": "talkback_24",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-3",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 4",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 580 1040 720"
+            }
+          ],
+          "elapsedMs": 4207
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 7,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-3",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 4",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 580 1040 720"
+          },
+          "after": {
+            "id": "node-4",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 5",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 720 1040 860"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_25",
+              "text": "ROW 5, Button"
+            },
+            {
+              "utteranceId": "talkback_26",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-4",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 5",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 720 1040 860"
+            }
+          ],
+          "elapsedMs": 4111
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 8,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-4",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 5",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 720 1040 860"
+          },
+          "after": {
+            "id": "node-5",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 6",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 860 1040 1000"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_27",
+              "text": "ROW 6, Button"
+            },
+            {
+              "utteranceId": "talkback_28",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-5",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 6",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 860 1040 1000"
+            }
+          ],
+          "elapsedMs": 4192
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 9,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-5",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 6",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 860 1040 1000"
+          },
+          "after": {
+            "id": "node-6",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 7",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1000 1040 1140"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_29",
+              "text": "ROW 7, Button"
+            },
+            {
+              "utteranceId": "talkback_30",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-6",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 7",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1000 1040 1140"
+            }
+          ],
+          "elapsedMs": 4186
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 10,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-6",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 7",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1000 1040 1140"
+          },
+          "after": {
+            "id": "node-7",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 8",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1140 1040 1280"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_31",
+              "text": "ROW 8, Button"
+            },
+            {
+              "utteranceId": "talkback_32",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-7",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 8",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1140 1040 1280"
+            }
+          ],
+          "elapsedMs": 4097
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 11,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-7",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 8",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1140 1040 1280"
+          },
+          "after": {
+            "id": "node-8",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 9",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1280 1040 1420"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_33",
+              "text": "ROW 9, Button"
+            },
+            {
+              "utteranceId": "talkback_34",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-8",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 9",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1280 1040 1420"
+            }
+          ],
+          "elapsedMs": 4210
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 12,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-8",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 9",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1280 1040 1420"
+          },
+          "after": {
+            "id": "node-9",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 10",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1420 1040 1560"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_35",
+              "text": "ROW 10, Button"
+            },
+            {
+              "utteranceId": "talkback_36",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-9",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 10",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1420 1040 1560"
+            }
+          ],
+          "elapsedMs": 4102
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 13,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-9",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 10",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1420 1040 1560"
+          },
+          "after": {
+            "id": "node-10",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 11",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1560 1040 1700"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_37",
+              "text": "ROW 11, Button"
+            },
+            {
+              "utteranceId": "talkback_38",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-10",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 11",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1560 1040 1700"
+            }
+          ],
+          "elapsedMs": 4210
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 14,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-10",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 11",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1560 1040 1700"
+          },
+          "after": {
+            "id": "node-11",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 12",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1700 1040 1840"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_39",
+              "text": "ROW 12, Button"
+            },
+            {
+              "utteranceId": "talkback_40",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-11",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 12",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1700 1040 1840"
+            }
+          ],
+          "elapsedMs": 4133
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 15,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-11",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 12",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1700 1040 1840"
+          },
+          "after": {
+            "id": "node-12",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 13",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1840 1040 1980"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_41",
+              "text": "ROW 13, Button"
+            },
+            {
+              "utteranceId": "talkback_42",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-12",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 13",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1840 1040 1980"
+            }
+          ],
+          "elapsedMs": 4292
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 16,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-12",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 13",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1840 1040 1980"
+          },
+          "after": {
+            "id": "node-13",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 14",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1980 1040 2120"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_43",
+              "text": "ROW 14, Button"
+            },
+            {
+              "utteranceId": "talkback_44",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-13",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 14",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1980 1040 2120"
+            }
+          ],
+          "elapsedMs": 4314
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 17,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-13",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 14",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1980 1040 2120"
+          },
+          "after": {
+            "id": "node-14",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 15",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 2120 1040 2260"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_45",
+              "text": "ROW 15, Button"
+            },
+            {
+              "utteranceId": "talkback_46",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-14",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 15",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 2120 1040 2260"
+            }
+          ],
+          "elapsedMs": 4322
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 18,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-14",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 15",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 2120 1040 2260"
+          },
+          "after": {
+            "id": "node-15",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 16",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 2122 1040 2262"
+          },
+          "status": "focused",
+          "signals": [
+            "scroll-complete"
+          ],
+          "speech": [
+            {
+              "utteranceId": "talkback_47",
+              "text": "ROW 16, Button"
+            },
+            {
+              "utteranceId": "talkback_48",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-15",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 16",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 2122 1040 2262"
+            }
+          ],
+          "elapsedMs": 4626
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 19,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-15",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 16",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 2122 1040 2262"
+          },
+          "after": {
+            "id": "node-16",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 17",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 290 1040 430"
+          },
+          "status": "focused",
+          "signals": [
+            "scroll-complete"
+          ],
+          "speech": [
+            {
+              "utteranceId": "talkback_49",
+              "text": "ROW 17, Button"
+            },
+            {
+              "utteranceId": "talkback_50",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-16",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 17",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 290 1040 430"
+            }
+          ],
+          "elapsedMs": 4673
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 20,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-16",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 17",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 290 1040 430"
+          },
+          "after": {
+            "id": "node-17",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 18",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 430 1040 570"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_51",
+              "text": "ROW 18, Button"
+            },
+            {
+              "utteranceId": "talkback_52",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-17",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 18",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 430 1040 570"
+            }
+          ],
+          "elapsedMs": 4287
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 21,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-17",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 18",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 430 1040 570"
+          },
+          "after": {
+            "id": "node-18",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 19",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 570 1040 710"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_53",
+              "text": "ROW 19, Button"
+            },
+            {
+              "utteranceId": "talkback_54",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-18",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 19",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 570 1040 710"
+            }
+          ],
+          "elapsedMs": 4309
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 22,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-18",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 19",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 570 1040 710"
+          },
+          "after": {
+            "id": "node-19",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 20",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 710 1040 850"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_55",
+              "text": "ROW 20, Button"
+            },
+            {
+              "utteranceId": "talkback_56",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-19",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 20",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 710 1040 850"
+            }
+          ],
+          "elapsedMs": 4178
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 23,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-19",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 20",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 710 1040 850"
+          },
+          "after": {
+            "id": "node-20",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 21",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 850 1040 990"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_57",
+              "text": "ROW 21, Button"
+            },
+            {
+              "utteranceId": "talkback_58",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-20",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 21",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 850 1040 990"
+            }
+          ],
+          "elapsedMs": 4608
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 24,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-20",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 21",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 850 1040 990"
+          },
+          "after": {
+            "id": "node-21",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 22",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 990 1040 1130"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_59",
+              "text": "ROW 22, Button"
+            },
+            {
+              "utteranceId": "talkback_60",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-21",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 22",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 990 1040 1130"
+            }
+          ],
+          "elapsedMs": 4601
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 25,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-21",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 22",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 990 1040 1130"
+          },
+          "after": {
+            "id": "node-22",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 23",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1130 1040 1270"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_61",
+              "text": "ROW 23, Button"
+            },
+            {
+              "utteranceId": "talkback_62",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-22",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 23",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1130 1040 1270"
+            }
+          ],
+          "elapsedMs": 4629
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 26,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-22",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 23",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1130 1040 1270"
+          },
+          "after": {
+            "id": "node-23",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 24",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1270 1040 1410"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_63",
+              "text": "ROW 24, Button"
+            },
+            {
+              "utteranceId": "talkback_64",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-23",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 24",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1270 1040 1410"
+            }
+          ],
+          "elapsedMs": 4613
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 27,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-23",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 24",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1270 1040 1410"
+          },
+          "after": {
+            "id": "node-24",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 25",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1410 1040 1550"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_65",
+              "text": "ROW 25, Button"
+            },
+            {
+              "utteranceId": "talkback_66",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-24",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 25",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1410 1040 1550"
+            }
+          ],
+          "elapsedMs": 4604
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 28,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-24",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 25",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1410 1040 1550"
+          },
+          "after": {
+            "id": "node-25",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 26",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1550 1040 1690"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_67",
+              "text": "ROW 26, Button"
+            },
+            {
+              "utteranceId": "talkback_68",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-25",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 26",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1550 1040 1690"
+            }
+          ],
+          "elapsedMs": 4589
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 29,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-25",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 26",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1550 1040 1690"
+          },
+          "after": {
+            "id": "node-26",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 27",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1690 1040 1830"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_69",
+              "text": "ROW 27, Button"
+            },
+            {
+              "utteranceId": "talkback_70",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-26",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 27",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1690 1040 1830"
+            }
+          ],
+          "elapsedMs": 4609
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 30,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-26",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 27",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1690 1040 1830"
+          },
+          "after": {
+            "id": "node-27",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 28",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1830 1040 1970"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_71",
+              "text": "ROW 28, Button"
+            },
+            {
+              "utteranceId": "talkback_72",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-27",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 28",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1830 1040 1970"
+            }
+          ],
+          "elapsedMs": 4516
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 31,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-27",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 28",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1830 1040 1970"
+          },
+          "after": {
+            "id": "node-28",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 29",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1970 1040 2110"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_73",
+              "text": "ROW 29, Button"
+            },
+            {
+              "utteranceId": "talkback_74",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-28",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 29",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 1970 1040 2110"
+            }
+          ],
+          "elapsedMs": 4603
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 32,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-28",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 29",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 1970 1040 2110"
+          },
+          "after": {
+            "id": "node-29",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 30",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 2110 1040 2250"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_75",
+              "text": "ROW 30, Button"
+            },
+            {
+              "utteranceId": "talkback_76",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-29",
+              "windowId": 285,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "",
+              "className": "android.widget.Button",
+              "text": "ROW 30",
+              "description": "",
+              "enabled": true,
+              "bounds": "40 2110 1040 2250"
+            }
+          ],
+          "elapsedMs": 4189
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "c925ade0-7319-4cbf-99a0-ac02f582b2f0",
+          "screen": "scroll",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 33,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 285,
+          "runtime": "14",
+          "before": {
+            "id": "node-29",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 30",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 2110 1040 2250"
+          },
+          "after": {
+            "id": "node-29",
+            "windowId": 285,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "",
+            "className": "android.widget.Button",
+            "text": "ROW 30",
+            "description": "",
+            "enabled": true,
+            "bounds": "40 2110 1040 2250"
+          },
+          "status": "edge",
+          "signals": [
+            "edge"
+          ],
+          "speech": [],
+          "focusEvents": [],
+          "elapsedMs": 625
+        }
+      ],
+      "coverage": {
+        "complete": true,
+        "start": "backward-edge",
+        "reason": "forward-edge",
+        "maxSteps": 80
+      }
+    },
+    "dialog": {
+      "schemaVersion": 1,
+      "source": "talkback-focus",
+      "speechSource": "talkback-tts-request-listener",
+      "requestId": "ba9ad841-f9e3-4419-8084-02abe24d79ca",
+      "screen": "dialog",
+      "target": "org.irs_public.aloud.fixture",
+      "targetPid": "9849",
+      "commands": [
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "ba9ad841-f9e3-4419-8084-02abe24d79ca",
+          "screen": "dialog",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 0,
+          "action": "hello",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 338,
+          "runtime": "14",
+          "before": {
+            "id": "node-0",
+            "windowId": 338,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "android:id/message",
+            "className": "android.widget.TextView",
+            "text": "Dialog value 12.50",
+            "description": "",
+            "enabled": true,
+            "bounds": "70 1129 1010 1186"
+          },
+          "after": {
+            "id": "node-0",
+            "windowId": 338,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "android:id/message",
+            "className": "android.widget.TextView",
+            "text": "Dialog value 12.50",
+            "description": "",
+            "enabled": true,
+            "bounds": "70 1129 1010 1186"
+          },
+          "status": "ready",
+          "signals": [],
+          "speech": [],
+          "focusEvents": [],
+          "elapsedMs": 0
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "ba9ad841-f9e3-4419-8084-02abe24d79ca",
+          "screen": "dialog",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 1,
+          "action": "reset",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 338,
+          "runtime": "14",
+          "before": {
+            "id": "node-0",
+            "windowId": 338,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "android:id/message",
+            "className": "android.widget.TextView",
+            "text": "Dialog value 12.50",
+            "description": "",
+            "enabled": true,
+            "bounds": "70 1129 1010 1186"
+          },
+          "after": {
+            "id": "node-1",
+            "windowId": 338,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "android:id/alertTitle",
+            "className": "android.widget.TextView",
+            "text": "Dialog heading",
+            "description": "",
+            "enabled": true,
+            "bounds": "133 1037 947 1108"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_78",
+              "text": "Aloud focus fixture"
+            },
+            {
+              "utteranceId": "talkback_79",
+              "text": "Dialog heading"
+            },
+            {
+              "utteranceId": "talkback_80",
+              "text": "Dialog heading"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-1",
+              "windowId": 338,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "android:id/alertTitle",
+              "className": "android.widget.TextView",
+              "text": "Dialog heading",
+              "description": "",
+              "enabled": true,
+              "bounds": "133 1037 947 1108"
+            }
+          ],
+          "elapsedMs": 6013
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "ba9ad841-f9e3-4419-8084-02abe24d79ca",
+          "screen": "dialog",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 2,
+          "action": "previous",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 338,
+          "runtime": "14",
+          "before": {
+            "id": "node-1",
+            "windowId": 338,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "android:id/alertTitle",
+            "className": "android.widget.TextView",
+            "text": "Dialog heading",
+            "description": "",
+            "enabled": true,
+            "bounds": "133 1037 947 1108"
+          },
+          "after": {
+            "id": "node-1",
+            "windowId": 338,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "android:id/alertTitle",
+            "className": "android.widget.TextView",
+            "text": "Dialog heading",
+            "description": "",
+            "enabled": true,
+            "bounds": "133 1037 947 1108"
+          },
+          "status": "edge",
+          "signals": [
+            "edge"
+          ],
+          "speech": [],
+          "focusEvents": [],
+          "elapsedMs": 616
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "ba9ad841-f9e3-4419-8084-02abe24d79ca",
+          "screen": "dialog",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 3,
+          "action": "first",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 338,
+          "runtime": "14",
+          "before": {
+            "id": "node-1",
+            "windowId": 338,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "android:id/alertTitle",
+            "className": "android.widget.TextView",
+            "text": "Dialog heading",
+            "description": "",
+            "enabled": true,
+            "bounds": "133 1037 947 1108"
+          },
+          "after": {
+            "id": "node-1",
+            "windowId": 338,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "android:id/alertTitle",
+            "className": "android.widget.TextView",
+            "text": "Dialog heading",
+            "description": "",
+            "enabled": true,
+            "bounds": "133 1037 947 1108"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_81",
+              "text": "Dialog heading"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-1",
+              "windowId": 338,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "android:id/alertTitle",
+              "className": "android.widget.TextView",
+              "text": "Dialog heading",
+              "description": "",
+              "enabled": true,
+              "bounds": "133 1037 947 1108"
+            }
+          ],
+          "elapsedMs": 1953
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "ba9ad841-f9e3-4419-8084-02abe24d79ca",
+          "screen": "dialog",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 4,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 338,
+          "runtime": "14",
+          "before": {
+            "id": "node-1",
+            "windowId": 338,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "android:id/alertTitle",
+            "className": "android.widget.TextView",
+            "text": "Dialog heading",
+            "description": "",
+            "enabled": true,
+            "bounds": "133 1037 947 1108"
+          },
+          "after": {
+            "id": "node-0",
+            "windowId": 338,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "android:id/message",
+            "className": "android.widget.TextView",
+            "text": "Dialog value 12.50",
+            "description": "",
+            "enabled": true,
+            "bounds": "70 1129 1010 1186"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_82",
+              "text": "Dialog value 12.50"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-0",
+              "windowId": 338,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "android:id/message",
+              "className": "android.widget.TextView",
+              "text": "Dialog value 12.50",
+              "description": "",
+              "enabled": true,
+              "bounds": "70 1129 1010 1186"
+            }
+          ],
+          "elapsedMs": 3475
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "ba9ad841-f9e3-4419-8084-02abe24d79ca",
+          "screen": "dialog",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 5,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 338,
+          "runtime": "14",
+          "before": {
+            "id": "node-0",
+            "windowId": 338,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "android:id/message",
+            "className": "android.widget.TextView",
+            "text": "Dialog value 12.50",
+            "description": "",
+            "enabled": true,
+            "bounds": "70 1129 1010 1186"
+          },
+          "after": {
+            "id": "node-2",
+            "windowId": 338,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "android:id/button1",
+            "className": "android.widget.Button",
+            "text": "CLOSE DIALOG",
+            "description": "",
+            "enabled": true,
+            "bounds": "668 1266 978 1408"
+          },
+          "status": "focused",
+          "signals": [],
+          "speech": [
+            {
+              "utteranceId": "talkback_83",
+              "text": "CLOSE DIALOG, Button"
+            },
+            {
+              "utteranceId": "talkback_84",
+              "text": "Double-tap to activate"
+            }
+          ],
+          "focusEvents": [
+            {
+              "id": "node-2",
+              "windowId": 338,
+              "packageName": "org.irs_public.aloud.fixture",
+              "viewId": "android:id/button1",
+              "className": "android.widget.Button",
+              "text": "CLOSE DIALOG",
+              "description": "",
+              "enabled": true,
+              "bounds": "668 1266 978 1408"
+            }
+          ],
+          "elapsedMs": 4390
+        },
+        {
+          "schemaVersion": 1,
+          "source": "talkback-focus",
+          "requestId": "ba9ad841-f9e3-4419-8084-02abe24d79ca",
+          "screen": "dialog",
+          "target": "org.irs_public.aloud.fixture",
+          "sequence": 6,
+          "action": "next",
+          "session": "7de036b8-48d1-48ce-86cd-e160db2227fc",
+          "talkbackCommit": "229212fdf5842191d0a93fc95d9ca1423b346866",
+          "pid": 8993,
+          "windowId": 338,
+          "runtime": "14",
+          "before": {
+            "id": "node-2",
+            "windowId": 338,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "android:id/button1",
+            "className": "android.widget.Button",
+            "text": "CLOSE DIALOG",
+            "description": "",
+            "enabled": true,
+            "bounds": "668 1266 978 1408"
+          },
+          "after": {
+            "id": "node-2",
+            "windowId": 338,
+            "packageName": "org.irs_public.aloud.fixture",
+            "viewId": "android:id/button1",
+            "className": "android.widget.Button",
+            "text": "CLOSE DIALOG",
+            "description": "",
+            "enabled": true,
+            "bounds": "668 1266 978 1408"
+          },
+          "status": "edge",
+          "signals": [
+            "edge"
+          ],
+          "speech": [],
+          "focusEvents": [],
+          "elapsedMs": 623
+        }
+      ],
+      "coverage": {
+        "complete": true,
+        "start": "backward-edge",
+        "reason": "forward-edge",
+        "maxSteps": 80
+      }
+    }
+  }
+}

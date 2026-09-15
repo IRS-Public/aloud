@@ -4,6 +4,7 @@
 #
 #   aloud talkback get --foss    # download talkback-foss
 #   aloud talkback get --build   # build google/talkback @ pin
+#   aloud talkback get --build --companion --no-native  # emulator focus capture
 #
 # Google publishes NO prebuilt TalkBack APKs (github releases are source-only,
 # verified Aug 2026), so:
@@ -20,12 +21,27 @@
 # The pinned source builds only armeabi-v7a/arm64-v8a native libs (braille).
 # On an x86_64 emulator that can make `adb install` fail with
 # NO_MATCHING_ABIS, so --build also emits talkback-nolib.apk — same APK with
-# lib/ stripped and debug-resigned. Braille display support dies; screen
-# reading and speech logging don't need it.
+# lib/ stripped and debug-resigned. Stripping alone can crash braille
+# initialization at this pin; use --companion --no-native for emulator tests.
 set -euo pipefail
 
 CACHE="${ALOUD_CACHE:-.aloud-cache}"
 mkdir -p "$CACHE"
+COMPANION=0; NO_NATIVE=0
+for flag in "$@"; do
+  case "$flag" in
+    --companion) COMPANION=1 ;;
+    --no-native) NO_NATIVE=1 ;;
+    --build|--foss) ;;
+    *) echo "unknown flag: $flag"; exit 1 ;;
+  esac
+done
+if [ "$NO_NATIVE" -eq 1 ] && [ "$COMPANION" -ne 1 ]; then
+  echo "--no-native requires --companion (emulator-only build)"; exit 1
+fi
+if [ "$COMPANION" -eq 1 ] && [ "${1:-}" != "--build" ]; then
+  echo "--companion requires --build"; exit 1
+fi
 
 TALKBACK_COMMIT="${TALKBACK_COMMIT:-229212fdf5842191d0a93fc95d9ca1423b346866}"
 
@@ -40,15 +56,27 @@ case "${1:---foss}" in
   --build)
     SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:?set ANDROID_HOME}}"
     yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-    "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "ndk;21.4.7075529" > /dev/null
+    "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" > /dev/null
+    if [ "$NO_NATIVE" -eq 0 ]; then "$SDK/cmdline-tools/latest/bin/sdkmanager" "ndk;21.4.7075529" > /dev/null; fi
     rm -rf "$CACHE/talkback-src"
     git clone https://github.com/google/talkback.git "$CACHE/talkback-src"
     git -C "$CACHE/talkback-src" checkout "$TALKBACK_COMMIT"
+    if [ "$COMPANION" -eq 1 ]; then
+      [ "$TALKBACK_COMMIT" = "229212fdf5842191d0a93fc95d9ca1423b346866" ] || { echo "companion requires its verified TalkBack pin"; exit 1; }
+      PATCH_ARGS=(); [ "$NO_NATIVE" -eq 0 ] || PATCH_ARGS=(--no-native)
+      node "$(dirname "$0")/talkback-companion/patch.mjs" "$CACHE/talkback-src" ${PATCH_ARGS[@]+"${PATCH_ARGS[@]}"}
+    fi
     # build.sh wants ANDROID_SDK and a system gradle; it runs assembleDebug
-    ( cd "$CACHE/talkback-src" && ANDROID_SDK="$SDK" bash build.sh )
+    if [ "$COMPANION" -eq 1 ]; then
+      printf 'sdk.dir=%s\n' "$SDK" > "$CACHE/talkback-src/local.properties"
+      ( cd "$CACHE/talkback-src" && gradle assemblePhoneDebug )
+    else
+      ( cd "$CACHE/talkback-src" && ANDROID_SDK="$SDK" bash build.sh )
+    fi
     APK=$(find "$CACHE/talkback-src/build/outputs/apk" -name "*phone-debug*.apk" | head -1)
     [ -n "$APK" ] || { echo "build produced no phone-debug apk"; exit 1; }
     cp "$APK" "$CACHE/talkback.apk"
+    node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({talkbackCommit:process.argv[2],companion:process.argv[3]==="1",nativeLibraries:process.argv[4]==="0"},null,2))' "$CACHE/build.json" "$TALKBACK_COMMIT" "$COMPANION" "$NO_NATIVE"
 
     # lib-stripped fallback for x86_64 emulators (see header)
     # newest installed build-tools, installing 35.0.0 only if none exist

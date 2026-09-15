@@ -176,11 +176,20 @@ function validateScreens(screens, platform = "input") {
     if (s.utterances != null && !isCount(s.utterances)) {
       invalid("utterances must be a non-negative integer or null");
     }
-    if (s.transcriptSource !== undefined && !["talkback", "computed-voiceover", "voiceover"].includes(s.transcriptSource)) {
+    if (s.transcriptSource !== undefined && !["talkback", "talkback-focus", "computed-voiceover", "voiceover"].includes(s.transcriptSource)) {
       invalid("unknown transcript source");
     }
     if ((platform === "Android" && ["voiceover", "computed-voiceover"].includes(s.transcriptSource)) ||
-        (platform === "iOS" && s.transcriptSource === "talkback")) invalid("transcript source belongs to another platform");
+        (platform === "iOS" && ["talkback", "talkback-focus"].includes(s.transcriptSource))) invalid("transcript source belongs to another platform");
+    if (s.transcriptSource === "talkback-focus" || s.talkBackFocus !== undefined) {
+      const t = s.talkBackFocus;
+      if (s.transcriptSource !== "talkback-focus" || !isCount(s.utterances) || !isRecord(t) ||
+          t.coverage?.complete !== true || t.coverage?.start !== "backward-edge" || t.coverage?.reason !== "forward-edge" ||
+          !Number.isInteger(t.coverage.maxSteps) || t.coverage.maxSteps < 1 || t.coverage.maxSteps > 200 ||
+          t.speechSource !== "talkback-tts-request-listener" ||
+          t.talkbackCommit !== "229212fdf5842191d0a93fc95d9ca1423b346866" ||
+          ![t.requestId, t.target].every((v) => typeof v === "string" && v.trim())) invalid("TalkBack focus needs complete traversal provenance");
+    }
     if (s.transcriptSource === "voiceover" || s.voiceOver !== undefined) {
       if (s.transcriptSource !== "voiceover" || !isCount(s.utterances) || !isRecord(s.voiceOver)) {
         invalid("real VoiceOver needs a speech count and capture provenance");
@@ -318,9 +327,12 @@ export function buildAcr({
 
   const transcriptNotes = transcriptCoverage(audits);
   const hasRealVoiceOver = audits.some((audit) => Object.values(audit.screens).some((s) => s.transcriptSource === "voiceover"));
-  const transcriptMethods = hasRealVoiceOver
+  let transcriptMethods = hasRealVoiceOver
     ? "Transcript sources are recorded per screen. Real VoiceOver output is captured through XCUIVoiceOverService, starting at current focus; partial speech does not establish conformance. Other iOS output is computed; Android output uses the TalkBack speech log."
     : "Transcripts, when present, are TalkBack speech-log output on Android and computed VoiceOver output on iOS.";
+  if (audits.some((audit) => Object.values(audit.screens).some((s) => s.transcriptSource === "talkback-focus"))) {
+    transcriptMethods += " Screens marked talkback-focus use the pinned TalkBack gesture pipeline and speech-request listener, with both native traversal boundaries verified. This does not prove audible delivery, correct focus order, or WCAG conformance.";
+  }
   const note302 =
     `Not evaluated; needs human review. Related evidence: ${transcriptNotes} ${transcriptMethods} ` +
     "See https://github.com/IRS-Public/aloud/blob/main/docs/how-it-works.md.";

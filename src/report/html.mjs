@@ -19,7 +19,7 @@ export const AUDIO_NOTE =
   "Audio is reconstructed: synthesized from the captured transcript, not a recording of the device.";
 
 const speakerFor = (source) =>
-  source === "computed-voiceover" ? "Computed VoiceOver" : source === "voiceover" ? "VoiceOver said" : "TalkBack said";
+  source === "talkback-focus" ? "TalkBack speech requests" : source === "computed-voiceover" ? "Computed VoiceOver" : source === "voiceover" ? "VoiceOver said" : "TalkBack said";
 
 // Display order: failing screens first (most errors first), then everything
 // else alphabetically. summary.json keeps the plain sorted order — only the
@@ -65,7 +65,11 @@ function transcriptHtml(s, id, audioEntries, includeAudioNote) {
   const lines = s.transcript ?? [];
   const speaker = speakerFor(s.source);
   const byIndex = new Map((audioEntries ?? []).map((e) => [e.i, e]));
-  const coverageNote = s.source === "voiceover"
+  const coverageNote = s.source === "talkback-focus"
+    ? `<p><strong>TalkBack traversal:</strong> both native boundaries verified in the captured window. Speech requests do not prove audible delivery or correct focus order.</p>
+      <p>Tree checks and the screenshot cover the viewport before traversal; TalkBack may scroll during capture.</p>
+      <p><a href="talkback-focus/${esc(encodeURIComponent(id))}.json">Raw focus steps and speech requests</a></p>`
+    : s.source === "voiceover"
     ? `<p><strong>Partial traversal:</strong> ${esc(s.voiceOver?.coverage.reason ?? "unknown")}. Capture starts at current focus; it does not prove every element was visited.</p>
       ${s.voiceOver?.steps?.[0]?.utterance === null ? "<p>The initial speech read timed out; the transcript contains only speech returned by subsequent steps.</p>" : ""}
       <p><a href="voiceover/${esc(encodeURIComponent(id))}.json">Raw VoiceOver evidence and toolchain</a></p>` : "";

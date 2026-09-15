@@ -4,6 +4,9 @@ The Android transcript is real TalkBack speech, captured from TalkBack's
 own log. That only works if the TalkBack build on the device logs its
 utterances in a shape aloud can parse. So aloud pins the build.
 
+For full traversal, opt into [TalkBack focus stepping](talkback-focus.md).
+The default capture still records startup/navigation speech only.
+
 ## The pin
 
 Google ships no prebuilt TalkBack APKs (the GitHub releases are
@@ -80,16 +83,21 @@ The pinned source build ships native libs (used for braille support) for
 `armeabi-v7a` and `arm64-v8a` only. On an x86_64 emulator, installing that
 APK can fail with `INSTALL_FAILED_NO_MATCHING_ABIS`.
 
-So `--build` also emits `talkback-nolib.apk` next to `talkback.apk` in the
-cache dir: the same APK with `lib/` stripped, zipaligned, and re-signed
-with the debug key. Braille display support dies; screen reading and
-speech logging do not need it. On an x86_64 emulator, install the
-fallback:
+`--build` also emits a `talkback-nolib.apk` fallback with native libraries
+stripped. **Stripping alone is insufficient for the pinned 16.2 build:**
+braille-display initialization can still try to load those libraries and
+crash the service. The focus smoke test exposed this on an ARM emulator.
+
+For emulator use, build the companion variant with braille initialization
+explicitly disabled:
 
 ```bash
-npx aloud talkback install .aloud-cache/talkback.apk \
-  || npx aloud talkback install .aloud-cache/talkback-nolib.apk
+npx aloud talkback get --build --companion --no-native
+npx aloud talkback install .aloud-cache/talkback.apk
 ```
+
+This variant supports speech/focus testing, not braille testing. See
+[TalkBack focus traversal](talkback-focus.md) for the supported capture path.
 
 The cache dir is `$ALOUD_CACHE` if set, else `.aloud-cache` under the
 current directory.

@@ -49,15 +49,16 @@ Still required before promotion to the default:
 
 Tracking: [#24](https://github.com/IRS-Public/aloud/issues/24).
 
-Develop a companion with a documented command/response protocol. Prove on
-the pinned TalkBack build that commands advance TalkBack's own focus and
-produce its speech. A tree walker that merely sets accessibility focus is
-not sufficient evidence of the user's traversal order.
+The opt-in `--talkback focus` implementation uses a shell-restricted companion
+inside the pinned source build. It invokes TalkBack's gesture controller,
+records actual focus and speech requests, and requires backward and forward
+native boundaries. Incomplete traversal fails with raw diagnostics retained.
+See [the protocol and limitations](talkback-focus.md).
 
-Acceptance fixtures must include nested containers, scrollable lists,
-duplicate labels, disabled controls, and an explicit end condition. Keep
-request IDs, screen IDs, and focus-step sequence numbers in capture records.
-Fail incomplete traversal rather than presenting it as a full transcript.
+The native fixture covers nested containers, scrolling, duplicate labels,
+disabled controls, dialogs, target changes, permission denial, and restoration.
+Broader app and WebView compatibility remains an adoption-validation task;
+traversal evidence alone does not establish correct focus order or conformance.
 
 ## 4. Logging TTS engine
 

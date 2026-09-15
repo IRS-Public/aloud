@@ -246,10 +246,10 @@ Roadmap, in implementation order:
    signal and GA toolchain validation remain required before it becomes the
    default. Today's baselines store tree errors, so no transcript migration
    is needed. [Tracking #23](https://github.com/IRS-Public/aloud/issues/23).
-3. **TalkBack focus stepping.** Build and test a companion that drives
-   TalkBack's accessibility focus, including scroll boundaries, repeated
-   labels, and explicit completion. Shell key injection alone is not a
-   verified full-traversal mechanism.
+3. **TalkBack focus stepping.** Opt-in `--talkback focus` drives the pinned
+   TalkBack gesture pipeline and captures focus and speech requests, including
+   scrolling and duplicate labels. Native backward/forward boundaries are
+   required; incomplete traversal fails. [Setup and limits](docs/talkback-focus.md).
 4. **A logging TTS engine.** Capture speech requests with sequence IDs,
    screen boundaries, and queue/flush events. Prove that requests survive
    stress and distinguish requested speech from audio actually played.

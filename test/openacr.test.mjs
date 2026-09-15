@@ -478,3 +478,21 @@ describe("OpenACR CLI evidence validation", () => {
     }
   });
 });
+
+it("retains TalkBack focus provenance without adding conformance coverage", () => {
+  const summary = { screens: { fixture: {
+    errors: 0, warns: 0, ruleIds: [], utterances: 2, transcriptSource: "talkback-focus",
+    talkBackFocus: { coverage: { complete: true, reason: "forward-edge", start: "backward-edge", maxSteps: 100 },
+      requestId: "request", target: "org.example", speechSource: "talkback-tts-request-listener",
+      talkbackCommit: "229212fdf5842191d0a93fc95d9ca1423b346866" },
+  } } };
+  const acr = build({ android: normalizeAudit(summary), ios: null });
+  const yaml = toYaml(acr);
+  assert.match(yaml, /both native traversal boundaries verified/);
+  assert.match(yaml, /does not prove audible delivery/);
+  for (const complete of [false, undefined]) {
+    const invalid = structuredClone(summary); invalid.screens.fixture.talkBackFocus.coverage.complete = complete;
+    assert.throws(() => build({ android: normalizeAudit(invalid), ios: null }), /TalkBack focus needs complete traversal provenance/);
+  }
+  assert.throws(() => build({ android: null, ios: normalizeAudit(summary) }), /another platform/);
+});

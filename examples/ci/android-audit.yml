@@ -102,10 +102,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .aloud-cache
-          key: talkback-apk-${{ env.TALKBACK_COMMIT }}
+          key: talkback-companion-${{ env.TALKBACK_COMMIT }}-${{ hashFiles('node_modules/@irs-public/aloud/src/android/talkback-companion/**', 'node_modules/@irs-public/aloud/src/android/get-talkback.sh') }}
 
-      # The source build takes ~50 minutes cold. The cache key is the pin,
-      # so this runs about once per pin bump.
+      # Cache the pin and companion source together; patch changes require a rebuild.
       - name: Build TalkBack from source (cache miss only)
         if: steps.talkback-cache.outputs.cache-hit != 'true'
         run: |
@@ -114,17 +113,14 @@ jobs:
           curl -fsSL -o "$RUNNER_TEMP/gradle.zip" https://services.gradle.org/distributions/gradle-8.14.3-bin.zip
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           export PATH="$RUNNER_TEMP/gradle-8.14.3/bin:$PATH"
-          npx aloud talkback get --build
-          # NDK r21 (~4GB) is only needed by this build; reclaim the disk
-          # before the emulator image lands.
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --uninstall "ndk;21.4.7075529" > /dev/null 2>&1 || true
+          npx aloud talkback get --build --companion --no-native
 
       - name: Save TalkBack APK cache (immediately, so later failures cannot lose it)
         if: steps.talkback-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: .aloud-cache
-          key: talkback-apk-${{ env.TALKBACK_COMMIT }}
+          key: talkback-companion-${{ env.TALKBACK_COMMIT }}-${{ hashFiles('node_modules/@irs-public/aloud/src/android/talkback-companion/**', 'node_modules/@irs-public/aloud/src/android/get-talkback.sh') }}
 
       # --- replace with your app's build ---
       # Produce a debug APK for the emulator ABI. For a React Native app:
@@ -157,14 +153,12 @@ jobs:
 
       - name: Run audit on emulator
         run: |
-          # The pinned TalkBack build ships ARM native libs only; on the
-          # x86_64 emulator the lib-stripped fallback installs instead
-          # (docs/talkback.md in the aloud repository).
-          npx aloud talkback install .aloud-cache/talkback.apk \
-            || npx aloud talkback install .aloud-cache/talkback-nolib.apk
+          # The companion emulator build omits braille native libraries and
+          # disables braille-display initialization.
+          npx aloud talkback install .aloud-cache/talkback.apk
           npx aloud talkback status
           # --- replace with your app's audit invocation ---
-          npx aloud android --apk path/to/app-debug.apk --no-gate \
+          npx aloud android --apk path/to/app-debug.apk --talkback focus --no-gate \
             ${FLOWS:+--flow "$FLOWS"}
           # --- end replace ---
 

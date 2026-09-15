@@ -14,6 +14,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderReportHtml } from "./html.mjs";
+import { validateTalkBackFocusCapture, focusTranscript } from "../android/talkback-focus.mjs";
 import { validateVoiceOverCapture } from "../ios/voiceover-capture.mjs";
 
 const args = process.argv.slice(2);
@@ -66,7 +67,15 @@ for (const f of readdirSync(OUT).sort()) {
         throw new Error(`VoiceOver transcript or toolchain does not match raw evidence in ${f}`);
       }
     }
+    if (r.source === "talkback-focus" || r.talkBackFocus !== undefined) {
+      if (r.source !== "talkback-focus" || r.talkBackFocus?.screen !== r.screen) throw new Error(`invalid TalkBack evidence in ${f}`);
+      validateTalkBackFocusCapture(r.talkBackFocus);
+      if (!r.talkBackFocus.coverage.complete || JSON.stringify(focusTranscript(r.talkBackFocus)) !== JSON.stringify(r.transcript)) {
+        throw new Error(`incomplete or mismatched TalkBack evidence in ${f}`);
+      }
+    }
     screens[r.screen] = { ...screens[r.screen], transcript: r.transcript, source: r.source,
+      ...(r.talkBackFocus ? { talkBackFocus: r.talkBackFocus } : {}),
       ...(r.voiceOver ? { voiceOver: r.voiceOver } : {}),
     };
   }
@@ -76,6 +85,19 @@ const ids = Object.keys(screens).sort();
 if (ids.length === 0) {
   console.error("no per-screen reports found — nothing to aggregate");
   process.exit(1);
+}
+
+const requirementsPath = join(OUT, "capture-requirements.json");
+if (existsSync(requirementsPath)) {
+  const requirements = JSON.parse(readFileSync(requirementsPath, "utf8"));
+  if (requirements.schemaVersion !== 1 || requirements.talkBackFocus !== true) {
+    throw new Error("invalid capture requirements");
+  }
+  for (const id of ids) {
+    if (screens[id].source !== "talkback-focus" || !screens[id].talkBackFocus?.coverage.complete) {
+      throw new Error(`${id}: requested TalkBack traversal did not complete; raw evidence is retained`);
+    }
+  }
 }
 
 const summary = {
@@ -91,6 +113,11 @@ const summary = {
           ruleIds: s.gate?.ruleIds ?? [],
           utterances: s.transcript?.length ?? null,
           ...(s.source ? { transcriptSource: s.source } : {}),
+          ...(s.talkBackFocus ? { talkBackFocus: {
+            coverage: s.talkBackFocus.coverage, requestId: s.talkBackFocus.requestId,
+            target: s.talkBackFocus.target, speechSource: s.talkBackFocus.speechSource,
+            talkbackCommit: s.talkBackFocus.commands[0].talkbackCommit,
+          } } : {}),
           ...(s.voiceOver ? { voiceOver: { coverage: s.voiceOver.coverage,
             initialSpeechUnavailable: s.voiceOver.steps[0]?.utterance === null,
             requestId: s.voiceOver.requestId, bundleId: s.voiceOver.bundleId, toolchain: s.voiceOver.toolchain,

@@ -39,6 +39,7 @@ import {
   uiDump,
   waitForDevice,
 } from "./adb.mjs";
+import { createFocusCapturer, focusTranscript } from "./talkback-focus.mjs";
 import { dedupeConsecutive, segmentTranscript } from "./transcript.mjs";
 import { parseUiDump, runChecks, validateUiCapture } from "./ui-tree.mjs";
 
@@ -126,6 +127,8 @@ async function walk() {
     dark = wantDark;
   };
 
+  const captureFocus = PASS === "transcript" && cfg.android?.talkBack === "focus"
+    ? createFocusCapturer({ out: OUT, target: appPackage, maxSteps: cfg.android.talkBackMaxSteps ?? 100 }) : null;
   const walked = [];
   for (const screen of nav.screens) {
     if (NAV_MODE !== "current-screen") setAppearance(!!screen.dark);
@@ -150,7 +153,12 @@ async function walk() {
     if (NAV_MODE !== "bridge") await sleep(screen.settleMs ?? 2500);
 
     if (PASS === "transcript") {
-      await sleep(TALKBACK_SETTLE_MS);
+      if (captureFocus) {
+        const talkBackFocus = await captureFocus(screen.id);
+        writeFileSync(join(OUT, `${screen.id}.transcript.json`), JSON.stringify({
+          screen: screen.id, source: "talkback-focus", transcript: focusTranscript(talkBackFocus), talkBackFocus,
+        }, null, 2));
+      } else await sleep(TALKBACK_SETTLE_MS);
       logMarker(`screen-end:${screen.id}`);
     } else {
       let nodes;
@@ -192,7 +200,7 @@ async function walk() {
   setAppearance(initialNight);
   await nav.stop();
 
-  if (PASS === "transcript") {
+  if (PASS === "transcript" && !captureFocus) {
     const screens = segmentTranscript(logcatDump());
     for (const id of walked) {
       const transcript = dedupeConsecutive(screens[id] ?? []);
