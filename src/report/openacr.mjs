@@ -27,6 +27,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { dump, load } from "js-yaml";
+import { validateVoiceOverCoverage } from "../ios/voiceover-capture.mjs";
 
 // The catalog names the edition the draft is built against. WCAG 2.2 is
 // required: the touch-target rules map to 2.5.8, which exists only there.
@@ -129,14 +130,20 @@ function selectScreens(audits, predicate) {
 }
 
 function transcriptCoverage(audits) {
-  const spoken = selectScreens(audits, (s) => s.utterances > 0);
-  const silent = selectScreens(audits, (s) => s.utterances === 0);
+  const ordinary = audits.map((audit) => ({ ...audit, screens: Object.fromEntries(
+    Object.entries(audit.screens).filter(([, s]) => s.transcriptSource !== "voiceover"),
+  ) }));
+  const spoken = selectScreens(ordinary, (s) => s.utterances > 0);
+  const silent = selectScreens(ordinary, (s) => s.utterances === 0);
+  const real = selectScreens(audits, (s) => s.transcriptSource === "voiceover");
   const unknown = selectScreens(audits, (s) => s.utterances == null);
   return [
     ...spoken.map((audit) =>
       `${screenCoverage([audit])} have ${audit.platform === "iOS" ? "computed utterances" : "captured speech"}.`),
     ...silent.map((audit) =>
       `${screenCoverage([audit])} have no ${audit.platform === "iOS" ? "computed utterances" : "captured speech"}.`),
+    ...real.flatMap((audit) => Object.entries(audit.screens).map(([id, s]) =>
+      `iOS ${id} has ${s.utterances} raw VoiceOver utterance(s) with partial traversal (${s.voiceOver.coverage.reason}); complete traversal and focus order have not been established.`)),
     unknown.length ? `Transcript coverage is unavailable for ${screenCoverage(unknown)}.` : "",
   ].filter(Boolean).join(" ");
 }
@@ -168,6 +175,22 @@ function validateScreens(screens, platform = "input") {
     }
     if (s.utterances != null && !isCount(s.utterances)) {
       invalid("utterances must be a non-negative integer or null");
+    }
+    if (s.transcriptSource !== undefined && !["talkback", "computed-voiceover", "voiceover"].includes(s.transcriptSource)) {
+      invalid("unknown transcript source");
+    }
+    if ((platform === "Android" && ["voiceover", "computed-voiceover"].includes(s.transcriptSource)) ||
+        (platform === "iOS" && s.transcriptSource === "talkback")) invalid("transcript source belongs to another platform");
+    if (s.transcriptSource === "voiceover" || s.voiceOver !== undefined) {
+      if (s.transcriptSource !== "voiceover" || !isCount(s.utterances) || !isRecord(s.voiceOver)) {
+        invalid("real VoiceOver needs a speech count and capture provenance");
+      }
+      try { validateVoiceOverCoverage(s.voiceOver.coverage); }
+      catch { invalid("real VoiceOver needs valid partial-coverage metadata"); }
+      for (const value of [s.voiceOver.requestId, s.voiceOver.bundleId,
+        s.voiceOver.toolchain?.xcode, s.voiceOver.toolchain?.simulatorUdid]) {
+        if (typeof value !== "string" || !value.trim()) invalid("real VoiceOver needs capture identity and toolchain");
+      }
     }
     if (s.appleAudit !== undefined && (!isRecord(s.appleAudit) || s.appleAudit.status !== "completed" ||
         !isCount(s.appleAudit.issues) || s.appleAudit.reportOnly !== true)) {
@@ -291,8 +314,10 @@ export function buildAcr({
   }
 
   const transcriptNotes = transcriptCoverage(audits);
-  const transcriptMethods =
-    "Transcripts, when present, are TalkBack speech-log output on Android and computed VoiceOver output on iOS.";
+  const hasRealVoiceOver = audits.some((audit) => Object.values(audit.screens).some((s) => s.transcriptSource === "voiceover"));
+  const transcriptMethods = hasRealVoiceOver
+    ? "Transcript sources are recorded per screen. Real VoiceOver output is captured through XCUIVoiceOverService, starting at current focus; partial speech does not establish conformance. Other iOS output is computed; Android output uses the TalkBack speech log."
+    : "Transcripts, when present, are TalkBack speech-log output on Android and computed VoiceOver output on iOS.";
   const note302 =
     `Not evaluated; needs human review. Related evidence: ${transcriptNotes} ${transcriptMethods} ` +
     "See https://github.com/IRS-Public/aloud/blob/main/docs/how-it-works.md.";

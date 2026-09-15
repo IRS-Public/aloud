@@ -44,6 +44,14 @@ if [ "$(cfgget 'c.ios?.appleAudit')" = "true" ]; then
     exit 1
   }
 fi
+VOICEOVER="$(cfgget 'c.ios?.voiceOver')"; [ -n "$VOICEOVER" ] || VOICEOVER="computed"
+if [ "$VOICEOVER" = "real" ]; then
+  command -v xcodegen > /dev/null || { echo "--voiceover real needs xcodegen: brew install xcodegen"; exit 1; }
+  xcodebuild -checkFirstLaunchStatus > /dev/null 2>&1 || {
+    echo "--voiceover real needs configured Xcode 27+ and an iOS 27+ Simulator runtime"
+    exit 1
+  }
+fi
 
 FLOW=""; GATE="--gate"; SKIP_APP_SERVER=0; SCREEN_ID=""
 while [ $# -gt 0 ]; do
@@ -128,7 +136,7 @@ if [ "$NAV_MODE" = "bridge" ] && [ -n "$APP_SERVER_CMD" ] && [ "$SKIP_APP_SERVER
   fi
 fi
 
-echo "── walk (computed VoiceOver + tree checks) ──"
+echo "── walk ($VOICEOVER VoiceOver + tree checks) ──"
 node "$ALOUD_HOME/src/ios/walk.mjs" --port "$PORT" --out "$IOS_OUT" \
   ${FLOW_ARGS[@]+"${FLOW_ARGS[@]}"} ${SCREEN_ID_ARGS[@]+"${SCREEN_ID_ARGS[@]}"}
 

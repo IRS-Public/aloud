@@ -56,7 +56,24 @@ if (command === "idb" && args.join(" ") === "ui describe-all --udid test-device"
 } else if (command === "xcodegen") {
   console.log("generated mock project");
 } else if (command === "xcodebuild") {
-  if (args[0] === "test-without-building") {
+  if (args[0] === "-version") {
+    console.log("Xcode 27.0\\nBuild version 18A1");
+  } else if (args[0] === "test-without-building" && process.env.TEST_RUNNER_ALOUD_VO_REQUEST_ID) {
+    if (process.env.ALOUD_MOCK_NATIVE_FAILURE) throw Error("native speech unavailable");
+    const requestId = process.env.TEST_RUNNER_ALOUD_VO_REQUEST_ID;
+    const maxSteps = Number(process.env.TEST_RUNNER_ALOUD_VO_MAX_STEPS);
+    const result = {
+      schemaVersion: 1, source: "voiceover", status: "captured", runtime: "iOS 27.0",
+      requestId, screen: process.env.TEST_RUNNER_ALOUD_VO_SCREEN,
+      bundleId: process.env.TEST_RUNNER_ALOUD_VO_BUNDLE_ID,
+      voiceOverWasEnabled: false, voiceOverRestored: true,
+      coverage: { complete: false, start: "current-focus", reason: "step-limit", maxSteps, elapsedMs: 1000 },
+      steps: Array.from({ length: maxSteps + 1 }, (_, sequence) => ({
+        sequence, action: sequence ? "forward" : "current", utterance: "Actual VoiceOver Button",
+      })),
+    };
+    console.log("ALOUD-VOICEOVER:" + requestId + ":" + Buffer.from(JSON.stringify(result)).toString("base64"));
+  } else if (args[0] === "test-without-building") {
     if (process.env.ALOUD_MOCK_NATIVE_FAILURE) throw Error("native audit unavailable");
     const requestId = process.env.TEST_RUNNER_ALOUD_AUDIT_REQUEST_ID;
     const result = {
@@ -73,7 +90,7 @@ if (command === "idb" && args.join(" ") === "ui describe-all --udid test-device"
 }
 `;
 
-async function capture(t, platform, dumps, { appleAudit = false, nativeFailure = false } = {}) {
+async function capture(t, platform, dumps, { appleAudit = false, nativeFailure = false, voiceOver = "computed", navMode = "deeplinks" } = {}) {
   const root = mkdtempSync(join(tmpdir(), "aloud-capture-test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const bin = join(root, "bin");
@@ -91,8 +108,8 @@ async function capture(t, platform, dumps, { appleAudit = false, nativeFailure =
   writeFileSync(config, JSON.stringify({
     out: root,
     app: { android: { package: APP_PACKAGE }, ios: { bundleId: APP_PACKAGE } },
-    ios: { appleAudit },
-    nav: { mode: "deeplinks", screens },
+    ios: { appleAudit, voiceOver, voiceOverMaxSteps: 2 },
+    nav: { mode: navMode, screens, screenId: "capture" },
   }));
   const result = await new Promise((resolveResult, reject) => {
     const child = spawn(process.execPath, [join(ROOT, "src", platform, "walk.mjs"), "--pass", "tree"], {
@@ -135,6 +152,48 @@ function assertCapturePassed(result, errors = 0) {
 }
 
 describe("iOS capture validation", { concurrency: 4 }, () => {
+  it("preserves the user's current screen when real speech is requested", async (t) => {
+    const result = await capture(t, "ios", [JSON.stringify([iosButton])], { voiceOver: "real", navMode: "current-screen" });
+    assertCapturePassed(result);
+    const calls = readFileSync(join(result.root, "calls.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+    assert.equal(calls.some((c) => c.args.some((arg) => ["launch", "terminate", "openurl"].includes(arg))), false);
+  });
+  it("captures actual VoiceOver after navigation and keeps Apple findings alongside it", async (t) => {
+    const result = await capture(t, "ios", [JSON.stringify([iosButton])], { voiceOver: "real", appleAudit: true });
+    assertCapturePassed(result);
+    const transcript = JSON.parse(readFileSync(join(result.out, "capture.transcript.json")));
+    assert.equal(transcript.source, "voiceover");
+    assert.deepEqual(transcript.transcript, Array(3).fill("Actual VoiceOver Button"));
+    assert.equal(transcript.voiceOver.coverage.complete, false);
+    assert.equal(transcript.voiceOver.screen, "capture");
+    assert.equal(transcript.voiceOver.bundleId, APP_PACKAGE);
+    assert.equal(JSON.parse(readFileSync(join(result.out, "capture.tree.json"))).appleAudit.issues.length, 1);
+    assert.match(result.stdout, /traversal partial/);
+    const calls = readFileSync(join(result.root, "calls.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+    const nav = calls.findIndex((c) => c.args.includes("openurl"));
+    const speech = calls.findIndex((c) => c.args.includes("-only-testing:AloudVoiceOverUITests/VoiceOverTests/testCurrentScreen"));
+    assert.ok(speech > nav);
+  });
+
+  it("does not fall back to computed speech when real capture fails", async (t) => {
+    const result = await capture(t, "ios", [JSON.stringify([iosButton])], { voiceOver: "real", nativeFailure: true });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /VoiceOver xcodebuild failed/);
+    assert.equal(existsSync(join(result.out, "capture.transcript.json")), false);
+    assert.equal(existsSync(join(result.out, "capture.tree.json")), false);
+  });
+
+  it("retains raw speech but rejects pairing changed screen content with the earlier tree", async (t) => {
+    const before = JSON.stringify([iosButton]);
+    const after = JSON.stringify([{ ...iosButton, AXLabel: "Other screen" }]);
+    const result = await capture(t, "ios", [before, before, after, after], { voiceOver: "real" });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /content changed during VoiceOver/);
+    assert.equal(existsSync(join(result.out, "voiceover/capture.json")), true);
+    assert.equal(existsSync(join(result.out, "capture.transcript.json")), false);
+    assert.equal(existsSync(join(result.out, "capture.tree.json")), false);
+  });
+
   it("attaches native findings to the selected screen while retaining computed speech and tree counts", async (t) => {
     const result = await capture(t, "ios", [JSON.stringify([iosButton])], { appleAudit: true });
     assertCapturePassed(result);

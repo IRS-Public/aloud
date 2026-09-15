@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { createVoiceOverCapturer, normalizeVoiceOverForComparison, parseVoiceOverCapture } from "../src/ios/voiceover-capture.mjs";
+import { loadConfig } from "../src/config.mjs";
+
+const ROOT = fileURLToPath(new URL("../", import.meta.url));
 
 const expected = { requestId: "request-1", screen: "checkout", bundleId: "org.example.app", maxSteps: 2 };
 const capture = (overrides = {}) => ({
@@ -144,4 +149,88 @@ test("unsupported Xcode, native failures and invalid records never substitute co
   const r = rig(t, { corrupt: true });
   assert.throws(() => r.create().capture("checkout"), /does not match/);
   assert.equal(existsSync(join(r.out, "voiceover/checkout.json")), false);
+});
+
+test("real speech is opt-in; invalid modes and unbounded step budgets are rejected", () => {
+  assert.equal(loadConfig().ios.voiceOver, "computed");
+  assert.equal(loadConfig().ios.voiceOverMaxSteps, 20);
+  assert.equal(loadConfig(undefined, { ios: { voiceOver: "real", voiceOverMaxSteps: 100 } }).ios.voiceOver, "real");
+  for (const voiceOver of [true, null, "native", ""]) {
+    assert.throws(() => loadConfig(undefined, { ios: { voiceOver } }), /ios.voiceOver/);
+  }
+  for (const voiceOverMaxSteps of [0, 101, -1, 2.5, "20", null, Infinity]) {
+    assert.throws(() => loadConfig(undefined, { ios: { voiceOverMaxSteps } }), /voiceOverMaxSteps/);
+  }
+});
+
+test("CLI forwards real speech settings and allows overriding real back to computed", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "aloud-voiceover-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const bin = join(dir, "bin");
+  mkdirSync(bin);
+  writeFileSync(join(bin, "bash"), '#!/usr/bin/env node\nconsole.log(require("fs").readFileSync(process.env.ALOUD_CONFIG, "utf8"));\n', { mode: 0o755 });
+  const config = join(dir, "config.json");
+  writeFileSync(config, JSON.stringify({ app: { ios: { bundleId: expected.bundleId } }, ios: { voiceOver: "real" } }));
+  const cli = (args) => spawnSync(process.execPath, [join(ROOT, "bin/aloud.mjs"), "ios", "--config", config,
+    "--out", join(dir, "out"), ...args], {
+    encoding: "utf8", env: { ...process.env, PATH: `${bin}:${dirname(process.execPath)}:${process.env.PATH}` },
+  });
+  const real = cli(["--voiceover", "real", "--voiceover-max-steps", "5", "--no-gate"]);
+  assert.equal(real.status, 0, real.stderr);
+  assert.equal(JSON.parse(real.stdout).ios.voiceOver, "real");
+  assert.equal(JSON.parse(real.stdout).ios.voiceOverMaxSteps, 5);
+  assert.equal(JSON.parse(cli(["--voiceover", "computed"]).stdout).ios.voiceOver, "computed");
+  assert.notEqual(cli(["--voiceover-max-steps", "NaN"]).status, 0);
+});
+
+function report(t, { gate = false, mutate = () => {} } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "aloud-voiceover-report-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const treeGate = { errors: 0, ruleIds: [] };
+  const voiceOver = { ...capture(), toolchain: { xcode: "Xcode 27.0", simulatorUdid: "device-1" } };
+  voiceOver.steps[0].utterance = '<script>"$1,234.50"</script>';
+  const transcript = { screen: "checkout", source: "voiceover", voiceOver,
+    transcript: voiceOver.steps.map((step) => step.utterance) };
+  mutate(transcript);
+  writeFileSync(join(dir, "checkout.tree.json"), JSON.stringify({ screen: "checkout", gate: treeGate, violations: [] }));
+  writeFileSync(join(dir, "checkout.transcript.json"), JSON.stringify(transcript));
+  const baseline = join(dir, "baseline.json");
+  writeFileSync(baseline, JSON.stringify({ checkout: treeGate }));
+  const result = spawnSync(process.execPath, [join(ROOT, "src/report/report.mjs"), "--dir", dir,
+    "--baseline", baseline, ...(gate ? ["--gate"] : [])], { encoding: "utf8", env: { ...process.env, ALOUD_CONFIG: "" } });
+  return { ...result, dir };
+}
+
+test("partial real speech produces honest summary/HTML but fails a requested gate", (t) => {
+  for (const gate of [false, true]) {
+    const result = report(t, { gate });
+    assert.equal(result.status, gate ? 1 : 0, result.stderr);
+    const summary = JSON.parse(readFileSync(join(result.dir, "summary.json")));
+    assert.equal(summary.screens.checkout.transcriptSource, "voiceover");
+    assert.equal(summary.screens.checkout.voiceOver.coverage.complete, false);
+    const html = readFileSync(join(result.dir, "index.html"), "utf8");
+    assert.match(html, /VoiceOver said/);
+    assert.match(html, /Review · partial VoiceOver/);
+    assert.match(html, /Partial traversal/);
+    assert.match(html, /Tree pass/);
+    assert.match(html, /voiceover\/checkout.json/);
+    assert.match(html, /&lt;script&gt;/);
+    assert.doesNotMatch(html, /TalkBack said|Computed VoiceOver|<script>"/);
+    if (gate) assert.match(result.stderr, /VoiceOver traversal is partial/);
+  }
+});
+
+test("report refuses raw/transcript disagreement, missing provenance and invented complete coverage", (t) => {
+  for (const mutate of [
+    (r) => { r.transcript.pop(); },
+    (r) => { delete r.voiceOver; },
+    (r) => { delete r.voiceOver.toolchain; },
+    (r) => { r.voiceOver.screen = "other"; },
+    (r) => { r.voiceOver.coverage.complete = true; },
+    (r) => { r.source = "computed-voiceover"; },
+  ]) {
+    const result = report(t, { mutate });
+    assert.notEqual(result.status, 0);
+    assert.equal(existsSync(join(result.dir, "summary.json")), false);
+  }
 });

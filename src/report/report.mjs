@@ -14,6 +14,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderReportHtml } from "./html.mjs";
+import { parseVoiceOverCapture } from "../ios/voiceover-capture.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -50,7 +51,24 @@ for (const f of readdirSync(OUT).sort()) {
     screens[r.screen] = { ...screens[r.screen], ...r };
   } else if (f.endsWith(".transcript.json")) {
     const r = read(f);
-    screens[r.screen] = { ...screens[r.screen], transcript: r.transcript, source: r.source };
+    if (r.source === "voiceover" || r.voiceOver !== undefined) {
+      if (r.source !== "voiceover" || !r.voiceOver || r.voiceOver.screen !== r.screen) {
+        throw new Error(`invalid real VoiceOver evidence in ${f}`);
+      }
+      const v = r.voiceOver;
+      // Revalidate persisted data: a hand-edited or incomplete transcript
+      // must not turn an unverified traversal into a passing report.
+      parseVoiceOverCapture(`ALOUD-VOICEOVER:${v.requestId}:${Buffer.from(JSON.stringify(v)).toString("base64")}`,
+        { requestId: v.requestId, screen: r.screen, bundleId: v.bundleId, maxSteps: v.coverage?.maxSteps });
+      const raw = v.steps.flatMap((step) => step.utterance === null ? [] : [step.utterance]);
+      if (JSON.stringify(raw) !== JSON.stringify(r.transcript) || typeof v.toolchain?.xcode !== "string" ||
+          !v.toolchain.xcode.trim() || typeof v.toolchain?.simulatorUdid !== "string" || !v.toolchain.simulatorUdid.trim()) {
+        throw new Error(`VoiceOver transcript or toolchain does not match raw evidence in ${f}`);
+      }
+    }
+    screens[r.screen] = { ...screens[r.screen], transcript: r.transcript, source: r.source,
+      ...(r.voiceOver ? { voiceOver: r.voiceOver } : {}),
+    };
   }
 }
 
@@ -72,6 +90,10 @@ const summary = {
           warns: s.violations ? s.violations.filter((v) => v.severity === "warn").length : null,
           ruleIds: s.gate?.ruleIds ?? [],
           utterances: s.transcript?.length ?? null,
+          ...(s.source ? { transcriptSource: s.source } : {}),
+          ...(s.voiceOver ? { voiceOver: { coverage: s.voiceOver.coverage,
+            requestId: s.voiceOver.requestId, bundleId: s.voiceOver.bundleId, toolchain: s.voiceOver.toolchain,
+          } } : {}),
           ...(s.appleAudit ? { appleAudit: {
             status: s.appleAudit.status, issues: s.appleAudit.issues.length, reportOnly: true,
           } } : {}),
@@ -115,6 +137,9 @@ if (GATE) {
   const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")) : {};
   const failures = [];
   for (const id of ids) {
+    if (screens[id].source === "voiceover") {
+      failures.push(`${id}: VoiceOver traversal is partial (${screens[id].voiceOver.coverage.reason}) — use --no-gate for partial capture evidence`);
+    }
     const gate = screens[id].gate;
     if (!gate || !Number.isSafeInteger(gate.errors) || gate.errors < 0 ||
         !Array.isArray(gate.ruleIds) || !gate.ruleIds.every((rule) => typeof rule === "string")) {

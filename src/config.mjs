@@ -14,7 +14,7 @@ const DEFAULTS = {
     android: { activity: ".MainActivity" },
     ios: {},
   },
-  ios: { appleAudit: false },
+  ios: { appleAudit: false, voiceOver: "computed", voiceOverMaxSteps: 20 },
   nav: {
     mode: "current-screen",
     bridge: {
@@ -82,6 +82,13 @@ export function validateConfig(cfg) {
   if (cfg.ios !== undefined && (!isPlainObject(cfg.ios) ||
       (cfg.ios.appleAudit !== undefined && typeof cfg.ios.appleAudit !== "boolean"))) {
     throw new Error("ios.appleAudit must be a boolean");
+  }
+  if (cfg.ios?.voiceOver !== undefined && !["computed", "real"].includes(cfg.ios.voiceOver)) {
+    throw new Error("ios.voiceOver must be computed or real");
+  }
+  if (cfg.ios?.voiceOverMaxSteps !== undefined && (!Number.isInteger(cfg.ios.voiceOverMaxSteps) ||
+      cfg.ios.voiceOverMaxSteps < 1 || cfg.ios.voiceOverMaxSteps > 100)) {
+    throw new Error("ios.voiceOverMaxSteps must be an integer from 1 to 100");
   }
   if (!NAV_MODES.includes(cfg.nav.mode)) {
     throw new Error(`unknown nav.mode "${cfg.nav.mode}" (use ${NAV_MODES.join(" | ")})`);

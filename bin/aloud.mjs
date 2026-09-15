@@ -33,7 +33,8 @@ const LEG_OPTIONS = {
 
 const OPTIONS = {
   android: { ...LEG_OPTIONS, apk: { type: "string" }, pass: { type: "string" } },
-  ios: { ...LEG_OPTIONS, app: { type: "string" }, "apple-audit": { type: "boolean" } },
+  ios: { ...LEG_OPTIONS, app: { type: "string" }, "apple-audit": { type: "boolean" },
+    voiceover: { type: "string" }, "voiceover-max-steps": { type: "string" } },
   report: {
     ...GLOBAL_OPTIONS,
     dir: { type: "string" },
@@ -83,6 +84,8 @@ Leg flags (android, ios):
   --skip-app-server             Do not spawn nav.bridge.appServer.command
   --screen-id <id>              current-screen mode report key (default "current")
   --apple-audit                 iOS only: add report-only Apple accessibility audit evidence
+  --voiceover computed|real     iOS speech source (default: computed; real needs Xcode 27)
+  --voiceover-max-steps N       Maximum forward moves for real speech (1–100, default: 20)
 
   aloud --help          Show this help
   aloud --version       Show the aloud version
@@ -165,6 +168,10 @@ function runLeg(platform, argv) {
   if (platform === "android") setPath(overrides, ["app", "android", "apk"], values.apk);
   if (platform === "ios") setPath(overrides, ["app", "ios", "app"], values.app);
   if (platform === "ios") setPath(overrides, ["ios", "appleAudit"], values["apple-audit"]);
+  if (platform === "ios") setPath(overrides, ["ios", "voiceOver"], values.voiceover);
+  if (platform === "ios" && values["voiceover-max-steps"] !== undefined) {
+    setPath(overrides, ["ios", "voiceOverMaxSteps"], Number(values["voiceover-max-steps"]));
+  }
 
   const { cfg, resolvedPath } = resolveAndWriteConfig(values, overrides);
   try {

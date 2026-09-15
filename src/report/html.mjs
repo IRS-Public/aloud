@@ -19,7 +19,7 @@ export const AUDIO_NOTE =
   "Audio is reconstructed: synthesized from the captured transcript, not a recording of the device.";
 
 const speakerFor = (source) =>
-  source === "computed-voiceover" ? "Computed VoiceOver" : "TalkBack said";
+  source === "computed-voiceover" ? "Computed VoiceOver" : source === "voiceover" ? "VoiceOver said" : "TalkBack said";
 
 // Display order: failing screens first (most errors first), then everything
 // else alphabetically. summary.json keeps the plain sorted order — only the
@@ -34,6 +34,9 @@ export function displayOrder(ids, screens) {
 
 function statusOf(s) {
   if (!s.gate) return { key: "nodata", label: "No tree check" };
+  if (s.gate.errors === 0 && s.source === "voiceover") {
+    return { key: "nodata", label: "Review · partial VoiceOver" };
+  }
   if (s.gate.errors === 0 && s.appleAudit?.issues.length) {
     return { key: "nodata", label: `Review · ${s.appleAudit.issues.length} Apple finding(s)` };
   }
@@ -62,7 +65,10 @@ function transcriptHtml(s, id, audioEntries, includeAudioNote) {
   const lines = s.transcript ?? [];
   const speaker = speakerFor(s.source);
   const byIndex = new Map((audioEntries ?? []).map((e) => [e.i, e]));
-  const note = includeAudioNote ? `<p class="audio-note">${esc(AUDIO_NOTE)}</p>` : "";
+  const coverageNote = s.source === "voiceover"
+    ? `<p><strong>Partial traversal:</strong> ${esc(s.voiceOver?.coverage.reason ?? "unknown")}. Capture starts at current focus; it does not prove every element was visited.</p>
+      <p><a href="voiceover/${esc(encodeURIComponent(id))}.json">Raw VoiceOver evidence and toolchain</a></p>` : "";
+  const note = coverageNote + (includeAudioNote ? `<p class="audio-note">${esc(AUDIO_NOTE)}</p>` : "");
   if (lines.length === 0) {
     return `<h3 class="speaker">${esc(speaker)}</h3>
       ${note}<p class="none">No speech captured in this run.</p>`;
@@ -306,7 +312,9 @@ const AUDIO_JS = `
  */
 export function renderReportHtml({ screens, ids, generated, shots, audioManifest }) {
   const order = displayOrder(ids, screens);
-  const isIosLeg = order.some((id) => screens[id].source === "computed-voiceover");
+  const hasComputed = order.some((id) => screens[id].source === "computed-voiceover");
+  const hasVoiceOver = order.some((id) => screens[id].source === "voiceover");
+  const isIosLeg = hasComputed || hasVoiceOver;
 
   const withGate = order.filter((id) => screens[id].gate);
   const failCount = withGate.filter((id) => screens[id].gate.errors > 0).length;
@@ -319,10 +327,10 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
 
   const appleIssueTotal = order.reduce((n, id) => n + (screens[id].appleAudit?.issues.length ?? 0), 0);
   const hasAppleAudit = order.some((id) => screens[id].appleAudit);
-  const legLabel = isIosLeg ? "iOS · Computed VoiceOver" : "Android · TalkBack";
-  const legNote = isIosLeg
-    ? `<p class="callout"><strong>Honest label:</strong> VoiceOver output on this leg is computed from the accessibility tree, not spoken by a device. Real speech can differ slightly.</p>`
-    : "";
+  const legLabel = isIosLeg ? (hasVoiceOver ? "iOS · VoiceOver evidence" : "iOS · Computed VoiceOver") : "Android · TalkBack";
+  const legNote = (hasComputed
+    ? `<p class="callout"><strong>Honest label:</strong> Transcripts labeled Computed VoiceOver are computed from the accessibility tree, not spoken by a device. Real speech can differ slightly.</p>`
+    : "") + (hasVoiceOver ? `<p class="callout"><strong>Partial VoiceOver capture:</strong> These utterances come from Apple's VoiceOver service. Complete traversal has not been established. Tree checks are separate; partial speech cannot pass the audit gate.</p>` : "");
 
   // The reconstructed-audio note goes directly above the first audio control
   // on the page, in display order.
@@ -390,8 +398,8 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
     <p class="meta">${order.length} screen${order.length === 1 ? "" : "s"} · generated ${esc(generated)}</p>
     <dl class="stats">
       <div><dt>Screens</dt><dd>${order.length}</dd></div>
-      <div><dt>${hasAppleAudit ? "Tree pass" : "Pass"}</dt><dd class="is-pass">${passCount}</dd></div>
-      <div><dt>${hasAppleAudit ? "Tree fail" : "Fail"}</dt><dd${failCount ? ` class="is-fail"` : ""}>${failCount}</dd></div>
+      <div><dt>${hasAppleAudit || hasVoiceOver ? "Tree pass" : "Pass"}</dt><dd class="is-pass">${passCount}</dd></div>
+      <div><dt>${hasAppleAudit || hasVoiceOver ? "Tree fail" : "Fail"}</dt><dd${failCount ? ` class="is-fail"` : ""}>${failCount}</dd></div>
       <div><dt>Errors</dt><dd${errorTotal ? ` class="is-fail"` : ""}>${errorTotal}</dd></div>
       <div><dt>Warnings</dt><dd>${warnTotal}</dd></div>
       ${hasAppleAudit ? `<div><dt>Apple findings to review</dt><dd>${appleIssueTotal}</dd></div>` : ""}
