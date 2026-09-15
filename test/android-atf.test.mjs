@@ -8,7 +8,7 @@ import { load } from "js-yaml";
 import { execFileSync } from "node:child_process";
 import { ATF_CHECKS, atfFindings, atfSummary, atfTreeNodes, sha256, validateAtfEvidence, validateAtfSummary } from "../src/android/atf-evidence.mjs";
 import { runChecks } from "../src/android/ui-tree.mjs";
-import { createAtfCapturer } from "../src/android/atf-capture.mjs";
+import { createAtfCapturer, recoverAtfArtifacts } from "../src/android/atf-capture.mjs";
 import { loadConfig } from "../src/config.mjs";
 import { buildAcr, CATALOG_ID, normalizeAudit } from "../src/report/openacr.mjs";
 const require = createRequire(import.meta.url);
@@ -62,6 +62,7 @@ test("native rich fields and duplicate element identities remain distinct", () =
 
 for (const [name, mutate] of [
   ["failed capture", (e) => edit(e, (v) => { v.status = "failed"; v.error = "screen changed"; })],
+  ["observed native changes", (e) => edit(e, (v) => { v.observedChanges = [{ type: "TYPE_WINDOW_CONTENT_CHANGED" }]; })],
   ["missing check", (e) => edit(e, (v) => v.checks.pop())],
   ["failed check", (e) => edit(e, (v) => { v.checks[0].status = "failed"; })],
   ["framework version", (e) => edit(e, (v) => { v.framework.version = "latest"; })],
@@ -71,6 +72,7 @@ for (const [name, mutate] of [
   ["disconnected graph", (e) => edit(e, (v) => { v.nodes[0].children = []; v.nodes[0].childCount = 0; })],
   ["wrong node target", (e) => edit(e, (v) => { v.nodes[3].packageName = "other.app"; })],
   ["changed screen", (e) => edit(e, (v) => { v.nodes[3].text = "Changed"; }, ["verification"])],
+  ["transient screen change between snapshots", (e) => edit(e, (v) => { v.changeSequence++; }, ["verification"])],
   ["changed process", (e) => { e.targetPidAfter = "9999"; }],
   ["changed companion", (e) => edit(e, (v) => { v.pid++; }, ["verification"])],
   ["raw truncation", (e) => { e.capture.raw = e.capture.raw.slice(0, -3); }],
@@ -90,6 +92,19 @@ test("missing companion preserves failed capture and cannot create native succes
       runShell: () => "123", runAdb: () => "Broadcast completed: result=0", takeScreenshot: () => assert.fail("no screenshot expected") });
     await assert.rejects(capture("missing"), /companion unavailable/);
     assert.equal(JSON.parse(readFileSync(join(dir, "atf/missing.json"))).complete, false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test("interrupted native artifacts are retained without promoting an incomplete capture", () => {
+  const dir = mkdtempSync(join(tmpdir(), "aloud-atf-recovery-")), e = fixture();
+  try {
+    e.complete = false; delete e.verification;
+    mkdirSync(join(dir, "atf")); writeFileSync(join(dir, "atf", `${e.screen}.json`), JSON.stringify(e));
+    const files = recoverAtfArtifacts(dir, (args) => {
+      if (args.at(-1).endsWith(".verify.json")) throw new Error("not written");
+      return e.capture.raw;
+    });
+    assert.equal(files.length, 1); assert.equal(readFileSync(files[0], "utf8"), e.capture.raw);
+    assert.equal(JSON.parse(readFileSync(join(dir, "atf", `${e.screen}.json`))).complete, false);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

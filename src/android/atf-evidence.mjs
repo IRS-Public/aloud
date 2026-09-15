@@ -42,7 +42,8 @@ export function validateAtfSnapshot(raw, receipt, expected) {
   const v = JSON.parse(raw);
   for (const key of ["requestId", "screen", "target", "phase", "session", "source", "schemaVersion"]) check(v[key] === receipt[key], `artifact ${key}`);
   check(v.status === "completed" && v.error === null, `capture did not complete (${v.error ?? v.status})`);
-  check(v.talkbackCommit === TALKBACK_COMMIT && count(v.pid) && v.pid > 0 && count(v.windowId) && count(v.elapsedMs), "producer identity");
+  check(Array.isArray(v.observedChanges) && v.observedChanges.length === 0, "screen changed during native capture");
+  check(v.talkbackCommit === TALKBACK_COMMIT && count(v.pid) && v.pid > 0 && count(v.windowId) && count(v.elapsedMs) && count(v.changeSequence), "producer identity");
   check(equal(v.framework, { artifact: ATF_ARTIFACT, version: ATF_VERSION, suite: ATF_SUITE, origin: "ACCESSIBILITY_NODE_INFOS" }), "framework provenance");
   check(count(v.runtime?.sdk) && v.runtime.sdk >= 26 && ["release", "fingerprint", "locale"].every((k) => string(v.runtime[k])) &&
     count(v.densityDpi) && v.densityDpi > 0, "runtime provenance");
@@ -89,7 +90,7 @@ export function validateAtfEvidence(evidence) {
   const expected = { requestId: evidence.requestId, screen: evidence.screen, target: evidence.target };
   const a = validateAtfSnapshot(evidence.capture?.raw, evidence.capture?.receipt, { ...expected, phase: "capture" });
   const b = validateAtfSnapshot(evidence.verification?.raw, evidence.verification?.receipt, { ...expected, phase: "verify", session: a.session });
-  check(a.pid === b.pid && a.windowId === b.windowId && a.densityDpi === b.densityDpi && equal(a.runtime, b.runtime) &&
+  check(a.pid === b.pid && a.windowId === b.windowId && a.changeSequence === b.changeSequence && a.densityDpi === b.densityDpi && equal(a.runtime, b.runtime) &&
     equal(a.nodes, b.nodes), "screen or companion changed around the screenshot");
   return a;
 }

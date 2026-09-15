@@ -26,6 +26,7 @@ import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Iterator;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -46,6 +47,7 @@ public final class AloudAtf extends BroadcastReceiver {
   private volatile boolean alive = true, busy;
   private String lastRequest, lastScreen, lastTarget;
   private boolean verified;
+  private final ArrayList<JSONObject> changeEvents = new ArrayList<>();
 
   private AloudAtf(TalkBackService service) { this.service = service; }
   public static void install(TalkBackService service) {
@@ -64,11 +66,24 @@ public final class AloudAtf extends BroadcastReceiver {
   public static void event(AccessibilityEvent event) {
     if (instance == null) return;
     int t = event.getEventType();
-    if (t == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || t == AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
-        t == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED || t == AccessibilityEvent.TYPE_VIEW_SCROLLED ||
-        t == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED || t == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
-      instance.changes++;
-    }
+    // Clock ticks in SystemUI are not part of the app hierarchy. Focus-only window changes
+    // likewise do not change the node properties used by this snapshot suite.
+    boolean appContent = instance.lastTarget != null && instance.lastTarget.contentEquals(event.getPackageName() == null ? "" : event.getPackageName()) &&
+        (t == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED || t == AccessibilityEvent.TYPE_VIEW_SCROLLED || t == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED);
+    boolean windowChange = t == AccessibilityEvent.TYPE_WINDOWS_CHANGED &&
+        (event.getWindowChanges() & ~AccessibilityEvent.WINDOWS_CHANGE_ACCESSIBILITY_FOCUSED) != 0;
+    if (appContent || windowChange || t == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || t == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) instance.noteChange(event);
+  }
+  private synchronized void noteChange(AccessibilityEvent event) {
+    changes++;
+    changeEvents.add(obj("sequence", changes, "type", AccessibilityEvent.eventTypeToString(event.getEventType()),
+        "packageName", text(event.getPackageName()), "windowId", event.getWindowId()));
+    if (changeEvents.size() > 20) changeEvents.remove(0);
+  }
+  private synchronized JSONArray changesSince(long before) {
+    JSONArray events = new JSONArray();
+    for (JSONObject event : changeEvents) if (event.optLong("sequence") > before) events.put(event);
+    return events;
   }
   private static JSONObject obj(Object... pairs) {
     JSONObject o = new JSONObject();
@@ -122,6 +137,7 @@ public final class AloudAtf extends BroadcastReceiver {
           "runtime", obj("sdk", Build.VERSION.SDK_INT, "release", Build.VERSION.RELEASE,
               "fingerprint", Build.FINGERPRINT, "locale", Locale.getDefault().toLanguageTag()),
           "densityDpi", service.getResources().getDisplayMetrics().densityDpi,
+          "changeSequence", beforeChanges,
           "status", "failed", "error", null, "nodes", new JSONArray(), "checks", new JSONArray());
       try {
         snapshot(value, target, started);
@@ -135,6 +151,7 @@ public final class AloudAtf extends BroadcastReceiver {
           if (!alive || changes != beforeChanges) {
             put(value, "status", "failed"); put(value, "error", "screen-changed-during-capture");
           }
+          put(value, "observedChanges", changesSince(beforeChanges));
           byte[] bytes = (value.toString() + "\n").getBytes(StandardCharsets.UTF_8);
           if (bytes.length > 8 * 1024 * 1024) throw new IllegalStateException("artifact-size-limit");
           if (!dir.isDirectory() && !dir.mkdirs()) throw new IllegalStateException("artifact-directory-failed");
