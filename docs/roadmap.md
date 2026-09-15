@@ -24,8 +24,12 @@ and explicit per-screen native-check coverage.
 
 Tracking: [#23](https://github.com/IRS-Public/aloud/issues/23).
 
-The existing Xcode 27 harness is experimental. Before wiring it into the
-supported walker:
+The Xcode 27 harness is integrated as opt-in partial capture through
+`--voiceover real --no-gate`. It preserves raw speech and identities,
+retains limits/timeouts explicitly, and rejects unavailable targets and
+system dialogs. Complete traversal is still unproven: Apple's `Output`
+contains no documented focus identity or end flag. Before promotion to the
+default:
 
 - Remove fallback-to-host behavior and validate the intended app throughout
   capture. Preserve the already-navigated screen.

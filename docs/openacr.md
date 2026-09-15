@@ -56,8 +56,11 @@ clean verdict. Notes identify incomplete coverage even when another screen
 has a known failure.
 
 Transcript coverage comes from the summary's utterance counts. Notes
-distinguish TalkBack speech from computed iOS utterances and identify empty
-transcripts. Baselines contain no transcript counts, so their transcript
+distinguish TalkBack speech, computed iOS utterances, and real VoiceOver
+capture with explicit partial coverage. Empty transcripts are identified.
+Real speech requires capture identity, toolchain, and coverage metadata;
+incomplete or contradictory metadata is rejected. Partial speech does not
+expand conformance coverage or establish focus order. Baselines contain no transcript counts, so their transcript
 coverage is reported as unavailable. Use fresh report directories when you
 need that evidence in the draft.
 

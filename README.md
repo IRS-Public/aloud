@@ -15,10 +15,9 @@ an HTML evidence page, and a draft OpenACR conformance report.
 
 - **Android**: real TalkBack, built from Google's source at a pinned commit.
   The transcript is what TalkBack spoke, captured from its speech log.
-- **iOS**: a computed VoiceOver transcript today, built from the
-  accessibility tree in the same order VoiceOver composes speech. Real
-  VoiceOver capture lands when Apple's `XCUIVoiceOverService` reaches GA in
-  Xcode 27. An experimental harness for it ships in this repo.
+- **iOS**: computed VoiceOver transcripts by default. Opt-in real speech
+  through Xcode 27's `XCUIVoiceOverService` uses
+  `--voiceover real --no-gate` and labels traversal as partial.
 
 Both audit legs have passed real CI runs on the IRS mobile app project it
 was built for.
@@ -184,10 +183,10 @@ the tree pass would kill TalkBack mid-speech.
 **iOS** runs one pass. `idb` dumps the accessibility tree per screen. aloud
 computes the VoiceOver utterance for each element (label, value, trait,
 hint) and runs the iOS rule checks. The transcript is labeled
-`computed-voiceover` in every report, never passed off as real speech. A CI
-spike has already captured real VoiceOver speech through Xcode 27's
-`XCUIVoiceOverService`; the swap to real speech is roadmap, with the
-constraints documented honestly in [docs/ios.md](docs/ios.md).
+`computed-voiceover`. Opt-in `--voiceover real --no-gate` records actual
+speech with `source: "voiceover"`, raw capture evidence, and explicit partial
+coverage. Partial speech cannot pass the gate. Requirements and screen-state
+limits are documented in [docs/ios.md](docs/ios.md).
 
 Findings gate against a per-screen baseline you accept explicitly with
 `aloud baseline`. It is a ratchet: counts only go down, and a rule id the
@@ -242,12 +241,11 @@ Roadmap, in implementation order:
    integration is available for validation on iOS 17+. Keep native findings
    report-only until real-app fixtures establish useful severity and
    coverage. This work does not depend on the VoiceOver beta API.
-2. **Real VoiceOver on iOS.** Harden and integrate the
-   `XCUIVoiceOverService` harness with a verified Xcode 27 toolchain. Target
-   identity, traversal completeness, and failure handling must be proven
-   before real speech becomes the default. Retain raw speech; normalize
-   only for explicitly defined comparisons. Today's baselines store tree
-   error counts and rule IDs, not transcript text.
+2. **Real VoiceOver on iOS.** Opt-in per-screen capture preserves raw speech,
+   target identity, and explicit partial coverage. A verified completion
+   signal and GA toolchain validation remain required before it becomes the
+   default. Today's baselines store tree errors, so no transcript migration
+   is needed. [Tracking #23](https://github.com/IRS-Public/aloud/issues/23).
 3. **TalkBack focus stepping.** Build and test a companion that drives
    TalkBack's accessibility focus, including scroll boundaries, repeated
    labels, and explicit completion. Shell key injection alone is not a
@@ -282,8 +280,8 @@ wrong, open an issue; we would genuinely like to know.
 | Section 508 / OpenACR reporting | Yes | No | No | No | No |
 | Open source | Yes, CC0 | Core only | No | Yes | No |
 
-\* Real TalkBack on Android today. On iOS the transcript is computed and
-labeled as computed; real VoiceOver capture is on the roadmap for Xcode 27
+\* Real TalkBack on Android today. On iOS the default transcript is computed and
+labeled as computed; opt-in real VoiceOver captures are partial on Xcode 27
 GA, with the experimental harness already in this repo.
 
 ## License
