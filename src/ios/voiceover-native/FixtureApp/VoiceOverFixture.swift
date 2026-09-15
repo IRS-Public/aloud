@@ -32,6 +32,10 @@ struct FixtureScreen: View {
         Button("Stable control") {}
       } else {
         Text("Launch screen must not be substituted for the navigated screen")
+        ForEach(["repeated", "modal", "scroll", "dynamic"], id: \.self) { next in
+          Button("Open \(next)") { mode = next; modal = next == "modal" }
+            .accessibilityIdentifier("fixture-\(next)")
+        }
       }
     }
     .padding()

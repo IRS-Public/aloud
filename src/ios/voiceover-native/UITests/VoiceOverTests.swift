@@ -24,6 +24,8 @@ final class VoiceOverTests: XCTestCase {
       app.state == .runningBackgroundSuspended, "Target app must already be running")
     app.activate()
     XCTAssertTrue(app.wait(for: .runningForeground, timeout: 30), "Target app is not foreground")
+    let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+    XCTAssertFalse(system.alerts.firstMatch.exists, "Dismiss system alerts before capturing the target")
 
     let service = XCUIDevice.shared.voiceOverService
     let wasEnabled = service.isEnabled
@@ -50,6 +52,7 @@ final class VoiceOverTests: XCTestCase {
         break
       }
       XCTAssertEqual(app.state, .runningForeground, "Target app left foreground")
+      XCTAssertFalse(system.alerts.firstMatch.exists, "System alert interrupted target speech")
       let action = sequence == 0 ? "current" : "forward"
       do {
         let output = try sequence == 0 ? service.currentSpeech() : service.moveForward()
@@ -66,6 +69,7 @@ final class VoiceOverTests: XCTestCase {
       XCTAssertEqual(app.state, .runningForeground, "Target app left foreground")
     }
     XCTAssertEqual(app.state, .runningForeground, "Target app left foreground")
+    XCTAssertFalse(system.alerts.firstMatch.exists, "System alert interrupted target speech")
     if service.isEnabled != wasEnabled {
       if wasEnabled { try service.enable() } else { try service.disable() }
     }

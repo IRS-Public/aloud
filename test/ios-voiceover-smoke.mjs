@@ -32,8 +32,16 @@ try {
 simctl("install", device.udid, join(buildDir, "Build/Products/Debug-iphonesimulator/VoiceOverFixture.app"));
 simctl("launch", device.udid, bundleId);
 for (const mode of ["repeated", "modal", "scroll", "dynamic"]) {
-  simctl("openurl", device.udid, `aloud-voiceover-fixture://${mode}`);
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  // Prepare a non-launch screen in a separate test. Capture must preserve
+  // this state. simctl openurl can show a system confirmation dialog.
+  const prepLog = execFileSync("xcodebuild", [
+    "test-without-building", "-project", join(out, "voiceover/harness/AloudVoiceOver.xcodeproj"),
+    "-scheme", "AloudVoiceOver", "-destination", `platform=iOS Simulator,id=${device.udid}`,
+    "-derivedDataPath", buildDir, "-parallel-testing-enabled", "NO", "CODE_SIGNING_ALLOWED=NO",
+    "-only-testing:AloudVoiceOverUITests/FixtureTests/testNavigateFixture",
+  ], { encoding: "utf8", timeout: 300_000, maxBuffer: 64 * 1024 * 1024,
+    env: { ...process.env, TEST_RUNNER_ALOUD_VO_FIXTURE_MODE: mode } });
+  writeFileSync(join(out, `voiceover/prepare-${mode}.log`), prepLog);
   const result = capturer.capture(mode);
   assert.equal(result.coverage.complete, false);
   assert.equal(result.voiceOverRestored, true);
