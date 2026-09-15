@@ -73,7 +73,8 @@ Other accessibility services remain in the enabled list while TalkBack runs.
 ## Protocol v1
 
 Only a source build patched with `--companion` registers the dynamic receiver.
-It requires the platform `android.permission.DUMP` permission, held by adb
+It uses Android’s [receiver permission check](https://developer.android.com/reference/android/content/Context#registerReceiver(android.content.BroadcastReceiver,%20android.content.IntentFilter,%20java.lang.String,%20android.os.Handler,%20int))
+with the platform [`android.permission.DUMP`](https://developer.android.com/reference/android/Manifest.permission#DUMP) permission, held by adb
 shell/root and privileged platform callers. Ordinary apps cannot invoke it;
 the acceptance fixture verifies this denial. The endpoint is debug-only and
 is registered only while TalkBack's service is alive.

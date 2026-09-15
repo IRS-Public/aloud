@@ -4,6 +4,7 @@
 #
 #   aloud talkback get --foss    # download talkback-foss
 #   aloud talkback get --build   # build google/talkback @ pin
+#   aloud talkback get --build --companion --no-native  # emulator focus capture
 #
 # Google publishes NO prebuilt TalkBack APKs (github releases are source-only,
 # verified Aug 2026), so:
@@ -20,8 +21,8 @@
 # The pinned source builds only armeabi-v7a/arm64-v8a native libs (braille).
 # On an x86_64 emulator that can make `adb install` fail with
 # NO_MATCHING_ABIS, so --build also emits talkback-nolib.apk — same APK with
-# lib/ stripped and debug-resigned. Braille display support dies; screen
-# reading and speech logging don't need it.
+# lib/ stripped and debug-resigned. Stripping alone can crash braille
+# initialization at this pin; use --companion --no-native for emulator tests.
 set -euo pipefail
 
 CACHE="${ALOUD_CACHE:-.aloud-cache}"

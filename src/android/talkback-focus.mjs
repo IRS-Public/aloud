@@ -128,7 +128,9 @@ export function createFocusCapturer({ out, target, maxSteps = 100, runShell = sh
       const previous = result.commands.at(-1);
       result.commands.push(response);
       appendFileSync(log, JSON.stringify(response) + "\n");
-      if (previous && response.before.id !== previous.after.id) throw new Error("focus-changed-between-commands");
+      if (previous && ["focused", "edge"].includes(response.status) && response.before.id !== previous.after.id) {
+        throw new Error("focus-changed-between-commands");
+      }
       if (currentPid() !== result.targetPid) throw new Error("target-process-changed");
       return response;
     }

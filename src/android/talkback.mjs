@@ -147,27 +147,27 @@ export function status() {
 const execSleep = (seconds) => execFileSync("sleep", [String(seconds)]);
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-const [cmd, arg] = process.argv.slice(2);
-try {
-  if (cmd === "snapshot") saveAccessibilityState(arg, findTalkBack(), { preferences: !process.argv.includes("--settings-only") });
-  else if (cmd === "restore") restoreAccessibilityState(arg);
-  else if (cmd === "enable") enable();
-  else if (cmd === "disable") disable();
-  else if (cmd === "status") status();
-  else if (cmd === "configure") {
-    const pkg = findTalkBack();
-    if (!pkg) throw new Error("TalkBack is not installed");
-    configure(pkg);
-  } else if (cmd === "install") {
-    if (!arg) throw new Error("usage: aloud talkback install <apk>");
-    console.log(adb(["install", "-r", "-g", arg]));
-  } else {
-    console.error("usage: aloud talkback <enable|disable|status|configure|install <apk>>");
+  const [cmd, arg] = process.argv.slice(2);
+  try {
+    if (cmd === "snapshot") saveAccessibilityState(arg, findTalkBack(), { preferences: !process.argv.includes("--settings-only") });
+    else if (cmd === "restore") restoreAccessibilityState(arg);
+    else if (cmd === "enable") enable();
+    else if (cmd === "disable") disable();
+    else if (cmd === "status") status();
+    else if (cmd === "configure") {
+      const pkg = findTalkBack();
+      if (!pkg) throw new Error("TalkBack is not installed");
+      configure(pkg);
+    } else if (cmd === "install") {
+      if (!arg) throw new Error("usage: aloud talkback install <apk>");
+      console.log(adb(["install", "-r", "-g", arg]));
+    } else {
+      console.error("usage: aloud talkback <enable|disable|status|configure|install <apk>>");
+      process.exit(1);
+    }
+  } catch (err) {
+    console.error(err.message || err);
     process.exit(1);
   }
-} catch (err) {
-  console.error(err.message || err);
-  process.exit(1);
-}
 
 }
