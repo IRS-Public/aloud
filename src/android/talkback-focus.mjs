@@ -101,19 +101,21 @@ export function createFocusCapturer({ out, target, maxSteps = 100, runShell = sh
   if (!Number.isInteger(maxSteps) || maxSteps < 1 || maxSteps > 200) throw new Error("TalkBack maxSteps must be 1–200");
   const dir = join(out, "talkback-focus");
   mkdirSync(dir, { recursive: true });
+  const currentPid = () => {
+    try { return runShell("pidof", target).trim(); } catch { return ""; }
+  };
   return async function capture(screen) {
     validateScreenId(screen);
     const requestId = randomUUID();
     const log = join(dir, `${screen}.commands.jsonl`);
     const raw = join(dir, `${screen}.broadcasts.txt`);
     const result = { schemaVersion: 1, source: "talkback-focus", speechSource: "talkback-tts-request-listener",
-      requestId, screen, target, targetPid: runShell("pidof", target).trim(), commands: [],
+      requestId, screen, target, targetPid: "", commands: [],
       coverage: { complete: false, start: "backward-edge", reason: "controller-failed", maxSteps } };
-    if (!result.targetPid) throw new Error(`Android target ${target} is not running`);
     writeFileSync(log, ""); writeFileSync(raw, "");
     let hello;
     async function command(action) {
-      if (runShell("pidof", target).trim() !== result.targetPid) throw new Error("target-process-changed");
+      if (currentPid() !== result.targetPid) throw new Error("target-process-changed");
       const sequence = result.commands.length;
       const args = ["shell", "am", "broadcast", "-a", FOCUS_ACTION, "-p", "com.android.talkback",
         "--es", "op", action, "--es", "requestId", requestId, "--es", "screen", screen,
@@ -127,10 +129,12 @@ export function createFocusCapturer({ out, target, maxSteps = 100, runShell = sh
       result.commands.push(response);
       appendFileSync(log, JSON.stringify(response) + "\n");
       if (previous && response.before.id !== previous.after.id) throw new Error("focus-changed-between-commands");
-      if (runShell("pidof", target).trim() !== result.targetPid) throw new Error("target-process-changed");
+      if (currentPid() !== result.targetPid) throw new Error("target-process-changed");
       return response;
     }
     try {
+      result.targetPid = currentPid();
+      if (!result.targetPid) throw new Error("target-not-running");
       hello = await command("hello");
       if (hello.status !== "ready") throw new Error(hello.status);
       // A previous screen can leave TalkBack's reachEdge flag set. Its First item action
