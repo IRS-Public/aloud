@@ -120,6 +120,20 @@ open aloud-report/ios/index.html
 Same first-run rule as Android: accept the baseline with
 `npx aloud baseline aloud-report/ios`, or pass `--no-gate`.
 
+To also collect Apple's per-screen accessibility audit, install `xcodegen`
+and use a configured Xcode 15+ with an iOS 17+ simulator:
+
+```bash
+brew install xcodegen
+npx aloud ios --apple-audit --no-gate
+```
+
+This opt-in integration adds contrast, hit-region, text-clipping, and other
+Apple findings to the evidence page. Findings are **report-only** while the
+integration is calibrated; they do not change the tree-check gate or
+OpenACR conformance levels. A failed or incomplete native capture stops the
+run. See [docs/ios.md](docs/ios.md#apple-accessibility-audit-opt-in).
+
 ### Draft OpenACR
 
 Run this after the baseline step: with no flags, `openacr` reads the
@@ -222,23 +236,31 @@ Working today, proven in CI:
 - iOS computed VoiceOver transcripts and tree checks.
 - Ratchet gate, HTML evidence page, draft OpenACR emitter.
 
-Roadmap, in honest order:
+Roadmap, in implementation order:
 
-- **Real VoiceOver on iOS.** Swap the computed transcript for
-  `XCUIVoiceOverService` speech at Xcode 27 GA. The spike proved capture
-  works but the utterance format differs from the computed one, so the swap
-  includes a normalization step before baselines carry over.
-- **Per-screen `performAccessibilityAudit()`** on iOS, alongside the tree
-  rules.
-- **TalkBack focus stepping** for full traversal-order transcripts. This
-  needs a broadcast-intent companion service; `adb shell input` events
-  inject below the accessibility layer and can never drive TalkBack.
-- **A logging TTS engine** for lossless speech capture. Logcat capture can
-  occasionally drop a line; a TTS engine that records what it is asked to
-  speak cannot.
-- **Deeper Android checks** through Google's Accessibility Test Framework.
-  The `uiautomator` dump omits `stateDescription`, `roleDescription`,
-  hints, and `paneTitle`.
+1. **Per-screen Apple accessibility audits.** The opt-in `--apple-audit`
+   integration is available for validation on iOS 17+. Keep native findings
+   report-only until real-app fixtures establish useful severity and
+   coverage. This work does not depend on the VoiceOver beta API.
+2. **Real VoiceOver on iOS.** Harden and integrate the
+   `XCUIVoiceOverService` harness with a verified Xcode 27 toolchain. Target
+   identity, traversal completeness, and failure handling must be proven
+   before real speech becomes the default. Retain raw speech; normalize
+   only for explicitly defined comparisons. Today's baselines store tree
+   error counts and rule IDs, not transcript text.
+3. **TalkBack focus stepping.** Build and test a companion that drives
+   TalkBack's accessibility focus, including scroll boundaries, repeated
+   labels, and explicit completion. Shell key injection alone is not a
+   verified full-traversal mechanism.
+4. **A logging TTS engine.** Capture speech requests with sequence IDs,
+   screen boundaries, and queue/flush events. Prove that requests survive
+   stress and distinguish requested speech from audio actually played.
+5. **Deeper Android checks.** Integrate Google's Accessibility Test
+   Framework and richer node data after the capture protocol is stable.
+   Preserve check provenance and verify each rule's coverage before it can
+   change OpenACR results.
+
+Acceptance criteria and dependencies: [technical roadmap](docs/roadmap.md).
 
 ## Prior art, and the word "first"
 

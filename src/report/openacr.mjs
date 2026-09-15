@@ -169,6 +169,13 @@ function validateScreens(screens, platform = "input") {
     if (s.utterances != null && !isCount(s.utterances)) {
       invalid("utterances must be a non-negative integer or null");
     }
+    if (s.appleAudit !== undefined && (!isRecord(s.appleAudit) || s.appleAudit.status !== "completed" ||
+        !isCount(s.appleAudit.issues) || s.appleAudit.reportOnly !== true)) {
+      invalid("Apple audit summary must contain completed, report-only evidence and a valid issue count");
+    }
+    if (s.appleAudit !== undefined && platform === "Android") {
+      invalid("Apple audit evidence belongs to iOS");
+    }
   }
 }
 
@@ -230,7 +237,7 @@ function adherenceForAutomated(num, audits) {
   if (failures.length === 0) {
     return {
       level: missing.length ? "not-evaluated" : "supports",
-      notes: `The automated native audit found no violations on ${checked}. ${coverage}`,
+      notes: `The automated tree checks found no violations on ${checked}. ${coverage}`,
     };
   }
   const detail = failures
@@ -239,7 +246,7 @@ function adherenceForAutomated(num, audits) {
     .slice(0, 1500);
   return {
     level: "partially-supports",
-    notes: `The automated native audit found violations on ${failures.length} of ${checked}: ${detail}. ${coverage}`,
+    notes: `The automated tree checks found violations on ${failures.length} of ${checked}: ${detail}. ${coverage}`,
   };
 }
 
@@ -325,6 +332,12 @@ export function buildAcr({
     ? `Tree checks for labels and touch-target size completed (${screenCounts}).`
     : "No completed tree checks are present in the input.";
   const missingNotes = missing.length ? ` Missing tree checks on ${screenCoverage(missing)}.` : "";
+  const appleScreens = Object.values(ios?.screens ?? {}).filter((screen) => screen.appleAudit);
+  const appleIssues = appleScreens.reduce((sum, screen) => sum + screen.appleAudit.issues, 0);
+  const appleNotes = appleScreens.length
+    ? ` Apple accessibility audits completed on ${appleScreens.length} iOS screen(s), with ${appleIssues} finding(s) requiring review. ` +
+      "These native results are report-only and do not assign conformance levels. Review the separate Apple evidence in the HTML report."
+    : "";
 
   return {
     title: `${appName} Accessibility Conformance Report (draft)`,
@@ -341,13 +354,13 @@ export function buildAcr({
     notes:
       "DRAFT. This report is generated from the automated 508 audit " +
       "(https://github.com/IRS-Public/aloud/blob/main/docs/how-it-works.md). It records only what " +
-      `automation can prove. ${treeNotes}${missingNotes} ${transcriptNotes} ${transcriptMethods} Every criterion marked ` +
+      `automation can prove. ${treeNotes}${missingNotes}${appleNotes} ${transcriptNotes} ${transcriptMethods} Every criterion marked ` +
       "'not-evaluated' needs a human review. A Section 508 office must complete " +
       "those rows and replace the author contact before publication.",
     evaluation_methods_used:
       "Automated accessibility-tree checks use device or simulator dumps " +
       "(uiautomator on Android, idb on iOS). " +
-      `${treeNotes}${missingNotes} ${transcriptNotes} ${transcriptMethods} Rules and WCAG ` +
+      `${treeNotes}${missingNotes}${appleNotes} ${transcriptNotes} ${transcriptMethods} Rules and WCAG ` +
       "mapping: src/android/ui-tree.mjs and src/ios/tree.mjs. " +
       "No human evaluation yet.",
     catalog: CATALOG_ID,

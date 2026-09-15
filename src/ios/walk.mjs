@@ -10,15 +10,16 @@
 // tree — VoiceOver itself cannot run in the Simulator until the Xcode 27
 // API ships. The Xcode 27 spike showed real speech differs slightly from
 // the computed format ("Order status Heading" vs "Order status, heading"),
-// so the swap must normalize before baselines carry over (see
-// docs/ios.md). Navigation comes from the platform-blind nav
-// adapter (src/nav/), same as the Android walker.
+// so any future speech comparison needs an explicit policy (see
+// docs/ios.md). Tree-error baselines do not compare speech. Navigation comes
+// from the platform-blind nav adapter (src/nav/), same as the Android walker.
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadNavigator } from "../nav/index.mjs";
 import { computeTranscript, normalizeElements, runIosChecks, validateIosCapture } from "./tree.mjs";
+import { createAppleAuditor } from "./apple-audit.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -74,6 +75,8 @@ const SHOTS_DIR = join(OUT, "shots");
 async function walk() {
   mkdirSync(SHOTS_DIR, { recursive: true });
   const udid = bootedUdid();
+  const appleAuditor = cfg.ios?.appleAudit
+    ? createAppleAuditor({ out: OUT, udid, bundleId: BUNDLE_ID }) : null;
   // Navigators that can reconstruct a screen start clean. current-screen
   // must preserve the app state the user selected before running the audit.
   if (NAV_MODE !== "current-screen") {
@@ -115,44 +118,61 @@ async function walk() {
     dark = wantDark;
   };
 
-  for (const screen of nav.screens) {
-    if (NAV_MODE !== "current-screen") setAppearance(!!screen.dark);
-    // Bridge mode sleeps internally (persona/hop/eval timing is proven and
-    // owned by the adapter); other modes settle here.
-    await nav.goto(screen);
-    if (NAV_MODE !== "bridge") await sleep(screen.settleMs ?? 2500);
+  try {
+    for (const screen of nav.screens) {
+      if (NAV_MODE !== "current-screen") setAppearance(!!screen.dark);
+      // Bridge mode sleeps internally (persona/hop/eval timing is proven and
+      // owned by the adapter); other modes settle here.
+      await nav.goto(screen);
+      if (NAV_MODE !== "bridge") await sleep(screen.settleMs ?? 2500);
 
-    const elements = await settledElements(udid, screen.id);
-    const transcript = computeTranscript(elements);
-    const violations = runIosChecks(elements);
-    const errors = violations.filter((v) => v.severity === "error");
-    writeFileSync(
-      join(OUT, `${screen.id}.tree.json`),
-      JSON.stringify(
-        {
-          screen: screen.id,
-          title: screen.title,
-          violations,
-          gate: {
-            errors: errors.length,
-            ruleIds: [...new Set(errors.map((v) => v.ruleId))].sort(),
+      const elements = await settledElements(udid, screen.id);
+      const transcript = computeTranscript(elements);
+      const violations = runIosChecks(elements);
+      const errors = violations.filter((v) => v.severity === "error");
+      // Apple's audits can temporarily change settings such as Dynamic Type.
+      // Keep the tree screenshot paired with the dump captured above.
+      simctl("io", udid, "screenshot", join(SHOTS_DIR, `${screen.id}.png`));
+      const appleAudit = appleAuditor?.capture(screen.id);
+      if (appleAudit) {
+        const afterAudit = await settledElements(udid, screen.id);
+        // XCTest briefly backgrounds the app. Reject apps that reset their
+        // screen on activation, or audits that leave changed content behind.
+        // Raw idb metadata can vary; compare normalized content and geometry.
+        const fingerprint = (els) => JSON.stringify(els.map(({ raw, ...el }) => el));
+        if (fingerprint(elements) !== fingerprint(afterAudit)) {
+          throw new Error(`screen "${screen.id}": accessibility content changed during the Apple audit; refusing to pair findings with a different screen`);
+        }
+      }
+      writeFileSync(
+        join(OUT, `${screen.id}.tree.json`),
+        JSON.stringify(
+          {
+            screen: screen.id,
+            title: screen.title,
+            violations,
+            ...(appleAudit ? { appleAudit } : {}),
+            gate: {
+              errors: errors.length,
+              ruleIds: [...new Set(errors.map((v) => v.ruleId))].sort(),
+            },
           },
-        },
-        null,
-        2,
-      ),
-    );
-    writeFileSync(
-      join(OUT, `${screen.id}.transcript.json`),
-      JSON.stringify({ screen: screen.id, source: "computed-voiceover", transcript }, null, 2),
-    );
-    simctl("io", udid, "screenshot", join(SHOTS_DIR, `${screen.id}.png`));
-    console.log(
-      `  ✓ ${screen.id} — ${transcript.length} utterances, ${errors.length} error(s), ${violations.length - errors.length} warn(s)`,
-    );
+          null,
+          2,
+        ),
+      );
+      writeFileSync(
+        join(OUT, `${screen.id}.transcript.json`),
+        JSON.stringify({ screen: screen.id, source: "computed-voiceover", transcript }, null, 2),
+      );
+      console.log(
+        `  ✓ ${screen.id} — ${transcript.length} utterances, ${errors.length} error(s), ${violations.length - errors.length} warn(s)`,
+      );
+    }
+  } finally {
+    try { await nav.stop(); }
+    finally { setAppearance(initialAppearance === "dark"); }
   }
-  await nav.stop();
-  setAppearance(initialAppearance === "dark");
 }
 
 // describe-all output is always JSON (one flat array); the --json flag is a

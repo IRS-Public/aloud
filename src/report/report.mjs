@@ -72,6 +72,9 @@ const summary = {
           warns: s.violations ? s.violations.filter((v) => v.severity === "warn").length : null,
           ruleIds: s.gate?.ruleIds ?? [],
           utterances: s.transcript?.length ?? null,
+          ...(s.appleAudit ? { appleAudit: {
+            status: s.appleAudit.status, issues: s.appleAudit.issues.length, reportOnly: true,
+          } } : {}),
         },
       ];
     }),

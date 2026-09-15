@@ -3,10 +3,10 @@
 // VoiceOver's default announcement order is label, value, traits, hint —
 // the order is a stable convention (reproduced by cashapp/AccessibilitySnapshot,
 // which we treat as the reference implementation), not a formal spec. The
-// output format matches Apple's own XCUIVoiceOverService utterance examples
-// from Xcode 27 ("Add Favorites, button"): comma-joined, trait words
-// lowercase. That is deliberate — when the real-VoiceOver API goes GA, the
-// computed baselines swap to spoken ones without a format change.
+// output is comma-joined with lowercase trait words. Real VoiceOver can
+// use different punctuation and casing; retain its raw output and define
+// comparisons separately. Ratchet baselines currently store tree-error
+// counts and rule IDs, not transcript text.
 //
 // Input is a NORMALIZED element (see tree.mjs): { label, value, hint,
 // role, enabled }. Pure function, unit-tested in test/ios-checks.test.mjs.
