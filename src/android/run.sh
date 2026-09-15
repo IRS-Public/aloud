@@ -113,6 +113,9 @@ cleanup() {
   else
     rm -f "$STATE_FILE"
   fi
+  if [ "$result" -ne 0 ] && [ "${#TTS_ARGS[@]}" -gt 0 ]; then
+    node "$ALOUD_HOME/src/android/tts-capture.mjs" "$ALOUD_OUT" || echo "TTS journal export incomplete; device journals retained" >&2
+  fi
   if [ -n "$APP_SERVER_PID" ]; then
     kill "$APP_SERVER_PID" 2>/dev/null || true
     wait "$APP_SERVER_PID" 2>/dev/null || true

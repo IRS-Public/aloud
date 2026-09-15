@@ -1,5 +1,6 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { adb } from "./adb.mjs";
 import { UUID, TTS_ENGINE } from "./tts-evidence.mjs";
 
@@ -27,3 +28,19 @@ export function collectClientTtsEvidence(session, clientPackage, out, runAdb = a
   });
   return { schemaVersion: 1, client, engines };
 }
+
+// The shell runner can still export fsynced journals after its capture child was interrupted.
+export function recoverTtsJournals(out, runAdb = adb) {
+  const dir = join(out, "talkback-focus"), sessions = new Set();
+  if (!existsSync(dir)) return;
+  for (const name of readdirSync(dir).filter((n) => n.endsWith(".commands.jsonl"))) {
+    for (const line of readFileSync(join(dir, name), "utf8").split("\n")) {
+      try {
+        const row = JSON.parse(line);
+        if (UUID.test(row.tts?.clientSession)) sessions.add(row.tts.clientSession);
+      } catch { /* Retain a partially written command as raw data; never call it complete. */ }
+    }
+  }
+  for (const session of sessions) collectClientTtsEvidence(session, "com.android.talkback", out, runAdb);
+}
+if (process.argv[1] === fileURLToPath(import.meta.url)) recoverTtsJournals(process.argv[2]);
