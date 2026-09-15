@@ -65,7 +65,9 @@ public class MainActivity extends Activity {
     super.onCreate(saved);
     String mode = getIntent().getStringExtra("mode");
     LinearLayout body = column(); setContentView(body);
-    if (mode != null && mode.startsWith("atf-")) {
+    if ("atf-empty".equals(mode)) {
+      TextView staticText = new TextView(this); staticText.setText("Read-only status"); body.addView(staticText);
+    } else if (mode != null && mode.startsWith("atf-")) {
       atf(body, "atf-bad".equals(mode), "atf-dynamic".equals(mode));
     } else if ("scroll".equals(mode)) {
       ScrollView scroll = new ScrollView(this); LinearLayout rows = column();
@@ -89,6 +91,14 @@ public class MainActivity extends Activity {
       sendOrderedBroadcast(probe, null, new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
           Log.i("ALOUD_PERMISSION", "result=" + getResultCode() + ",data=" + getResultData());
+        }
+      }, null, -17, "receiver-not-invoked", null);
+      Intent atfProbe = new Intent("org.irs_public.aloud.ATF_COMMAND").setPackage("com.android.talkback")
+          .putExtra("requestId", "11111111-1111-4111-8111-111111111111").putExtra("screen", "probe")
+          .putExtra("target", getPackageName()).putExtra("phase", "capture");
+      sendOrderedBroadcast(atfProbe, null, new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) {
+          Log.i("ALOUD_ATF_PERMISSION", "result=" + getResultCode() + ",data=" + getResultData());
         }
       }, null, -17, "receiver-not-invoked", null);
     }

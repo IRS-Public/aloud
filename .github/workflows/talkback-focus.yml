@@ -1,4 +1,4 @@
-name: TalkBack focus and logging TTS smoke
+name: Android companion acceptance
 on:
   pull_request:
     paths: ['src/android/**', 'src/report/**', 'src/config.mjs', 'bin/**', 'test/android-*', 'test/android-fixture/**', 'test/android-tts-fixture/**', '.github/workflows/talkback-focus.yml']
@@ -67,7 +67,7 @@ jobs:
           key: talkback-companion-${{ hashFiles('src/android/get-talkback.sh', 'src/android/talkback-companion/**', 'src/android/tts-shared/**') }}
       - name: Boot Android 14 emulator
         run: bash src/android/boot-emulator-ci.sh
-      - name: Install and exercise real TalkBack focus traversal
+      - name: Install native fixtures
         run: |
           # Keep first-boot Assistant onboarding notifications out of positive fixtures.
           # The suite injects a foreign notification explicitly as a negative case.
@@ -76,9 +76,14 @@ jobs:
           "$ANDROID_HOME/platform-tools/adb" install -r -g test/android-fixture/build/outputs/apk/debug/AloudFocusFixture-debug.apk
           "$ANDROID_HOME/platform-tools/adb" install -r -g test/android-tts-fixture/build/outputs/apk/debug/AloudTtsFixture-debug.apk
           "$ANDROID_HOME/platform-tools/adb" install -r -g .aloud-cache/logging-tts.apk
-          node test/android-focus-smoke.mjs
-          node test/android-tts-smoke.mjs
-          node test/android-tts-engine-smoke.mjs
+      - name: Check TalkBack focus traversal
+        run: node test/android-focus-smoke.mjs
+      - name: Check native ATF capture and cleanup
+        run: node test/android-atf-smoke.mjs
+      - name: Check logging TTS traversal and cleanup
+        run: node test/android-tts-smoke.mjs
+      - name: Check TTS queue accounting and process recovery
+        run: node test/android-tts-engine-smoke.mjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -87,5 +92,6 @@ jobs:
             aloud-report/focus-smoke
             aloud-report/tts-smoke
             aloud-report/tts-engine-smoke
+            aloud-report/atf-smoke
             ${{ runner.temp }}/emulator.log
           retention-days: 14
