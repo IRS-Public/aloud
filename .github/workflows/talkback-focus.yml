@@ -36,12 +36,13 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - uses: actions/cache@v5
+      - uses: actions/cache/restore@v5
+        id: gradle-cache
         with:
           path: ~/.gradle/caches
           key: talkback-gradle-${{ runner.os }}-${{ hashFiles('src/android/talkback-companion/**', 'test/android-fixture/*.gradle') }}
           restore-keys: talkback-gradle-${{ runner.os }}-
-      - uses: actions/cache@v5
+      - uses: actions/cache/restore@v5
         id: apk
         with:
           path: .aloud-cache/*.apk
@@ -51,6 +52,16 @@ jobs:
         run: bash src/android/get-talkback.sh --build --companion --no-native
       - name: Build native acceptance fixture
         run: gradle -p test/android-fixture assembleDebug
+      - uses: actions/cache/save@v5
+        if: steps.gradle-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/.gradle/caches
+          key: talkback-gradle-${{ runner.os }}-${{ hashFiles('src/android/talkback-companion/**', 'test/android-fixture/*.gradle') }}
+      - uses: actions/cache/save@v5
+        if: steps.apk.outputs.cache-hit != 'true'
+        with:
+          path: .aloud-cache/*.apk
+          key: talkback-companion-${{ hashFiles('src/android/get-talkback.sh', 'src/android/talkback-companion/**') }}
       - name: Boot Android 14 emulator
         run: bash src/android/boot-emulator-ci.sh
       - name: Install and exercise real TalkBack focus traversal
