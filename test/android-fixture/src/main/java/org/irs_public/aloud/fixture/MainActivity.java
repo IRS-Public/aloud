@@ -8,7 +8,10 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -23,11 +26,48 @@ public class MainActivity extends Activity {
     Button button = new Button(this); button.setText(text); button.setId(nextId++);
     button.setMinimumHeight(140); return button;
   }
+  private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
+  private void atf(LinearLayout body, boolean bad, boolean dynamic) {
+    body.setFocusableInTouchMode(true); body.requestFocus();
+    body.setAccessibilityPaneTitle("Account options");
+    ImageButton image = new ImageButton(this);
+    image.setImageResource(android.R.drawable.ic_menu_send);
+    image.setContentDescription(bad ? null : "Send message");
+    body.addView(image, new LinearLayout.LayoutParams(dp(52), dp(52)));
+    Button small = button("Small target"); small.setMinWidth(0); small.setMinimumWidth(0);
+    small.setMinHeight(0); small.setMinimumHeight(0); small.setPadding(0, 0, 0, 0);
+    body.addView(small, new LinearLayout.LayoutParams(dp(bad ? 24 : 100), dp(bad ? 24 : 52)));
+    body.addView(button("Transfer")); body.addView(button(bad ? "Transfer" : "Deposit"));
+    EditText field = new EditText(this); field.setHint("Email address"); field.setSingleLine(true);
+    field.setContentDescription(bad ? "Account" : null); field.setMinHeight(dp(52)); body.addView(field);
+    Button redundant = button("Save"); redundant.setContentDescription(bad ? "Save button" : "Save changes"); body.addView(redundant);
+    Button custom = button("Custom control");
+    if (bad) custom.setAccessibilityDelegate(new View.AccessibilityDelegate() {
+      @Override public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfo info) {
+        super.onInitializeAccessibilityNodeInfo(host, info); info.setClassName("org.example.UnknownControl");
+      }
+    });
+    body.addView(custom);
+    Button state = button("Delivery"); state.setStateDescription("Queued");
+    state.setAccessibilityDelegate(new View.AccessibilityDelegate() {
+      @Override public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfo info) {
+        super.onInitializeAccessibilityNodeInfo(host, info);
+        info.getExtras().putCharSequence("AccessibilityNodeInfo.roleDescription", "status control");
+      }
+    });
+    body.addView(state);
+    if (dynamic) state.postDelayed(new Runnable() {
+      private int tick;
+      @Override public void run() { state.setStateDescription("Queued " + (++tick)); state.postDelayed(this, 80); }
+    }, 80);
+  }
   @Override public void onCreate(Bundle saved) {
     super.onCreate(saved);
     String mode = getIntent().getStringExtra("mode");
     LinearLayout body = column(); setContentView(body);
-    if ("scroll".equals(mode)) {
+    if (mode != null && mode.startsWith("atf-")) {
+      atf(body, "atf-bad".equals(mode), "atf-dynamic".equals(mode));
+    } else if ("scroll".equals(mode)) {
       ScrollView scroll = new ScrollView(this); LinearLayout rows = column();
       for (int i = 1; i <= 30; i++) rows.addView(button("Row " + i));
       scroll.addView(rows); body.addView(scroll);

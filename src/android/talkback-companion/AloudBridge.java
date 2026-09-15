@@ -30,6 +30,7 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
   private static AloudBridge instance;
   private static BooleanSupplier scrollPending = () -> false;
   public static void setScrollPending(BooleanSupplier supplier) { scrollPending = supplier; }
+  public static boolean isBusy() { return instance != null && instance.pending != null; }
   private final TalkBackService service;
   private final Handler handler = new Handler(Looper.getMainLooper());
   private final String session = UUID.randomUUID().toString();
@@ -53,9 +54,11 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
     service.registerReceiver(instance, new IntentFilter(ACTION), "android.permission.DUMP", null,
         Context.RECEIVER_EXPORTED);
     service.getSpeechController().getFailoverTts().addListener(instance);
+    AloudAtf.install(service);
   }
 
   public static void destroy() {
+    AloudAtf.destroy();
     if (instance == null) return;
     if (instance.pending != null) instance.finish("service-stopped");
     instance.service.getSpeechController().getFailoverTts().removeListener(instance);
@@ -74,6 +77,7 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
   }
 
   public static void event(AccessibilityEvent event) {
+    AloudAtf.event(event);
     if (instance == null || instance.pending == null) return;
     AloudBridge b = instance;
     int type = event.getEventType();
@@ -140,7 +144,7 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
 
   @Override public void onReceive(Context context, Intent intent) {
     if (!isOrderedBroadcast()) return;
-    if (pending != null) { setResultCode(409); setResultData("busy"); return; }
+    if (pending != null || AloudAtf.isBusy()) { setResultCode(409); setResultData("busy"); return; }
     String op = intent.getStringExtra("op");
     String incoming = intent.getStringExtra("requestId");
     String incomingScreen = intent.getStringExtra("screen");
