@@ -44,7 +44,7 @@ export function validateFocusResponse(value, expected) {
        value.signals.some((s) => ["wrap", "scroll-failed"].includes(s)))) {
     throw new Error("TalkBack companion success has invalid focus evidence");
   }
-  if (value.status === "focused" && (!value.focusEvents.length || !value.speech.length ||
+  if (value.status === "focused" && (!value.focusEvents.length || !value.speech.some((s) => s.text.length > 0) ||
       value.signals.includes("edge") || value.focusEvents.at(-1).id !== value.after.id)) {
     throw new Error("TalkBack focus move has no matching focus and speech evidence");
   }
@@ -67,6 +67,11 @@ export function validateTalkBackFocusCapture(capture) {
     validateFocusResponse(command, { requestId: capture.requestId, screen: capture.screen, target: capture.target,
       sequence, action: command.action,
       ...(sequence ? { session: hello.session, pid: hello.pid, windowId: hello.windowId } : {}) });
+  }
+  for (let i = 1; i < capture.commands.length; i++) {
+    if (capture.commands[i].before.id !== capture.commands[i - 1].after.id) {
+      throw new Error("TalkBack focus changed between commands");
+    }
   }
   if (hello.action !== "hello" || hello.status !== "ready") throw new Error("TalkBack capture lacks a ready session");
   if (capture.coverage.complete) {
@@ -118,8 +123,10 @@ export function createFocusCapturer({ out, target, maxSteps = 100, runShell = sh
       appendFileSync(raw, output + "\n");
       const response = parseFocusResponse(output, { requestId, screen, target, sequence, action,
         ...(hello ? { session: hello.session, pid: hello.pid, windowId: hello.windowId } : {}) });
+      const previous = result.commands.at(-1);
       result.commands.push(response);
       appendFileSync(log, JSON.stringify(response) + "\n");
+      if (previous && response.before.id !== previous.after.id) throw new Error("focus-changed-between-commands");
       if (runShell("pidof", target).trim() !== result.targetPid) throw new Error("target-process-changed");
       return response;
     }
@@ -148,6 +155,7 @@ export function createFocusCapturer({ out, target, maxSteps = 100, runShell = sh
         if (step.status !== "focused") throw new Error(step.status);
       }
       if (!result.coverage.complete) throw new Error("forward-step-limit");
+      validateTalkBackFocusCapture(result);
     } catch (error) {
       result.coverage = { ...result.coverage, complete: false, reason: error.message };
     } finally {
@@ -157,7 +165,6 @@ export function createFocusCapturer({ out, target, maxSteps = 100, runShell = sh
       catch { /* structured evidence and the controller failure remain available */ }
     }
     if (!result.coverage.complete) throw new Error(`screen "${screen}": incomplete TalkBack traversal (${result.coverage.reason}); raw evidence: ${dir}`);
-    validateTalkBackFocusCapture(result);
     return result;
   };
 }

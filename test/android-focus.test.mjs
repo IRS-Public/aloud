@@ -35,6 +35,7 @@ test("preserves distinct focuses with duplicate speech and verifies native bound
 });
 
 for (const [name, mutate] of Object.entries({
+  "unobserved focus change": (c) => { c.commands[4].before.id = "unrecorded"; },
   "sequence gap": (c) => { c.commands[3].sequence++; },
   "different request": (c) => { c.commands[2].requestId = "another"; },
   "service restart": (c) => { c.commands[3].pid++; },
@@ -68,7 +69,7 @@ for (const mode of ["complete", "limit", "restart", "missing-companion"]) {
         const action = value("op"), sequence = Number(value("sequence"));
         count++;
         if (mode === "missing-companion") return "Broadcast completed: result=0";
-        const r = mode === "limit" && sequence > 0 ? response(sequence, action, "focused", "a", "b") : structuredClone(source[sequence]);
+        const r = mode === "limit" && sequence > 0 ? response(sequence, action, "focused", sequence === 1 ? "a" : `node-${sequence - 1}`, `node-${sequence}`) : structuredClone(source[sequence]);
         r.requestId = value("requestId");
         return `Broadcast completed: result=200, data="${Buffer.from(JSON.stringify(r)).toString("base64")}"`;
       },

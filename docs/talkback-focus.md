@@ -43,7 +43,8 @@ no computed transcript is substituted.
 
 `--talkback-max-steps N` limits each backward/forward phase (1–200; default
 100). Each native command has an 8-second deadline and waits for speech to
-finish plus 600 ms of quiet. A deadline is an incomplete result. The
+finish, waits for TalkBack’s pending auto-scroll callback to resolve, and requires
+600 ms of quiet. A deadline is an incomplete result. The
 controller retains every returned broadcast, parsed command, and diagnostic
 log even when it refuses to produce a passing transcript.
 

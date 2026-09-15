@@ -18,6 +18,7 @@ import com.google.android.accessibility.utils.output.FailoverTextToSpeech.Uttera
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -26,6 +27,8 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
   public static final String ACTION = "org.irs_public.aloud.TALKBACK_COMMAND";
   public static final String PIN = "229212fdf5842191d0a93fc95d9ca1423b346866";
   private static AloudBridge instance;
+  private static BooleanSupplier scrollPending = () -> false;
+  public static void setScrollPending(BooleanSupplier supplier) { scrollPending = supplier; }
   private final TalkBackService service;
   private final Handler handler = new Handler(Looper.getMainLooper());
   private final String session = UUID.randomUUID().toString();
@@ -179,7 +182,7 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
     long now = SystemClock.uptimeMillis();
     if (failure != null) { finish(failure); return; }
     boolean edge = signals.toString().contains("\"edge\"");
-    if ((focused || edge) && now - changed >= 600 && !service.getSpeechController().isSpeakingOrSpeechQueued()) {
+    if ((focused || edge) && now - changed >= 600 && !scrollPending.getAsBoolean() && !service.getSpeechController().isSpeakingOrSpeechQueued()) {
       finish(edge ? "edge" : "focused"); return;
     }
     if (now - started >= 8000) { finish("step-timeout"); return; }

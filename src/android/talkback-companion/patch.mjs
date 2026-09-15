@@ -18,6 +18,8 @@ export function patchCompanion(root, { noNative = false } = {}) {
   replace(service, "  public void onDestroy() {", "  public void onDestroy() {\n    AloudBridge.destroy();");
   replace(service, "  public void onAccessibilityEvent(AccessibilityEvent event) {", "  public void onAccessibilityEvent(AccessibilityEvent event) {\n    AloudBridge.event(event);");
   const focus = join(pkg, "focusmanagement/FocusProcessorForLogicalNavigation.java");
+  replace(focus, "    isWindowNavigationSupported = !FormFactorUtils.isAndroidTv();",
+    `    isWindowNavigationSupported = !FormFactorUtils.isAndroidTv();\n    ${bridge}.setScrollPending(() -> scrollCallback != null);`);
   replace(focus, "return NavigationResult.create(NavigationResult.Type.REACH_EDGE);", `${bridge}.signal("edge");\n      return NavigationResult.create(NavigationResult.Type.REACH_EDGE);`, 2);
   replace(focus, "    if (reachEdge && navigationAction.shouldWrap && navigationResult.isEmpty()) {", `    if (reachEdge && navigationAction.shouldWrap && navigationResult.isEmpty()) {\n      ${bridge}.signal("wrap");`);
   replace(focus, "      final AutoScrollCallback autoScrollCallback = scrollCallback;", `      ${bridge}.signal("scroll-complete");\n      final AutoScrollCallback autoScrollCallback = scrollCallback;`);
