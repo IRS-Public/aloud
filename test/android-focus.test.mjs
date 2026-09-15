@@ -56,13 +56,16 @@ test("does not accept a focused status with speech alone", () => {
   assert.throws(() => validateFocusResponse(r, r), /focus and speech/);
 });
 
-for (const mode of ["complete", "limit", "restart", "missing-companion"]) {
+for (const mode of ["complete", "limit", "restart", "exit", "unavailable", "missing-companion"]) {
   test(`controller ${mode} retains raw broadcasts and stops conservatively`, async (t) => {
     const out = mkdtempSync(join(tmpdir(), "aloud-focus-")); t.after(() => rmSync(out, { recursive: true, force: true }));
     let count = 0;
     const source = capture().commands;
     const capturer = createFocusCapturer({ out, target, maxSteps: 3,
-      runShell: () => mode === "restart" && count > 2 ? "21" : "20",
+      runShell: () => {
+        if (mode === "unavailable" || (mode === "exit" && count > 2)) throw new Error("pidof found no process");
+        return mode === "restart" && count > 2 ? "21" : "20";
+      },
       runAdb: (args) => {
         if (args[0] === "logcat") return "raw diagnostics";
         const value = (name) => args[args.indexOf(name) + 1];
@@ -79,7 +82,8 @@ for (const mode of ["complete", "limit", "restart", "missing-companion"]) {
     const result = JSON.parse(readFileSync(join(out, "talkback-focus/fixture.json")));
     assert.equal(result.coverage.complete, mode === "complete");
     assert.match(readFileSync(join(out, "talkback-focus/fixture.logcat.txt"), "utf8"), /raw diagnostics/);
-    if (mode === "restart") assert.match(result.coverage.reason, /target-process-changed/);
+    if (["restart", "exit"].includes(mode)) assert.match(result.coverage.reason, /target-process-changed/);
+    if (mode === "unavailable") assert.equal(result.coverage.reason, "target-not-running");
     if (mode === "limit") assert.equal(result.coverage.reason, "rewind-step-limit");
   });
 }
