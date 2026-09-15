@@ -10,7 +10,11 @@ final class FixtureTests: XCTestCase {
       try XCUIDevice.shared.voiceOverService.disable()
     }
     let app = XCUIApplication(bundleIdentifier: "org.aloud.voiceover.VoiceOverFixture")
-    app.launch()
+    // Launch externally with simctl. XCTest terminates applications it
+    // launches when this preparation session ends.
+    XCTAssertTrue(app.state == .runningForeground || app.state == .runningBackground ||
+      app.state == .runningBackgroundSuspended)
+    app.activate()
     let button = app.buttons["fixture-\(mode)"]
     XCTAssertTrue(button.waitForExistence(timeout: 15))
     button.tap()

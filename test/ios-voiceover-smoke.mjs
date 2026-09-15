@@ -30,8 +30,9 @@ try {
   throw err;
 }
 simctl("install", device.udid, join(buildDir, "Build/Products/Debug-iphonesimulator/VoiceOverFixture.app"));
-simctl("launch", device.udid, bundleId);
 for (const mode of ["repeated", "modal", "scroll", "dynamic"]) {
+  try { simctl("terminate", device.udid, bundleId); } catch { /* not running */ }
+  simctl("launch", device.udid, bundleId);
   // Prepare a non-launch screen in a separate test. Capture must preserve
   // this state. simctl openurl can show a system confirmation dialog.
   const prepLog = execFileSync("xcodebuild", [
