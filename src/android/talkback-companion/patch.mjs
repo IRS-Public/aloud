@@ -1,10 +1,42 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, copyFileSync } from "node:fs";
+import { readFileSync, writeFileSync, copyFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const TALKBACK_COMMIT = "229212fdf5842191d0a93fc95d9ca1423b346866";
 const here = dirname(fileURLToPath(import.meta.url));
+export function patchLoggingTts(root) {
+  const source = join(root, "utils/src/main/java/com/google/android/accessibility/utils/output/FailoverTextToSpeech.java");
+  let text = readFileSync(source, "utf8");
+  const ledger = "org.irs_public.aloud.tts.RequestLedger";
+  function replace(before, after, expected = 1) {
+    if (text.split(before).length - 1 !== expected) throw new Error(`TalkBack TTS pin mismatch: ${before}`);
+    text = text.replaceAll(before, after);
+  }
+  replace("    this.context = context;", `    this.context = context;\n    ${ledger}.initialize(context);`);
+  replace("tts.speak(", `${ledger}.speak(tts, `, 9);
+  for (const [method, event] of [["onStart", "start"], ["onDone", "done"], ["onError", "error"]]) {
+    const signature = `    public void ${method}(String utteranceId) {`;
+    replace(signature, `${signature}\n      utteranceId = ${ledger}.progress("${event}", utteranceId, false);`);
+  }
+  replace("    public void onStop(String utteranceId, boolean interrupted) {",
+    `    public void onStop(String utteranceId, boolean interrupted) {\n      utteranceId = ${ledger}.progress("stop", utteranceId, interrupted);`);
+  for (const signature of ["    public void onAudioAvailable(String utteranceId, byte[] audio) {",
+    "    public void onRangeStart(String utteranceId, int start, int end, int frame) {"]) {
+    replace(signature, `${signature}\n      utteranceId = ${ledger}.originalId(utteranceId);`);
+  }
+  writeFileSync(source, text);
+  const manifest = join(root, "talkback/src/main/AndroidManifest.xml");
+  const xml = readFileSync(manifest, "utf8");
+  if (xml.includes("<queries>") || xml.split("</manifest>").length !== 2) throw new Error("TalkBack manifest pin mismatch");
+  writeFileSync(manifest, xml.replace("</manifest>",
+    '<queries><intent><action android:name="android.intent.action.TTS_SERVICE"/></intent></queries>\n</manifest>'));
+  const target = join(root, "utils/src/main/java/org/irs_public/aloud/tts");
+  mkdirSync(target, { recursive: true });
+  for (const file of ["Journal.java", "RequestLedger.java"]) {
+    copyFileSync(join(here, "../tts-shared/src/main/java/org/irs_public/aloud/tts", file), join(target, file));
+  }
+}
 export function patchCompanion(root, { noNative = false } = {}) {
   const pkg = join(root, "talkback/src/main/java/com/google/android/accessibility/talkback");
   const bridge = "com.google.android.accessibility.talkback.AloudBridge";
@@ -25,6 +57,7 @@ export function patchCompanion(root, { noNative = false } = {}) {
   replace(focus, "      final AutoScrollCallback autoScrollCallback = scrollCallback;", `      ${bridge}.signal("scroll-complete");\n      final AutoScrollCallback autoScrollCallback = scrollCallback;`);
   replace(focus, "      scrollCallback.onAutoScrollFailed(scrolledNode);", `      ${bridge}.signal("scroll-failed");\n      scrollCallback.onAutoScrollFailed(scrolledNode);`);
   copyFileSync(join(here, "AloudBridge.java"), join(pkg, "AloudBridge.java"));
+  patchLoggingTts(root);
   if (noNative) {
     const display = join(root, "braille/brailledisplay/src/phone/java/com/google/android/accessibility/braille/brailledisplay/BrailleDisplay.java");
     replace(display, "    this.brailleDisplayManager = new BrailleDisplayManager(accessibilityService, controller);",

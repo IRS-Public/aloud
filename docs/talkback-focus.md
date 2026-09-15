@@ -61,8 +61,9 @@ never from text matching. Tokens are not persistent IDs or baseline keys.
 Speech is observed through TalkBack's `FailoverTtsListener` callback immediately
 before an utterance request. Each record retains its native utterance ID and
 text, including hints. This is speech-request evidence, not a recording or a
-claim of lossless audible output. The separate logging-TTS milestone will
-provide independent engine-side evidence and queue/completion accounting.
+claim of lossless audible output. Opt into [logging TTS](logging-tts.md) with
+`--tts logging` for independent engine receipts and queue/completion accounting;
+that recording engine generates synthetic silence.
 
 When both passes run, tree checks and the screenshot are taken at the requested
 viewport **before** focus traversal scrolls it. The focused node records show

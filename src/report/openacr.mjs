@@ -186,9 +186,16 @@ function validateScreens(screens, platform = "input") {
       if (s.transcriptSource !== "talkback-focus" || !isCount(s.utterances) || !isRecord(t) ||
           t.coverage?.complete !== true || t.coverage?.start !== "backward-edge" || t.coverage?.reason !== "forward-edge" ||
           !Number.isInteger(t.coverage.maxSteps) || t.coverage.maxSteps < 1 || t.coverage.maxSteps > 200 ||
-          t.speechSource !== "talkback-tts-request-listener" ||
+          !["talkback-tts-request-listener", "logging-tts"].includes(t.speechSource) ||
           t.talkbackCommit !== "229212fdf5842191d0a93fc95d9ca1423b346866" ||
           ![t.requestId, t.target].every((v) => typeof v === "string" && v.trim())) invalid("TalkBack focus needs complete traversal provenance");
+      if (t.speechSource === "logging-tts") {
+        const l = t.loggingTts;
+        if (!isRecord(l) || l.schemaVersion !== 1 || l.source !== "logging-tts" || l.output !== "synthetic-silence" ||
+            l.complete !== true || l.engine !== "org.irs_public.aloud.tts" || !isCount(l.requests) || l.requests < 1 ||
+            l.requests < s.utterances || !isCount(l.queueEvents) ||
+            ![l.clientSession, l.engineSession].every((v) => typeof v === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(v))) invalid("logging TTS needs complete engine accounting");
+      } else if (t.loggingTts !== undefined) invalid("logging TTS accounting needs explicit speech provenance");
     }
     if (s.transcriptSource === "voiceover" || s.voiceOver !== undefined) {
       if (s.transcriptSource !== "voiceover" || !isCount(s.utterances) || !isRecord(s.voiceOver)) {
@@ -332,6 +339,9 @@ export function buildAcr({
     : "Transcripts, when present, are TalkBack speech-log output on Android and computed VoiceOver output on iOS.";
   if (audits.some((audit) => Object.values(audit.screens).some((s) => s.transcriptSource === "talkback-focus"))) {
     transcriptMethods += " Screens marked talkback-focus use the pinned TalkBack gesture pipeline and speech-request listener, with both native traversal boundaries verified. This does not prove audible delivery, correct focus order, or WCAG conformance.";
+  }
+  if (audits.some((audit) => Object.values(audit.screens).some((s) => s.talkBackFocus?.speechSource === "logging-tts"))) {
+    transcriptMethods += " Logging TTS captures additionally verify durable requests against independent engine receipts and Android completion callbacks. The recording engine generates synthetic silence, not spoken audio; request accounting does not establish audible delivery or conformance.";
   }
   const note302 =
     `Not evaluated; needs human review. Related evidence: ${transcriptNotes} ${transcriptMethods} ` +

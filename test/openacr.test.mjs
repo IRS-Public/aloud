@@ -496,3 +496,26 @@ it("retains TalkBack focus provenance without adding conformance coverage", () =
   }
   assert.throws(() => build({ android: null, ios: normalizeAudit(summary) }), /another platform/);
 });
+
+it("keeps logging-engine request accounting separate from audible delivery and conformance", () => {
+  const c = readJson("fixtures/logging-tts-android14/capture.json");
+  const summary = { generated: "2026-09-15T00:00:00.000Z", screens: { nested: {
+    errors: null, warns: null, ruleIds: [], utterances: 8, transcriptSource: "talkback-focus",
+    talkBackFocus: { coverage: c.coverage, requestId: c.requestId, target: c.target,
+      speechSource: "logging-tts", talkbackCommit: c.commands[0].talkbackCommit,
+      loggingTts: { schemaVersion: 1, source: "logging-tts", output: "synthetic-silence", complete: true,
+        engine: "org.irs_public.aloud.tts", clientSession: c.commands[0].tts.clientSession,
+        engineSession: "22222222-2222-4222-8222-222222222222", requests: 9, queueEvents: 1 } },
+  } } };
+  const acr = build({ android: normalizeAudit(summary), ios: null });
+  assert.match(findCriterion(acr, "302.1").notes, /synthetic silence, not spoken audio/);
+  assert.equal(findCriterion(acr, "302.1").level, "not-evaluated");
+  for (const mutate of [
+    (t) => { t.loggingTts.complete = false; }, (t) => { t.loggingTts.output = "speech"; },
+    (t) => { t.loggingTts.requests = 1; }, (t) => { t.loggingTts.engineSession = "missing"; },
+    (t) => { t.speechSource = "talkback-tts-request-listener"; },
+  ]) {
+    const invalid = structuredClone(summary); mutate(invalid.screens.nested.talkBackFocus);
+    assert.throws(() => build({ android: normalizeAudit(invalid), ios: null }), /logging TTS/);
+  }
+});

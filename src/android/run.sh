@@ -76,7 +76,7 @@ mkdir -p "$ALOUD_OUT"
 # Persist requested coverage so re-aggregating an interrupted run cannot pass
 # using only the trees that were captured before focus traversal started.
 if [ "$(cfg 'c.android?.talkBack')" = "focus" ] && [[ " $PASSES " == *" transcript "* ]]; then
-  node -e 'require("fs").writeFileSync(process.env.ALOUD_OUT+"/capture-requirements.json", JSON.stringify({schemaVersion:1,talkBackFocus:true}))'
+  node -e 'const c=require(process.env.ALOUD_CONFIG); require("fs").writeFileSync(process.env.ALOUD_OUT+"/capture-requirements.json", JSON.stringify({schemaVersion:1,talkBackFocus:true,...(c.android?.tts==="logging"?{loggingTts:true}:{})}))'
 fi
 
 echo "── device ──"
@@ -97,6 +97,11 @@ fi
 
 STATE_FILE="$ALOUD_OUT/accessibility-state.json"
 STATE_ARGS=(); [[ " $PASSES " == *" transcript "* ]] || STATE_ARGS=(--settings-only)
+TTS_ARGS=()
+if [ "$(cfg 'c.android?.tts')" = "logging" ] && [[ " $PASSES " == *" transcript "* ]]; then
+  STATE_ARGS+=(--tts)
+  TTS_ARGS=(--logging-tts)
+fi
 node "$ALOUD_HOME/src/android/talkback.mjs" snapshot "$STATE_FILE" ${STATE_ARGS[@]+"${STATE_ARGS[@]}"}
 APP_SERVER_PID=""
 cleanup() {
@@ -107,6 +112,9 @@ cleanup() {
     result=1
   else
     rm -f "$STATE_FILE"
+  fi
+  if [ "$result" -ne 0 ] && [ "${#TTS_ARGS[@]}" -gt 0 ]; then
+    node "$ALOUD_HOME/src/android/tts-capture.mjs" "$ALOUD_OUT" || echo "TTS journal export incomplete; device journals retained" >&2
   fi
   if [ -n "$APP_SERVER_PID" ]; then
     kill "$APP_SERVER_PID" 2>/dev/null || true
@@ -145,7 +153,7 @@ for PASS in $PASSES; do
     # current-screen enables TalkBack inside its capture markers so the
     # initial announcement is retained. Other modes announce on navigation.
     if [ "$NAV_MODE" != "current-screen" ]; then
-      node "$ALOUD_HOME/src/android/talkback.mjs" enable
+      node "$ALOUD_HOME/src/android/talkback.mjs" enable ${TTS_ARGS[@]+"${TTS_ARGS[@]}"}
     fi
     node "$ALOUD_HOME/src/android/walk.mjs" --pass transcript --port "$PORT" ${FLOW_ARGS[@]+"${FLOW_ARGS[@]}"}
     node "$ALOUD_HOME/src/android/talkback.mjs" disable
