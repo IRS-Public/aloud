@@ -107,6 +107,19 @@ test("interrupted native artifacts are retained without promoting an incomplete 
     assert.equal(JSON.parse(readFileSync(join(dir, "atf", `${e.screen}.json`))).complete, false);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+test("unsettled startup never dispatches a native audit or produces a passing capture", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "aloud-atf-settling-")), phases = [];
+  try {
+    const capture = createAtfCapturer({ out: dir, target: "test.app", startupAttempts: 2, sleep: async () => {},
+      runShell: () => "123", runAdb: (args) => {
+        if (args[0] === "logcat") return "";
+        phases.push(args.at(-1)); return 'Broadcast completed: result=202, data="settling"';
+      }, takeScreenshot: () => assert.fail("no screenshot before readiness") });
+    await assert.rejects(capture("settling"), /never settled/);
+    assert.deepEqual(phases, ["ready", "ready"]);
+    assert.equal(JSON.parse(readFileSync(join(dir, "atf/settling.json"))).complete, false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test("persisted report revalidates native checks, overlaps, raw hashes, and expected screens", () => {
   const dir = mkdtempSync(join(tmpdir(), "aloud-atf-report-")), e = fixture(), t = tree(e);

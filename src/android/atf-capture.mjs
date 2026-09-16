@@ -38,6 +38,18 @@ export function createAtfCapturer({ out, target, runAdb = adb, runShell = shell,
     const evidence = { schemaVersion: 1, source: "android-atf", requestId, screen, target, complete: false };
     const logs = [];
     const pid = () => { try { return runShell("pidof", target).trim(); } catch { return ""; } };
+    async function waitUntilReady() {
+      for (let i = 0; i < startupAttempts; i++) {
+        if (pid() !== evidence.targetPidBefore) throw new Error("target process changed during startup");
+        const output = runAdb(["shell", "am", "broadcast", "-a", ATF_ACTION, "-p", "com.android.talkback",
+          "--es", "requestId", requestId, "--es", "screen", screen, "--es", "target", target, "--es", "phase", "ready"], { timeout: 5000 });
+        logs.push(output);
+        if (/Broadcast completed: result=204, data="ready"/.test(output)) return;
+        if (!/Broadcast completed: result=(0|202)(?:,|\s|$)/.test(output)) throw new Error("ATF companion readiness failed");
+        await sleep(1000);
+      }
+      throw new Error("ATF companion unavailable or screen never settled before capture");
+    }
     async function command(phase, session) {
       if (pid() !== evidence.targetPidBefore) throw new Error("target process changed");
       const expected = { requestId, screen, target, phase, ...(session ? { session } : {}) };
@@ -69,6 +81,7 @@ export function createAtfCapturer({ out, target, runAdb = adb, runShell = shell,
       if (!evidence.targetPidBefore) throw new Error("target is not running");
       // A signal can terminate the host while the native command is running. Preserve its identity first.
       writeFileSync(join(dir, `${screen}.json`), JSON.stringify(evidence, null, 2));
+      await waitUntilReady();
       const first = await command("capture");
       takeScreenshot(join(out, "shots", `${screen}.png`));
       await command("verify", first.session);
@@ -79,6 +92,10 @@ export function createAtfCapturer({ out, target, runAdb = adb, runShell = shell,
     finally {
       writeFileSync(join(dir, `${screen}.json`), JSON.stringify(evidence, null, 2));
       writeFileSync(join(dir, `${screen}.broadcasts.txt`), logs.join("\n"));
+      if (!evidence.complete) {
+        try { writeFileSync(join(dir, `${screen}.logcat.txt`), runAdb(["logcat", "-d", "-v", "threadtime"], { timeout: 5000 })); }
+        catch { /* Keep the capture failure even when device diagnostics are unavailable. */ }
+      }
     }
     if (!evidence.complete) throw new Error(`screen "${screen}": Android ATF capture failed (${evidence.error}); raw evidence: ${dir}`);
     return evidence;

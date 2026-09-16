@@ -44,6 +44,7 @@ public final class AloudAtf extends BroadcastReceiver {
   private final Handler handler = new Handler(Looper.getMainLooper());
   private final String session = UUID.randomUUID().toString();
   private volatile long changes;
+  private volatile long lastChangeAt = SystemClock.uptimeMillis();
   private volatile boolean alive = true, busy;
   private String lastRequest, lastScreen, lastTarget;
   private boolean verified;
@@ -76,8 +77,9 @@ public final class AloudAtf extends BroadcastReceiver {
   }
   private synchronized void noteChange(AccessibilityEvent event) {
     changes++;
+    lastChangeAt = SystemClock.uptimeMillis();
     changeEvents.add(obj("sequence", changes, "type", AccessibilityEvent.eventTypeToString(event.getEventType()),
-        "packageName", text(event.getPackageName()), "windowId", event.getWindowId()));
+        "packageName", text(event.getPackageName()), "windowId", event.getWindowId(), "windowChanges", event.getWindowChanges()));
     if (changeEvents.size() > 20) changeEvents.remove(0);
   }
   private synchronized JSONArray changesSince(long before) {
@@ -113,8 +115,16 @@ public final class AloudAtf extends BroadcastReceiver {
     if (request == null || !request.matches("[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}") ||
         screen == null || !screen.matches("[a-zA-Z0-9_.-]{1,120}") ||
         target == null || !target.matches("[a-zA-Z0-9_.]{1,200}") ||
-        !("capture".equals(phase) || "verify".equals(phase))) {
+        !("ready".equals(phase) || "capture".equals(phase) || "verify".equals(phase))) {
       setResultCode(400); setResultData("invalid identity"); return;
+    }
+    if ("ready".equals(phase)) {
+      if (!target.equals(lastTarget)) { lastTarget = target; lastChangeAt = SystemClock.uptimeMillis(); }
+      AccessibilityNodeInfo root = service.getRootInActiveWindow();
+      boolean ready = root != null && target.equals(text(root.getPackageName())) &&
+          SystemClock.uptimeMillis() - lastChangeAt >= 1000 && !service.getSpeechController().isSpeakingOrSpeechQueued();
+      if (root != null) root.recycle();
+      setResultCode(ready ? 204 : 202); setResultData(ready ? "ready" : "settling"); return;
     }
     File dir = new File(service.createDeviceProtectedStorageContext().getFilesDir(), "aloud-atf");
     File file = new File(dir, request + "." + phase + ".json");

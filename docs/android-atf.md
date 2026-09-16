@@ -66,6 +66,11 @@ their request identity and export available native artifacts as incomplete.
 The host stores the expected screen inventory before walking it, so a missing
 screen cannot disappear during report regeneration.
 
+Before the first snapshot, a bounded readiness probe waits for TalkBack's
+startup speech and one second without relevant changes. No checks execute
+while the screen is still settling. Changes during a snapshot or between
+the two snapshots fail the capture; they are not retried into a passing result.
+
 Capture is bounded to 500 nodes, 50 levels, 65,536 characters per field, 5,000
 results per check, and 8 MiB per native artifact. Native work checks a seven
 second budget; the host times out each broadcast after 15 seconds. Bound
