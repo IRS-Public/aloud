@@ -58,3 +58,34 @@ configuration without a signing identity.
 
 Validation is in progress. Final results will link the CI artifacts and distinguish
 captured screens, rejected captures, and remaining coverage.
+
+## Reproduce
+
+Run the **External app validation** workflow for both platforms. It retains
+app/build provenance, per-case CLI logs, raw native evidence, reports, and
+failure diagnostics for 14 days. Download artifacts before they expire if
+you need to retain a validation record.
+
+For Android, start a disposable rooted Android 14 emulator and install the
+pinned TalkBack companion and recording TTS engine using the normal setup
+instructions. Download the exact APK named in `test/real-app/wikipedia.json`,
+then run:
+
+```sh
+ALOUD_WIKIPEDIA_APK=/absolute/path/wikipedia.apk node test/real-app/android.mjs
+```
+
+The script verifies the APK hash before installation and clears Wikipedia's
+data. It checks restoration of accessibility settings, TTS settings, and
+TalkBack preferences after each capture. It does not restore the app's data.
+
+For iOS, follow `.github/workflows/real-app.yml` to build the pinned source
+with the recorded compatibility patch, Python 3.11, idb, and Xcode 27. Set
+`ALOUD_WIKIPEDIA_APP` to the simulator app bundle and
+`ALOUD_WIKIPEDIA_SOURCE` to its source checkout, then run
+`node test/real-app/ios.mjs`. The script records the actual selected toolchain;
+using Xcode 27 RC does not establish GA compatibility.
+
+Both scripts accept `ALOUD_REAL_APP_OUT` for a separate evidence directory.
+The CLI uses `--no-gate`: native app findings are retained for review, while
+capture failures still fail validation.
