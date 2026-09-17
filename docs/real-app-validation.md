@@ -32,6 +32,13 @@ or an end-of-traversal flag. A repeated utterance, timeout, or successful captur
 on an external app cannot establish complete traversal. Keep real VoiceOver
 opt-in and partial until a separately verified completion signal exists.
 
+On the observed iOS 27 runtime `24A434`, long returned utterances ended at 64
+characters, including a mid-word ending in the page-control hint. Aloud passes
+`Output.utterance` through unchanged; it does not reconstruct missing text from
+the tree. This observation needs verification on newer runtimes and does not
+establish a universal API length limit. A captured API response does not prove
+the complete spoken text was returned.
+
 ## Preparation and observed limits
 
 Android runs verify the downloaded APK's SHA-256, clear the disposable app's
@@ -56,7 +63,10 @@ identifies `27A266a` as the September 14, 2026 Xcode 27 release (checked Septemb
 and records available simulator runtimes. The harness retains the directory
 hint and release reference separately; a directory name alone cannot establish
 release status. The early beta captures do not establish released-toolchain
-capture compatibility. The pinned app needs a one-line `isolated deinit` compatibility patch
+capture compatibility. A later run captured speech using released Xcode
+`27A266a` with simulator runtime `24A434`; that runtime differs from Apple’s
+September 14 iOS release (`24A437`). Keep toolchain and OS-runtime identities
+separate when assessing compatibility. The pinned app needs a one-line `isolated deinit` compatibility patch
 for its settings controller on this SDK. The patch is committed alongside the
 harness; the evidence includes the complete tracked source diff and app version.
 An empty `OpenSourceDebug.xcconfig` supplies upstream's generated simulator

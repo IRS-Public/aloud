@@ -43,6 +43,9 @@ exercises repeated labels, dynamic content, scrolling, and modals.
 
 Still required before promotion to the default:
 
+- Verify complete utterance text on supported runtimes; the external-app run
+  observed long API strings ending at 64 characters, which Aloud preserves
+  exactly. See the [validation record](real-app-validation.md).
 - Establish a verified traversal-completion signal. Neither repeated
   speech nor `noSpeech` establishes the end of a screen.
 - Pair moving or changing content with coherent tree/screenshot evidence;
