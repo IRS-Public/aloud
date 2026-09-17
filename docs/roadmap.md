@@ -50,7 +50,9 @@ Still required before promotion to the default:
   speech nor `noSpeech` establishes the end of a screen.
 - Pair moving or changing content with coherent tree/screenshot evidence;
   the current walker rejects changed screens and retains raw diagnostics.
-- Validate repeatably on supported GA toolchains and external apps.
+- Expand repeatable validation to released OS runtimes and more external apps.
+  The first external captures use released Xcode 27 with simulator `24A434`;
+  the toolchain and OS runtime have separate build identities.
 
 ## 3. TalkBack focus stepping
 
