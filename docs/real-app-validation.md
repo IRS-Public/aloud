@@ -102,6 +102,10 @@ from that run for raw artifacts. iOS validation is still in progress.
   Validation now accepts accounted stops and labels them in the report.
   Dispatch/synthesis errors, missing callbacks, incomplete journals, and
   contradictory command or process identities still fail.
+- iOS pairing failures previously retained native audit/speech output but not
+  the trees used to reject the pairing. Raw idb reads now remain under
+  `ios/capture-trees/`, labeled by screen, phase, and attempt. A changed tree
+  still fails; these files are diagnostics, not replacement capture evidence.
 
 ## Reproduce
 
