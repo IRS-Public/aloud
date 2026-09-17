@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { adb, shell, uiDump } from "../../src/android/adb.mjs";
 import { parseUiDump } from "../../src/android/ui-tree.mjs";
@@ -58,7 +58,7 @@ function capture(id, expected, nav = { mode: "current-screen", screenId: id }, {
       atfChecks: screen.androidAtf?.checks, coverage: screen.talkBackFocus.coverage, loggingTts: screen.talkBackFocus.loggingTts };
     console.log(`${id}: ${screen.androidAtf?.nodeCount} nodes, ${screen.utterances} utterances`);
   } catch (error) {
-    writeFileSync(root + ".log", `${error.stdout ?? ""}\n${error.stderr ?? ""}\n${error.stack}`);
+    appendFileSync(root + ".log", `${error.stdout ?? ""}\n${error.stderr ?? ""}\n${error.stack}`);
     results.cases[id] = { status: "failed", error: error.message };
     if (!expectedFailure) throw error;
     assert.match(String(error.stderr), expectedFailure);
@@ -86,6 +86,13 @@ try {
   tap("Forward"); await pause(1000);
   tap("Forward"); await pause(1000);
   tap("Skip"); await pause(3000);
+  // Complete first-use toolbar setup through the public UI. Opening its menu
+  // dismisses Wikipedia's one-time customization hint before capture starts.
+  shell("am", "start", "-W", "-a", "android.intent.action.VIEW", "-d", "https://en.wikipedia.org/wiki/Abacheri", pin.package);
+  await pause(10000);
+  tap("More options"); await pause(500);
+  shell("input", "keyevent", "KEYCODE_BACK"); await pause(1000);
+  results.preparation = "Completed onboarding; opened and closed the article overflow menu to dismiss the first-use toolbar hint";
   for (const [id, title, expected, expectedFailure] of [
     ["short-article", "Abacheri", /Abacheri/, undefined],
     ["long-article", "Hello_world", /Hello|world/i, /node-limit/],
