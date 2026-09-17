@@ -1,0 +1,14 @@
+{
+  "android": {
+    "url": "https://releases.wikimedia.org/mobile/android/wikipedia/stable/wikipedia-50608-r-2026-09-15.apk",
+    "sha256": "8633cbe383553a04849c65dc648713aa72cfbf8d8a7a30affd3fe835d9f4de59",
+    "package": "org.wikipedia",
+    "activity": ".main.MainActivity"
+  },
+  "ios": {
+    "repository": "https://github.com/wikimedia/wikipedia-ios.git",
+    "revision": "235840e09104e4ed4ed623783b86d5d70d836e0d",
+    "bundleId": "org.wikimedia.wikipedia",
+    "scheme": "Wikipedia"
+  }
+}
