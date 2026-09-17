@@ -46,12 +46,16 @@ captures, not passing audits. The automated suite retains the ATF rejection and
 checks that report regeneration cannot promote it. The short Abacheri article
 is a separate WebView case; live Wikipedia content is not a fixed golden baseline.
 
-The iOS runner selects Xcode 27.0 build `27A266a` from a directory still named
+The `xcode-27` runner label has selected different images: the successful early
+VoiceOver diagnostic captures used beta 6 (`27A5252f`, simulator `24A5423a`),
+while a later app-build run used `27A266a` from a directory still named
 `Xcode_27_Release_Candidate.app`. [Apple’s release list](https://developer.apple.com/news/releases/)
-identifies that exact build as the September 14, 2026 Xcode 27 release (checked
-September 17). The harness records the version, directory hint, and this release
-reference separately; older diagnostic artifacts classified it by directory alone.
-This verifies the released Xcode build identity, not every supported OS runtime. The pinned app needs a one-line `isolated deinit` compatibility patch
+identifies `27A266a` as the September 14, 2026 Xcode 27 release (checked September
+17). CI now requires that exact released build before building the external app
+and records available simulator runtimes. The harness retains the directory
+hint and release reference separately; a directory name alone cannot establish
+release status. The early beta captures do not establish released-toolchain
+capture compatibility. The pinned app needs a one-line `isolated deinit` compatibility patch
 for its settings controller on this SDK. The patch is committed alongside the
 harness; the evidence includes the complete tracked source diff and app version.
 An empty `OpenSourceDebug.xcconfig` supplies upstream's generated simulator
@@ -103,7 +107,7 @@ incomplete-report rejection checks passed. Download `wikipedia-android-evidence`
 from that run for raw artifacts.
 
 The [iOS diagnostic run](https://github.com/IRS-Public/aloud/actions/runs/35255884301/job/105319296430)
-captured real VoiceOver twice on Wikipedia onboarding: each retained 11
+captured real VoiceOver twice on Wikipedia onboarding using beta 6: each retained 11
 utterances, stopped at the 10-step budget, preserved the matching tree, and
 restored VoiceOver state. Both have `coverage.complete: false`. Two Apple
 audits completed and then failed the screen-pairing guard because of the Skip

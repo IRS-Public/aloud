@@ -45,8 +45,12 @@ jobs:
         run: |
           mkdir -p aloud-report/real-app-ios
           xcodebuild -version | tee aloud-report/real-app-ios/xcode.txt
-          xcode-select -p | tee aloud-report/real-app-ios/developer-directory.txt
+          echo "${DEVELOPER_DIR:-$(xcode-select -p)}" | tee aloud-report/real-app-ios/developer-directory.txt
           ls -d /Applications/Xcode* > aloud-report/real-app-ios/installed-xcodes.txt
+          # The runner label has also selected beta 6. Require Apple's released
+          # build identity, even when the installation directory still says RC.
+          grep -qx 'Build version 27A266a' aloud-report/real-app-ios/xcode.txt
+          xcrun simctl list runtimes -j > aloud-report/real-app-ios/simulator-runtimes.json
           # Upstream normally generates this file for personal device signing.
           # Simulator ad-hoc signing preserves required app-group entitlements.
           touch .external/wikipedia-ios/Configurations/OpenSourceDebug.xcconfig
