@@ -12,8 +12,13 @@ const simctl = (...args) => run("xcrun", ["simctl", ...args]);
 const toolchain = run("xcodebuild", ["-version"]);
 assert.match(toolchain, /^Xcode 27\./m, "real VoiceOver validation requires Xcode 27");
 const developerDirectory = process.env.DEVELOPER_DIR ?? run("xcode-select", ["-p"]).trim();
-const releaseChannel = /release[ _-]?candidate/i.test(developerDirectory) ? "release-candidate"
+const directoryChannelHint = /release[ _-]?candidate/i.test(developerDirectory) ? "release-candidate"
   : /beta/i.test(developerDirectory + toolchain) ? "beta" : "unverified";
+// Apple lists this same build as the September 14 release. A runner's directory
+// can retain its RC name after that build ships; retain both pieces of evidence.
+const releasedBuild = /^Xcode 27\.0$/m.test(toolchain) && /^Build version 27A266a$/m.test(toolchain);
+const releaseChannel = releasedBuild ? "released" : directoryChannelHint;
+const releaseReference = releasedBuild ? { url: "https://developer.apple.com/news/releases/", date: "2026-09-14", checked: "2026-09-17" } : null;
 const available = JSON.parse(simctl("list", "devices", "available", "-j")).devices;
 const device = Object.entries(available).filter(([runtime]) => /iOS-27/.test(runtime))
   .flatMap(([, list]) => list).find((d) => d.name.includes("iPhone") && d.isAvailable);
@@ -28,7 +33,7 @@ const appVersion = { version: appBundle("CFBundleShortVersionString"), build: ap
 if (device.state !== "Booted") simctl("boot", device.udid);
 simctl("bootstatus", device.udid, "-b");
 simctl("install", device.udid, process.env.ALOUD_WIKIPEDIA_APP);
-const results = { app: { ...pin, ...appVersion }, toolchain: { version: toolchain, developerDirectory, releaseChannel }, simulator: device, cases: {} };
+const results = { app: { ...pin, ...appVersion }, toolchain: { version: toolchain, developerDirectory, directoryChannelHint, releaseChannel, releaseReference }, simulator: device, cases: {} };
 writeFileSync(join(out, "provenance.json"), JSON.stringify(results, null, 2));
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 function elements(logPath) {

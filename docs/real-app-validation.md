@@ -46,10 +46,12 @@ captures, not passing audits. The automated suite retains the ATF rejection and
 checks that report regeneration cannot promote it. The short Abacheri article
 is a separate WebView case; live Wikipedia content is not a fixed golden baseline.
 
-The available iOS runner selects Xcode 27 Release Candidate, build `27A266a`.
-`xcodebuild -version` alone does not identify the release channel, so the harness
-also records the selected developer directory. This is RC validation, not GA
-validation. The pinned app needs a one-line `isolated deinit` compatibility patch
+The iOS runner selects Xcode 27.0 build `27A266a` from a directory still named
+`Xcode_27_Release_Candidate.app`. [Apple’s release list](https://developer.apple.com/news/releases/)
+identifies that exact build as the September 14, 2026 Xcode 27 release (checked
+September 17). The harness records the version, directory hint, and this release
+reference separately; older diagnostic artifacts classified it by directory alone.
+This verifies the released Xcode build identity, not every supported OS runtime. The pinned app needs a one-line `isolated deinit` compatibility patch
 for its settings controller on this SDK. The patch is committed alongside the
 harness; the evidence includes the complete tracked source diff and app version.
 An empty `OpenSourceDebug.xcconfig` supplies upstream's generated simulator
@@ -89,11 +91,11 @@ passes accessibility checks. All cases restored accessibility/TTS settings and
 TalkBack preferences. An earlier local attempt timed out in adb during article
 traversal and remains failed evidence; the table describes a separate fresh run.
 
-The [Android native regression suites](https://github.com/IRS-Public/aloud/actions/runs/35251458224)
+The [Android native regression suites](https://github.com/IRS-Public/aloud/actions/runs/35258520872)
 passed for focus traversal, ATF capture, logging TTS, and queue/process recovery.
-All 244 device-free tests passed.
+All 245 device-free tests passed.
 
-[Wikipedia Android CI](https://github.com/IRS-Public/aloud/actions/runs/35254341388)
+[Wikipedia Android CI](https://github.com/IRS-Public/aloud/actions/runs/35254341388/job/105314628464)
 also passed on Android 14 x86_64 with Node 24.20.0. The three native captures
 matched the local node/utterance counts; the article produced 90 nodes and 85
 transcript lines, including one stopped request. All state-restoration and
@@ -149,8 +151,8 @@ For iOS, follow `.github/workflows/real-app.yml` to build the pinned source
 with the recorded compatibility patch, Python 3.11, idb, and Xcode 27. Set
 `ALOUD_WIKIPEDIA_APP` to the simulator app bundle and
 `ALOUD_WIKIPEDIA_SOURCE` to its source checkout, then run
-`node test/real-app/ios.mjs`. The script records the actual selected toolchain;
-using Xcode 27 RC does not establish GA compatibility.
+`node test/real-app/ios.mjs`. The script records the actual selected toolchain and checks the known released
+build identity independently of the installation directory’s name.
 
 Both scripts accept `ALOUD_REAL_APP_OUT` for a separate evidence directory.
 The CLI uses `--no-gate`: native app findings are retained for review, while
