@@ -1,0 +1,13 @@
+diff --git a/Wikipedia/Code/SettingsTabViewController.swift b/Wikipedia/Code/SettingsTabViewController.swift
+index 0e6e598..cb812ac 100644
+--- a/Wikipedia/Code/SettingsTabViewController.swift
++++ b/Wikipedia/Code/SettingsTabViewController.swift
+@@ -180,7 +180,7 @@ public final class WMFSettingsHostingController: WMFComponentHostingController<W
+         }
+     }
+ 
+-    deinit {
++    isolated deinit {
+         NotificationCenter.default.removeObserver(self)
+     }
+ 

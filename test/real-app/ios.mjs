@@ -1,7 +1,7 @@
 // External-app acceptance on a disposable iOS 27 simulator; not a device-free unit test.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 const pin = JSON.parse(readFileSync(new URL("./wikipedia.json", import.meta.url))).ios;
 const out = resolve(process.env.ALOUD_REAL_APP_OUT ?? "aloud-report/real-app-ios");
@@ -10,7 +10,7 @@ const run = (cmd, args, options = {}) => execFileSync(cmd, args, { encoding: "ut
 const simctl = (...args) => run("xcrun", ["simctl", ...args]);
 const toolchain = run("xcodebuild", ["-version"]);
 assert.match(toolchain, /^Xcode 27\./m, "real VoiceOver validation requires Xcode 27");
-const developerDirectory = run("xcode-select", ["-p"]).trim();
+const developerDirectory = process.env.DEVELOPER_DIR ?? run("xcode-select", ["-p"]).trim();
 const releaseChannel = /release[ _-]?candidate/i.test(developerDirectory) ? "release-candidate"
   : /beta/i.test(developerDirectory + toolchain) ? "beta" : "unverified";
 const available = JSON.parse(simctl("list", "devices", "available", "-j")).devices;
@@ -18,10 +18,16 @@ const device = Object.entries(available).filter(([runtime]) => /iOS-27/.test(run
   .flatMap(([, list]) => list).find((d) => d.name.includes("iPhone") && d.isAvailable);
 assert.ok(device, "an iOS 27 simulator is required");
 assert.ok(process.env.ALOUD_WIKIPEDIA_APP, "set ALOUD_WIKIPEDIA_APP to the pinned simulator build");
+assert.ok(process.env.ALOUD_WIKIPEDIA_SOURCE, "set ALOUD_WIKIPEDIA_SOURCE to the pinned checkout");
+assert.equal(run("git", ["-C", process.env.ALOUD_WIKIPEDIA_SOURCE, "rev-parse", "HEAD"]).trim(), pin.revision);
+writeFileSync(join(out, "source-build.diff"), run("git", ["-C", process.env.ALOUD_WIKIPEDIA_SOURCE, "diff", "HEAD"]));
+const appBundle = (key) => run("/usr/libexec/PlistBuddy", ["-c", `Print :${key}`, join(process.env.ALOUD_WIKIPEDIA_APP, "Info.plist")]).trim();
+assert.equal(appBundle("CFBundleIdentifier"), pin.bundleId);
+const appVersion = { version: appBundle("CFBundleShortVersionString"), build: appBundle("CFBundleVersion") };
 if (device.state !== "Booted") simctl("boot", device.udid);
 simctl("bootstatus", device.udid, "-b");
 simctl("install", device.udid, process.env.ALOUD_WIKIPEDIA_APP);
-const results = { app: pin, toolchain: { version: toolchain, developerDirectory, releaseChannel }, simulator: device, cases: {} };
+const results = { app: { ...pin, ...appVersion }, toolchain: { version: toolchain, developerDirectory, releaseChannel }, simulator: device, cases: {} };
 writeFileSync(join(out, "provenance.json"), JSON.stringify(results, null, 2));
 function launch() {
   try { simctl("terminate", device.udid, pin.bundleId); } catch { /* not running */ }
@@ -56,7 +62,7 @@ try {
       }
     } catch (error) {
       failed = true;
-      writeFileSync(root + ".log", `${error.stdout ?? ""}\n${error.stderr ?? ""}\n${error.stack}`);
+      appendFileSync(root + ".log", `${error.stdout ?? ""}\n${error.stderr ?? ""}\n${error.stack}`);
       results.cases[id] = { status: "failed", error: error.message };
     }
     writeFileSync(join(out, "results.json"), JSON.stringify(results, null, 2));
