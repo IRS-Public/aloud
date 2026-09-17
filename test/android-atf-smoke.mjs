@@ -58,7 +58,7 @@ try {
   await launch("atf-dynamic");
   await assert.rejects(capture()("dynamic"), /ATF capture failed/); results.dynamicScreen = "rejected";
   await launch("atf-good");
-  await assert.rejects(capture({ takeScreenshot: () => shell("am", "start", "-a", "android.settings.SETTINGS") })("target-change"), /ATF capture failed/);
+  await assert.rejects(capture({ takeScreenshot: () => shell("am", "start", "-W", "-a", "android.settings.SETTINGS") })("target-change"), /ATF capture failed/);
   results.targetChange = "rejected";
   await launch("atf-good");
   await assert.rejects(capture({ takeScreenshot: () => {
