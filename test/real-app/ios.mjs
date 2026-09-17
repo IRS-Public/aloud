@@ -62,7 +62,7 @@ let failed = false;
 try {
   // Capture the same external screen twice. Each invocation exercises harness background/foreground transitions.
   const cases = ["apple", "voiceover"].flatMap((mode) => [1, 2].map((attempt) => ({ mode, id: `${mode}-onboarding-${attempt}`, expected: /Wikipedia|encyclopedia|language/i })));
-  cases.push({ mode: "apple", id: "apple-languages", prepare: "next", expected: /languages/i },
+  cases.push({ mode: "apple", id: "apple-exploration", prepare: "next", expected: /New ways to explore|Places tab/i },
     { mode: "apple", id: "apple-saved-deeplink", prepare: "skip", url: "wikipedia://saved", expected: /Saved articles|Reading lists/i });
   for (const { mode, id, prepare, url, expected } of cases) {
     const root = join(out, id), config = root + ".json";
