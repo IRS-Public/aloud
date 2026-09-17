@@ -95,7 +95,7 @@ function verifyResizeRejection(root, id, error, kind) {
     return normalizeElements(JSON.parse(readFileSync(join(dir, name)))).map(({ raw, ...el }) => el);
   };
   const before = latest("before"), after = latest("after-apple-audit");
-  const saved = kind === "saved-navigation";
+  const saved = ["saved-navigation", "saved-navigation-return"].includes(kind);
   assert.ok(saved || kind === true, "unknown expected resize");
   const testID = saved ? "Saved" : "App Onboarding Skip Button";
   const a = before.filter((el) => el.testID === testID), b = after.filter((el) => el.testID === testID);
@@ -104,8 +104,8 @@ function verifyResizeRejection(root, id, error, kind) {
   assert.notDeepEqual(a[0].frame, b[0].frame, "expected the observed element resize");
   if (saved) {
     assert.equal(a[0].roleDescription, "Nav bar");
-    assert.equal(a[0].frame.h, 144);
-    assert.deepEqual(b[0].frame, { ...a[0].frame, h: 224 });
+    assert.equal(a[0].frame.h, kind === "saved-navigation" ? 144 : 224);
+    assert.deepEqual(b[0].frame, { ...a[0].frame, h: kind === "saved-navigation" ? 224 : 144 });
   }
   const withoutResizedFrame = (els) => els.map((el) => el.testID === testID ? { ...el, frame: null } : el);
   assert.deepEqual(withoutResizedFrame(before), withoutResizedFrame(after), "unexpected content change beyond the known resize");
@@ -122,7 +122,7 @@ try {
     { mode: "apple", id: "apple-onboarding-settled", launchFresh: false, requires: "apple-onboarding-initial", expected: /encyclopedia/i },
     { mode: "apple", id: "apple-exploration", launchFresh: false, requires: "apple-onboarding-settled", prepare: "next", expected: /New ways to explore|Places tab/i },
     { mode: "apple", id: "apple-saved-after-deeplink", launchFresh: false, requires: "apple-exploration", prepare: "skip", url: "wikipedia://saved", expected: /No saved pages yet|Saved articles|Reading lists/i, expectedResize: "saved-navigation" },
-    { mode: "apple", id: "apple-saved-settled", launchFresh: false, requires: "apple-saved-after-deeplink", expected: /No saved pages yet|Saved articles|Reading lists/i },
+    { mode: "apple", id: "apple-saved-repeat", launchFresh: false, requires: "apple-saved-after-deeplink", expected: /No saved pages yet|Saved articles|Reading lists/i, expectedResize: "saved-navigation-return" },
   ];
   for (const { mode, id, prepare, url, expected, expectedResize, launchFresh = true, requires } of cases) {
     const root = join(out, id), config = root + ".json";
