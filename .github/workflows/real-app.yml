@@ -100,6 +100,11 @@ jobs:
         run: |
           if [ ! -f .aloud-cache/logging-tts.apk ]; then bash src/android/get-logging-tts.sh; fi
           curl -fL --retry 3 "$(node -p 'JSON.parse(require("fs").readFileSync("test/real-app/wikipedia.json")).android.url')" -o "$RUNNER_TEMP/wikipedia.apk"
+      - uses: actions/cache/save@v5
+        if: steps.apk.outputs.cache-hit != 'true'
+        with:
+          path: .aloud-cache/*.apk
+          key: talkback-companion-${{ hashFiles('src/android/get-talkback.sh', 'src/android/talkback-companion/**', 'src/android/tts-shared/**') }}
       - name: Boot Android 14 emulator
         run: bash src/android/boot-emulator-ci.sh
       - name: Install capture services
