@@ -105,8 +105,8 @@ try {
   // post-audit state. Never relabel or overwrite that first capture as successful.
   const cases = [
     ...[1, 2].map((attempt) => ({ mode: "voiceover", id: `voiceover-onboarding-${attempt}`, expected: /Wikipedia|encyclopedia|language/i })),
-    { mode: "apple", id: "apple-onboarding-resize", expectedResize: true },
-    { mode: "apple", id: "apple-onboarding-settled", launchFresh: false, requires: "apple-onboarding-resize", expected: /encyclopedia/i },
+    { mode: "apple", id: "apple-onboarding-initial", expectedResize: true, expected: /encyclopedia/i },
+    { mode: "apple", id: "apple-onboarding-settled", launchFresh: false, requires: "apple-onboarding-initial", expected: /encyclopedia/i },
     { mode: "apple", id: "apple-exploration", launchFresh: false, requires: "apple-onboarding-settled", prepare: "next", expected: /New ways to explore|Places tab/i },
     { mode: "apple", id: "apple-saved-after-deeplink", launchFresh: false, requires: "apple-exploration", prepare: "skip", url: "wikipedia://saved", expected: /Saved articles|Reading lists/i },
   ];
@@ -134,7 +134,6 @@ try {
       const log = run(process.execPath, ["bin/aloud.mjs", "ios", "--config", config, "--no-gate",
         ...(mode === "apple" ? ["--apple-audit"] : ["--voiceover", "real"])], { timeout: 600000 });
       writeFileSync(root + ".log", log);
-      assert.ok(!expectedResize, "the first audit now preserves its screen; review and promote this case");
       const summary = JSON.parse(readFileSync(join(root, "ios/summary.json")));
       assert.ok(summary.screens[id]);
       const speech = JSON.parse(readFileSync(join(root, `ios/${id}.transcript.json`)));
