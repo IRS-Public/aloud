@@ -28,13 +28,12 @@ const appVersion = { version: appBundle("CFBundleShortVersionString"), build: ap
 if (device.state !== "Booted") simctl("boot", device.udid);
 simctl("bootstatus", device.udid, "-b");
 simctl("install", device.udid, process.env.ALOUD_WIKIPEDIA_APP);
-simctl("spawn", device.udid, "defaults", "write", "com.apple.Accessibility", "ApplicationAccessibilityEnabled", "-bool", "true");
-simctl("spawn", device.udid, "defaults", "write", "com.apple.Accessibility", "AccessibilityEnabled", "-bool", "true");
 const results = { app: { ...pin, ...appVersion }, toolchain: { version: toolchain, developerDirectory, releaseChannel }, simulator: device, cases: {} };
 writeFileSync(join(out, "provenance.json"), JSON.stringify(results, null, 2));
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
-function elements() {
+function elements(logPath) {
   const raw = run("idb", ["ui", "describe-all", "--udid", device.udid], { timeout: 30000 }).trim();
+  if (logPath) writeFileSync(logPath, raw);
   const items = normalizeElements(raw.startsWith("[") ? JSON.parse(raw) : raw.split("\n").filter(Boolean).map(JSON.parse));
   validateIosCapture(items);
   return items;
@@ -48,15 +47,27 @@ async function tap(identifier) {
 }
 async function launch(root) {
   try { simctl("terminate", device.udid, pin.bundleId); } catch { /* not running */ }
+  for (const key of ["ApplicationAccessibilityEnabled", "AccessibilityEnabled"]) {
+    simctl("spawn", device.udid, "defaults", "write", "com.apple.Accessibility", key, "-bool", "true");
+  }
   const output = simctl("launch", device.udid, pin.bundleId, "-DidShowOnboarding5.3", "NO", "-WMFEnableHomeTabForTesting", "NO", "-AppleLanguages", "(en)");
   writeFileSync(root + "-launch.log", output);
   const pid = Number(output.trim().match(/: (\d+)$/)?.[1]);
   assert.ok(pid > 0, "simctl did not return the Wikipedia PID");
   await pause(5000);
   process.kill(pid, 0); // Simulator app processes run on this host. Fail early if launch crashed.
-  const before = elements();
-  writeFileSync(root + "-launch-tree.json", JSON.stringify(before, null, 2));
-  assert.ok(before.some((el) => el.testID === "App Onboarding Next Button"), "Wikipedia did not reach the requested onboarding screen");
+  let lastError;
+  const deadline = Date.now() + 30000;
+  for (let attempt = 1; Date.now() < deadline; attempt++) {
+    process.kill(pid, 0);
+    try {
+      const before = elements(root + `-launch-tree-${attempt}.json`);
+      assert.ok(before.some((el) => el.testID === "App Onboarding Next Button"), "Wikipedia did not reach the requested onboarding screen");
+      return;
+    } catch (error) { lastError = error; }
+    await pause(500);
+  }
+  throw lastError;
 }
 let failed = false;
 try {

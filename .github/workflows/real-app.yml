@@ -52,7 +52,7 @@ jobs:
           git -C .external/wikipedia-ios apply ../../test/real-app/wikipedia-xcode27.patch
           set -o pipefail
           xcodebuild build -project .external/wikipedia-ios/Wikipedia.xcodeproj -scheme Wikipedia -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/wikipedia-build" ONLY_ACTIVE_ARCH=YES ARCHS="$(uname -m)" CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=YES DEVELOPMENT_TEAM= > aloud-report/real-app-ios/app-build.log 2>&1
-          codesign -d --entitlements - "$RUNNER_TEMP/wikipedia-build/Build/Products/Debug-iphonesimulator/Wikipedia.app" > aloud-report/real-app-ios/app-entitlements.plist
+          cp "$RUNNER_TEMP/wikipedia-build/Build/Intermediates.noindex/Wikipedia.build/Debug-iphonesimulator/Wikipedia.build/Wikipedia.app-Simulated.xcent" aloud-report/real-app-ios/simulator-entitlements.plist
       - name: Validate native capture against Wikipedia
         run: node test/real-app/ios.mjs
         env:
