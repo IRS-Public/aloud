@@ -22,7 +22,7 @@ assert.equal(pkg, "com.android.talkback", "install the pinned Aloud companion fi
 const original = saveAccessibilityState(state, pkg, { tts: true });
 const prefsPath = `/data/user_de/0/${pkg}/shared_prefs/${pkg}_preferences.xml`;
 const prefs = () => { try { return shell("cat", prefsPath); } catch { return null; } };
-const results = { app: pin, runtime: { fingerprint: shell("getprop", "ro.build.fingerprint"), node: process.version }, cases: {} };
+const results = { app: pin, runtime: { fingerprint: shell("getprop", "ro.build.fingerprint"), sdk: shell("getprop", "ro.build.version.sdk"), abi: shell("getprop", "ro.product.cpu.abi"), node: process.version }, cases: {} };
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 function nodes() { return parseUiDump(uiDump()); } // Preparation only: never invoke UiAutomation during capture.
 function tap(label) {
@@ -76,6 +76,9 @@ function capture(id, expected, nav = { mode: "current-screen", screenId: id }, {
 }
 try {
   adb(["install", "-r", "-g", apk]);
+  const packageInfo = shell("dumpsys", "package", pin.package);
+  results.app = { ...pin, versionCode: packageInfo.match(/versionCode=(\d+)/)?.[1], versionName: packageInfo.match(/versionName=([^\r\n]+)/)?.[1] };
+  assert.ok(results.app.versionCode && results.app.versionName, "cannot identify installed Wikipedia build");
   shell("pm", "clear", pin.package);
   shell("am", "start", "-W", "-n", pin.package + "/" + pin.activity);
   await pause(3500);

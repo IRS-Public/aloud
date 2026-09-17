@@ -30,7 +30,31 @@ or an end-of-traversal flag. A repeated utterance, timeout, or successful captur
 on an external app cannot establish complete traversal. Keep real VoiceOver
 opt-in and partial until a separately verified completion signal exists.
 
+## Preparation and observed limits
+
+Android runs verify the downloaded APK's SHA-256, clear the disposable app's
+storage, complete onboarding, and open/close the article overflow menu. That
+last step completes Wikipedia's first-use toolbar hint through its public UI.
+Without preparation, the hint opened a different window during article traversal;
+Aloud retained the speech and correctly rejected the capture as `target-changed`.
+Preparation does not weaken that guard or retry a failed capture into a pass.
+
+The long “Hello, World!” article exceeds the 500-node ATF limit. A separate
+speech-only probe also reached the 200-step TalkBack limit. Both are incomplete
+captures, not passing audits. The automated suite retains the ATF rejection and
+checks that report regeneration cannot promote it. The short Abacheri article
+is a separate WebView case; live Wikipedia content is not a fixed golden baseline.
+
+The available iOS runner selects Xcode 27 Release Candidate, build `27A266a`.
+`xcodebuild -version` alone does not identify the release channel, so the harness
+also records the selected developer directory. This is RC validation, not GA
+validation. The pinned app needs a one-line `isolated deinit` compatibility patch
+for its settings controller on this SDK. The patch is committed alongside the
+harness; the evidence includes the complete tracked source diff and app version.
+An empty `OpenSourceDebug.xcconfig` supplies upstream's generated simulator
+configuration without a signing identity.
+
 ## Results
 
-Validation is in progress. This document will distinguish executed results from
-remaining coverage, including the actual Xcode build used for iOS evidence.
+Validation is in progress. Final results will link the CI artifacts and distinguish
+captured screens, rejected captures, and remaining coverage.
