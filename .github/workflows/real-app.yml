@@ -40,6 +40,10 @@ jobs:
         run: |
           mkdir -p aloud-report/real-app-ios
           xcodebuild -version | tee aloud-report/real-app-ios/xcode.txt
+          xcode-select -p | tee aloud-report/real-app-ios/developer-directory.txt
+          # Upstream normally generates this file for personal device signing.
+          # The simulator build needs the file but no signing identity.
+          touch .external/wikipedia-ios/Configurations/OpenSourceDebug.xcconfig
           set -o pipefail
           xcodebuild build -project .external/wikipedia-ios/Wikipedia.xcodeproj -scheme Wikipedia -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/wikipedia-build" CODE_SIGNING_ALLOWED=NO > aloud-report/real-app-ios/app-build.log 2>&1
       - name: Validate native capture against Wikipedia

@@ -10,7 +10,9 @@ const run = (cmd, args, options = {}) => execFileSync(cmd, args, { encoding: "ut
 const simctl = (...args) => run("xcrun", ["simctl", ...args]);
 const toolchain = run("xcodebuild", ["-version"]);
 assert.match(toolchain, /^Xcode 27\./m, "real VoiceOver validation requires Xcode 27");
-assert.doesNotMatch(toolchain, /beta|release candidate/i, "record beta/RC validation separately");
+const developerDirectory = run("xcode-select", ["-p"]).trim();
+const releaseChannel = /release[ _-]?candidate/i.test(developerDirectory) ? "release-candidate"
+  : /beta/i.test(developerDirectory + toolchain) ? "beta" : "unverified";
 const available = JSON.parse(simctl("list", "devices", "available", "-j")).devices;
 const device = Object.entries(available).filter(([runtime]) => /iOS-27/.test(runtime))
   .flatMap(([, list]) => list).find((d) => d.name.includes("iPhone") && d.isAvailable);
@@ -19,7 +21,7 @@ assert.ok(process.env.ALOUD_WIKIPEDIA_APP, "set ALOUD_WIKIPEDIA_APP to the pinne
 if (device.state !== "Booted") simctl("boot", device.udid);
 simctl("bootstatus", device.udid, "-b");
 simctl("install", device.udid, process.env.ALOUD_WIKIPEDIA_APP);
-const results = { app: pin, toolchain, simulator: device, cases: {} };
+const results = { app: pin, toolchain: { version: toolchain, developerDirectory, releaseChannel }, simulator: device, cases: {} };
 writeFileSync(join(out, "provenance.json"), JSON.stringify(results, null, 2));
 function launch() {
   try { simctl("terminate", device.udid, pin.bundleId); } catch { /* not running */ }
