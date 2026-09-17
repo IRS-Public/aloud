@@ -43,8 +43,8 @@ function elements(logPath) {
   validateIosCapture(items);
   return items;
 }
-async function tap(identifier) {
-  const matches = elements().filter((el) => el.testID === identifier && el.enabled && el.frame?.w > 0 && el.frame?.h > 0);
+async function tap(identifier, { byLabel = false } = {}) {
+  const matches = elements().filter((el) => (byLabel ? el.label === identifier && el.role === "Button" : el.testID === identifier) && el.enabled && el.frame?.w > 0 && el.frame?.h > 0);
   assert.equal(matches.length, 1, `expected one Wikipedia control: ${identifier}`);
   const f = matches[0].frame;
   run("idb", ["ui", "tap", String(Math.round(f.x + f.w / 2)), String(Math.round(f.y + f.h / 2)), "--udid", device.udid]);
@@ -104,11 +104,11 @@ try {
   // Keep the first rejected pairing distinct from a new capture of the changed,
   // post-audit state. Never relabel or overwrite that first capture as successful.
   const cases = [
+    ...[1, 2].map((attempt) => ({ mode: "voiceover", id: `voiceover-onboarding-${attempt}`, expected: /Wikipedia|encyclopedia|language/i })),
     { mode: "apple", id: "apple-onboarding-resize", expectedResize: true },
     { mode: "apple", id: "apple-onboarding-settled", launchFresh: false, requires: "apple-onboarding-resize", expected: /encyclopedia/i },
     { mode: "apple", id: "apple-exploration", launchFresh: false, requires: "apple-onboarding-settled", prepare: "next", expected: /New ways to explore|Places tab/i },
-    { mode: "apple", id: "apple-saved-deeplink", launchFresh: false, requires: "apple-exploration", prepare: "skip", url: "wikipedia://saved", expected: /Saved articles|Reading lists/i },
-    ...[1, 2].map((attempt) => ({ mode: "voiceover", id: `voiceover-onboarding-${attempt}`, expected: /Wikipedia|encyclopedia|language/i })),
+    { mode: "apple", id: "apple-saved-after-deeplink", launchFresh: false, requires: "apple-exploration", prepare: "skip", url: "wikipedia://saved", expected: /Saved articles|Reading lists/i },
   ];
   for (const { mode, id, prepare, url, expected, expectedResize, launchFresh = true, requires } of cases) {
     const root = join(out, id), config = root + ".json";
@@ -118,11 +118,17 @@ try {
       if (launchFresh) await launch(root);
       else enableBridge();
       if (prepare) await tap(prepare === "next" ? "App Onboarding Next Button" : "App Onboarding Skip Button");
-      let nav = { mode: "current-screen", screenId: id };
+      const nav = { mode: "current-screen", screenId: id };
       if (url) {
-        const screens = root + "-screens.json";
-        writeFileSync(screens, JSON.stringify([{ id: "saved", screens: [{ id, url, settleMs: 5000 }] }]));
-        nav = { mode: "deeplinks", screens };
+        // simctl openurl can leave a SpringBoard confirmation over the app.
+        // Confirm it explicitly during preparation, before current-screen capture.
+        // This does not establish unattended CLI deeplinks-mode compatibility.
+        simctl("openurl", device.udid, url);
+        await pause(2000);
+        const opened = elements(root + "-open-url-tree.json");
+        if (opened.some((el) => el.label === "Open in “Wikipedia”?")) await tap("Open", { byLabel: true });
+        await pause(5000);
+        assert.ok(elements(root + "-prepared-tree.json").some((el) => expected.test(el.label)), "deep link did not reach Saved after preparation");
       }
       writeFileSync(config, JSON.stringify({ out: root, app: { name: "Wikipedia", ios: { bundleId: pin.bundleId } }, nav, ios: { voiceOverMaxSteps: 10 } }));
       const log = run(process.execPath, ["bin/aloud.mjs", "ios", "--config", config, "--no-gate",
@@ -144,6 +150,7 @@ try {
         assert.equal(tree.appleAudit.bundleId, pin.bundleId);
         results.cases[id] = { status: "captured", issues: tree.appleAudit.issues.length };
       }
+      if (url) results.cases[id].navigation = { mode: "current-screen", preparedUrl: url, confirmationHandledDuringSetup: true };
     } catch (error) {
       appendFileSync(root + ".log", `${error.stdout ?? ""}\n${error.stderr ?? ""}\n${error.stack}`);
       results.cases[id] = { status: "failed", error: error.message };
