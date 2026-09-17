@@ -79,12 +79,16 @@ accounting does not prove audible delivery or correct focus order.
 
 Tracking: [#26](https://github.com/IRS-Public/aloud/issues/26).
 
-Capture node properties missing from `uiautomator`, including hints,
-`stateDescription`, and `paneTitle`, through a supported richer API.
-Integrate the framework's checks with stable rule IDs, source/version
-provenance, and reproducible fixtures. Distinguish duplicate findings from
-the existing tree checks.
+The opt-in `--atf` implementation captures native hints, `stateDescription`,
+`paneTitle`, and the AndroidX role-description extra. Six pinned ATF 4.1.1
+checks run against the same snapshot used by the existing tree rules.
+Reports preserve check execution, `NOT_RUN` applicability results, stable
+rule IDs, exact element identity, and potential overlap with tree findings.
+Raw snapshots and hashed receipts are retained and revalidated on aggregation.
+See [setup and scope](android-atf.md).
 
-Before new checks affect OpenACR, record which checks actually completed on
-each screen and test missing/failed native coverage. Absence of a finding
-must not be treated as evidence that an unexecuted check passed.
+The controlled fixture demonstrates each selected check failing and then
+clearing after correction, plus read-only content, changing screens, process
+loss, permission denial, and cleanup. These checks remain report-only and add
+no OpenACR conformance claims. Broader app/framework validation and additional
+checks require their own fixtures before expanding the supported suite.

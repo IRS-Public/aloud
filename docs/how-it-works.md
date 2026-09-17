@@ -135,8 +135,11 @@ tree. The rules live in `src/android/ui-tree.mjs`:
 
 Errors count toward the gate; warns appear in the report only. The dump
 format omits `stateDescription`, `roleDescription`, hints, and `paneTitle`.
-Those need an AccessibilityNodeInfo harness (Google's Accessibility Test
-Framework), which is on the roadmap.
+Opt-in `--atf` uses the companion's `AccessibilityNodeInfo` snapshot for both
+tree rules and six pinned Google Accessibility Test Framework checks. It
+captures those missing properties, retains exact node identities, and verifies
+the snapshot around the screenshot. ATF findings and skipped results appear
+separately and do not change the tree gate. See [native Android checks](android-atf.md).
 
 ## The iOS leg
 
@@ -222,8 +225,9 @@ facts are in [docs/ci.md](ci.md) and [`examples/ci/`](../examples/ci/).
   service and invokes its actual gesture controller.
 - **Logcat speech capture can drop lines.** Baselines count tree errors and
   cannot detect missing speech. Focus mode records TalkBack's own TTS request
-  callback and keeps duplicate speech. A separate logging TTS engine remains
-  on the roadmap for independent request and queue/completion accounting.
+  callback and keeps duplicate speech. Opt-in `--tts logging` pairs durable
+  request records with engine receipts and queue/completion events; its engine
+  generates synthetic silence. See [logging TTS capture](logging-tts.md).
 - **The computed iOS transcript is a model, not a recording.** Every report
   labels it as computed. See [docs/ios.md](ios.md) for the path to real
   VoiceOver speech.

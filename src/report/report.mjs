@@ -16,6 +16,9 @@ import { join } from "node:path";
 import { renderReportHtml } from "./html.mjs";
 import { validateTalkBackFocusCapture, focusTranscript } from "../android/talkback-focus.mjs";
 import { focusTtsSummary } from "../android/tts-evidence.mjs";
+import { atfSummary, atfFindings, atfTreeNodes, validateAtfEvidence } from "../android/atf-evidence.mjs";
+import { runChecks as androidTreeChecks } from "../android/ui-tree.mjs";
+import { isDeepStrictEqual } from "node:util";
 import { validateVoiceOverCapture } from "../ios/voiceover-capture.mjs";
 
 const args = process.argv.slice(2);
@@ -50,6 +53,17 @@ const screens = {};
 for (const f of readdirSync(OUT).sort()) {
   if (f.endsWith(".tree.json")) {
     const r = read(f);
+    if (r.androidAtf !== undefined || r.treeSource === "accessibility-node-info") {
+      if (isIos || r.treeSource !== "accessibility-node-info" || r.androidAtf?.screen !== r.screen) throw new Error(`invalid Android ATF source in ${f}`);
+      const native = validateAtfEvidence(r.androidAtf);
+      const violations = androidTreeChecks(atfTreeNodes(native), { densityDpi: native.densityDpi, appPackage: native.target });
+      const errors = violations.filter((v) => v.severity === "error");
+      const gate = { errors: errors.length, ruleIds: [...new Set(errors.map((v) => v.ruleId))].sort() };
+      if (!isDeepStrictEqual(violations, r.violations) || !isDeepStrictEqual(gate, r.gate)) throw new Error(`Android ATF tree findings differ from native evidence in ${f}`);
+      r.atfSummary = atfSummary(r.androidAtf);
+      r.atfFindings = atfFindings(native, r.violations);
+      r.atfNodes = native.nodes;
+    }
     screens[r.screen] = { ...screens[r.screen], ...r };
   } else if (f.endsWith(".transcript.json")) {
     const r = read(f);
@@ -92,15 +106,23 @@ if (ids.length === 0) {
 const requirementsPath = join(OUT, "capture-requirements.json");
 if (existsSync(requirementsPath)) {
   const requirements = JSON.parse(readFileSync(requirementsPath, "utf8"));
-  if (requirements.schemaVersion !== 1 || requirements.talkBackFocus !== true ||
-      (requirements.loggingTts !== undefined && requirements.loggingTts !== true)) {
+  if (requirements.schemaVersion !== 1 || (!requirements.talkBackFocus && !requirements.androidAtf) ||
+      ["talkBackFocus", "loggingTts", "androidAtf"].some((k) => requirements[k] !== undefined && requirements[k] !== true) ||
+      (requirements.loggingTts && !requirements.talkBackFocus) ||
+      (requirements.androidAtf && (!Array.isArray(requirements.atfScreens) || !requirements.atfScreens.length ||
+        !requirements.atfScreens.every((id) => typeof id === "string" && id.length > 0) || new Set(requirements.atfScreens).size !== requirements.atfScreens.length))) {
     throw new Error("invalid capture requirements");
   }
   for (const id of ids) {
-    if (screens[id].source !== "talkback-focus" || !screens[id].talkBackFocus?.coverage.complete) {
+    if (requirements.talkBackFocus && (screens[id].source !== "talkback-focus" || !screens[id].talkBackFocus?.coverage.complete)) {
       throw new Error(`${id}: requested TalkBack traversal did not complete; raw evidence is retained`);
     }
     if (requirements.loggingTts && !screens[id].loggingTts?.complete) throw new Error(`${id}: requested logging TTS capture did not complete`);
+  }
+  if (requirements.androidAtf) {
+    for (const id of new Set([...ids, ...requirements.atfScreens])) {
+      if (!screens[id]?.atfSummary || !requirements.atfScreens.includes(id)) throw new Error(`${id}: requested Android ATF checks did not complete`);
+    }
   }
 }
 
@@ -116,6 +138,7 @@ const summary = {
           warns: s.violations ? s.violations.filter((v) => v.severity === "warn").length : null,
           ruleIds: s.gate?.ruleIds ?? [],
           utterances: s.transcript?.length ?? null,
+          ...(s.atfSummary ? { androidAtf: s.atfSummary } : {}),
           ...(s.source ? { transcriptSource: s.source } : {}),
           ...(s.talkBackFocus ? { talkBackFocus: {
             coverage: s.talkBackFocus.coverage, requestId: s.talkBackFocus.requestId,

@@ -21,7 +21,7 @@
 // (adb here, simctl on iOS).
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadNavigator } from "../nav/index.mjs";
@@ -40,6 +40,8 @@ import {
   waitForDevice,
 } from "./adb.mjs";
 import { createFocusCapturer, focusTranscript } from "./talkback-focus.mjs";
+import { createAtfCapturer } from "./atf-capture.mjs";
+import { atfTreeNodes, validateAtfEvidence } from "./atf-evidence.mjs";
 import { dedupeConsecutive, segmentTranscript } from "./transcript.mjs";
 import { parseUiDump, runChecks, validateUiCapture } from "./ui-tree.mjs";
 
@@ -130,6 +132,12 @@ async function walk() {
   const captureFocus = PASS === "transcript" && cfg.android?.talkBack === "focus"
     ? createFocusCapturer({ out: OUT, target: appPackage, maxSteps: cfg.android.talkBackMaxSteps ?? 100,
       loggingTts: cfg.android.tts === "logging" }) : null;
+  const captureAtf = PASS === "tree" && cfg.android?.atf ? createAtfCapturer({ out: OUT, target: appPackage }) : null;
+  if (captureAtf) {
+    const path = join(OUT, "capture-requirements.json");
+    const previous = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
+    writeFileSync(path, JSON.stringify({ ...previous, schemaVersion: 1, androidAtf: true, atfScreens: nav.screens.map((s) => s.id) }));
+  }
   const walked = [];
   for (const screen of nav.screens) {
     if (NAV_MODE !== "current-screen") setAppearance(!!screen.dark);
@@ -163,14 +171,18 @@ async function walk() {
       } else await sleep(TALKBACK_SETTLE_MS);
       logMarker(`screen-end:${screen.id}`);
     } else {
-      let nodes;
+      let nodes, androidAtf, nativeSnapshot;
       try {
-        nodes = parseUiDump(uiDump());
+        if (captureAtf) {
+          androidAtf = await captureAtf(screen.id);
+          nativeSnapshot = validateAtfEvidence(androidAtf);
+          nodes = atfTreeNodes(nativeSnapshot);
+        } else nodes = parseUiDump(uiDump());
         validateUiCapture(nodes, appPackage);
       } catch (err) {
         throw new Error(`screen "${screen.id}": Android accessibility capture failed: ${err.message}`);
       }
-      const violations = runChecks(nodes, { densityDpi, appPackage });
+      const violations = runChecks(nodes, { densityDpi: nativeSnapshot?.densityDpi ?? densityDpi, appPackage });
       const errors = violations.filter((v) => v.severity === "error");
       // .gate is what the ratchet compares and what `aloud baseline` merges
       // into the baseline file — computed once, here, so gate and baseline
@@ -181,6 +193,7 @@ async function walk() {
           {
             screen: screen.id,
             title: screen.title,
+            ...(androidAtf ? { treeSource: "accessibility-node-info", androidAtf } : {}),
             violations,
             gate: {
               errors: errors.length,
@@ -191,7 +204,7 @@ async function walk() {
           2,
         ),
       );
-      screenshot(join(SHOTS_DIR, `${screen.id}.png`));
+      if (!captureAtf) screenshot(join(SHOTS_DIR, `${screen.id}.png`));
       console.log(
         `  ✓ ${screen.id} — ${errors.length} error(s), ${violations.length - errors.length} warn(s)`,
       );

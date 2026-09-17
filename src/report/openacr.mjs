@@ -28,6 +28,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { dump, load } from "js-yaml";
 import { validateVoiceOverCoverage } from "../ios/voiceover-capture.mjs";
+import { validateAtfSummary } from "../android/atf-evidence.mjs";
 
 // The catalog names the edition the draft is built against. WCAG 2.2 is
 // required: the touch-target rules map to 2.5.8, which exists only there.
@@ -162,6 +163,10 @@ function validateScreens(screens, platform = "input") {
       throw new Error(`invalid audit (${platform} ${id}): ${reason}`);
     };
     if (!isRecord(s)) invalid("screen evidence must be an object");
+    if (s.androidAtf !== undefined) {
+      if (platform === "iOS") invalid("Android ATF evidence belongs to Android");
+      validateAtfSummary(s.androidAtf);
+    }
     if (s.errors !== null && !isCount(s.errors)) invalid("errors must be a non-negative integer or null");
     if (!Array.isArray(s.ruleIds) || s.ruleIds.some((r) => typeof r !== "string" || !r)) {
       invalid("ruleIds must be an array of non-empty strings");
@@ -388,6 +393,9 @@ export function buildAcr({
     ? ` Apple accessibility audits completed on ${appleScreens.length} iOS screen(s), with ${appleIssues} finding(s) requiring review. ` +
       "These native results are report-only and do not assign conformance levels. Review the separate Apple evidence in the HTML report."
     : "";
+  const atfScreens = Object.values(android?.screens ?? {}).filter((s) => s.androidAtf);
+  const atfNotes = atfScreens.length ? ` ATF 4.1.1 (aloud-node-v1) executed on ${atfScreens.length} Android screen(s), using AccessibilityNodeInfo snapshots. ` +
+    "Native results remain report-only and add no conformance coverage. The HTML report preserves skipped results and unselected checks; neither counts as a pass." : "";
 
   return {
     title: `${appName} Accessibility Conformance Report (draft)`,
@@ -404,13 +412,13 @@ export function buildAcr({
     notes:
       "DRAFT. This report is generated from the automated 508 audit " +
       "(https://github.com/IRS-Public/aloud/blob/main/docs/how-it-works.md). It records only what " +
-      `automation can prove. ${treeNotes}${missingNotes}${appleNotes} ${transcriptNotes} ${transcriptMethods} Every criterion marked ` +
+      `automation can prove. ${treeNotes}${missingNotes}${appleNotes}${atfNotes} ${transcriptNotes} ${transcriptMethods} Every criterion marked ` +
       "'not-evaluated' needs a human review. A Section 508 office must complete " +
       "those rows and replace the author contact before publication.",
     evaluation_methods_used:
       "Automated accessibility-tree checks use device or simulator dumps " +
-      "(uiautomator on Android, idb on iOS). " +
-      `${treeNotes}${missingNotes}${appleNotes} ${transcriptNotes} ${transcriptMethods} Rules and WCAG ` +
+      (atfScreens.length ? "(AccessibilityNodeInfo in Android ATF mode, uiautomator in standard Android mode, idb on iOS). " : "(uiautomator on Android, idb on iOS). ") +
+      `${treeNotes}${missingNotes}${appleNotes}${atfNotes} ${transcriptNotes} ${transcriptMethods} Rules and WCAG ` +
       "mapping: src/android/ui-tree.mjs and src/ios/tree.mjs. " +
       "No human evaluation yet.",
     catalog: CATALOG_ID,

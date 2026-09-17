@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "source": "android-atf",
+  "requestId": "d0f08606-0d58-4dc9-9af7-1879f7bb5b75",
+  "screen": "good",
+  "target": "org.irs_public.aloud.fixture",
+  "complete": true,
+  "targetPidBefore": "7368",
+  "capture": {
+    "receipt": {
+      "schemaVersion": 1,
+      "source": "android-atf",
+      "requestId": "d0f08606-0d58-4dc9-9af7-1879f7bb5b75",
+      "screen": "good",
+      "target": "org.irs_public.aloud.fixture",
+      "phase": "capture",
+      "session": "beecca74-c905-468f-889a-f369ea1cd011",
+      "file": "d0f08606-0d58-4dc9-9af7-1879f7bb5b75.capture.json",
+      "bytes": 9322,
+      "sha256": "85802c9bca62fdf5f12a14852a6648f0a580383c978f393064b66d0e6d51e45a"
+    }
+  },
+  "verification": {
+    "receipt": {
+      "schemaVersion": 1,
+      "source": "android-atf",
+      "requestId": "d0f08606-0d58-4dc9-9af7-1879f7bb5b75",
+      "screen": "good",
+      "target": "org.irs_public.aloud.fixture",
+      "phase": "verify",
+      "session": "beecca74-c905-468f-889a-f369ea1cd011",
+      "file": "d0f08606-0d58-4dc9-9af7-1879f7bb5b75.verify.json",
+      "bytes": 9321,
+      "sha256": "3e87332a7de9dd482ceef07744591c4190c21086b5d5e416cdf8b56ff0ab85c6"
+    }
+  },
+  "targetPidAfter": "7368"
+}

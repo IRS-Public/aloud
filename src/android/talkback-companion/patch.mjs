@@ -5,6 +5,20 @@ import { fileURLToPath } from "node:url";
 
 export const TALKBACK_COMMIT = "229212fdf5842191d0a93fc95d9ca1423b346866";
 const here = dirname(fileURLToPath(import.meta.url));
+export function patchAtf(root) {
+  const build = join(root, "talkback/build.gradle");
+  const text = readFileSync(build, "utf8");
+  if (text.split("dependencies {").length !== 2) throw new Error("TalkBack ATF dependency pin mismatch");
+  writeFileSync(build, text.replace("dependencies {", `dependencies {
+    implementation('com.google.android.apps.common.testing.accessibility.framework:accessibility-test-framework:4.1.1') {
+        // Only node-hierarchy checks run here. Do not package instrumentation services or Espresso.
+        exclude group: 'androidx.test'
+        exclude group: 'androidx.test.espresso'
+        exclude group: 'androidx.test.services'
+    }`));
+  copyFileSync(join(here, "AloudAtf.java"), join(root,
+    "talkback/src/main/java/com/google/android/accessibility/talkback/AloudAtf.java"));
+}
 export function patchLoggingTts(root) {
   const source = join(root, "utils/src/main/java/com/google/android/accessibility/utils/output/FailoverTextToSpeech.java");
   let text = readFileSync(source, "utf8");
@@ -58,6 +72,7 @@ export function patchCompanion(root, { noNative = false } = {}) {
   replace(focus, "      scrollCallback.onAutoScrollFailed(scrolledNode);", `      ${bridge}.signal("scroll-failed");\n      scrollCallback.onAutoScrollFailed(scrolledNode);`);
   copyFileSync(join(here, "AloudBridge.java"), join(pkg, "AloudBridge.java"));
   patchLoggingTts(root);
+  patchAtf(root);
   if (noNative) {
     const display = join(root, "braille/brailledisplay/src/phone/java/com/google/android/accessibility/braille/brailledisplay/BrailleDisplay.java");
     replace(display, "    this.brailleDisplayManager = new BrailleDisplayManager(accessibilityService, controller);",
