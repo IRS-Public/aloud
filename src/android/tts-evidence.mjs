@@ -117,8 +117,11 @@ export function accountTts(evidence, { requestId, screen, requireDone = false } 
 
 export function validateFocusTts(capture) {
   const evidence = capture.loggingTts;
-  const accounting = accountTts(evidence, { requestId: capture.requestId, screen: capture.screen, requireDone: true });
+  const accounting = accountTts(evidence, { requestId: capture.requestId, screen: capture.screen });
   check(accounting.complete && accounting.requests.length > 0, `incomplete accounting: ${accounting.problems.join("; ")}`);
+  // TalkBack can flush its own WebView boundary announcement before the next
+  // control's label. A fully accounted stop is a recorded request, not lost speech.
+  check(accounting.requests.every((r) => r.result === 0 && ["done", "stop"].includes(r.terminal)), "focus speech dispatch or synthesis failed");
   const client = parseTtsJournal(evidence.client, "client");
   check(client[0].data.packageName === "com.android.talkback" && client[0].data.pid === capture.commands[0].pid,
     "focus journal belongs to another client process");
@@ -143,5 +146,7 @@ export function focusTtsSummary(capture) {
   const a = validateFocusTts(capture);
   return { schemaVersion: 1, source: a.source, output: a.output, complete: a.complete,
     engine: TTS_ENGINE, clientSession: a.clientSession, engineSession: a.engineSession,
-    requests: a.requests.length, queueEvents: a.queueEvents.length };
+    requests: a.requests.length, queueEvents: a.queueEvents.length,
+    completedRequests: a.requests.filter((r) => r.terminal === "done").length,
+    stoppedRequests: a.requests.filter((r) => r.terminal === "stop").length };
 }
