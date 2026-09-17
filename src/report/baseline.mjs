@@ -2,9 +2,9 @@
 // Merge the per-screen audit reports from a report dir into the ratchet
 // baseline. This is the only sanctioned way to change the baseline.
 //
-// The gate summary is computed ONCE, in the walker, and embedded in each
-// report as `.gate` — this script never re-derives it, so the gate and
-// the baseline can't drift. True merge: a filtered run (e.g.
+// The gate summary is computed in the walker and embedded as `.gate`.
+// Validate it against the findings before accepting its unchanged values.
+// True merge: a filtered run (e.g.
 // `--flow payments`) updates only the screens it walked.
 //
 // Only run this to ACCEPT current counts (initial baseline, or after a
@@ -18,6 +18,7 @@
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { validateBaseline, validateTreeReport } from "./validation.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -51,20 +52,16 @@ if (!existsSync(reportDir)) {
   process.exit(1);
 }
 
-const baseline = existsSync(baselinePath)
+const baseline = validateBaseline(existsSync(baselinePath)
   ? JSON.parse(readFileSync(baselinePath, "utf8"))
-  : {};
+  : {}, baselinePath);
 const updated = [];
 const files = readdirSync(reportDir)
   .filter((f) => f.endsWith(".tree.json"))
   .sort();
 
 for (const file of files) {
-  const report = JSON.parse(readFileSync(join(reportDir, file), "utf8"));
-  if (!report.screen || !report.gate) {
-    console.warn(`skipping ${file}: not a gate report (missing .screen/.gate)`);
-    continue;
-  }
+  const report = validateTreeReport(JSON.parse(readFileSync(join(reportDir, file), "utf8")), file);
   baseline[report.screen] = report.gate;
   updated.push(report.screen);
 }
