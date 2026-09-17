@@ -124,7 +124,7 @@ test("restores present and absent TTS settings before accessibility is re-enable
   assert.ok(engine >= 0 && enabled > engine);
 });
 
-for (const mutation of ["none", "stopped-request", "failed-request", "missing-terminal", "missing-engine", "truncated-log", "changed-transcript", "downgraded-source"]) {
+for (const mutation of ["none", "stopped-request", "stopped-synthesis-error", "failed-request", "missing-terminal", "missing-engine", "truncated-log", "changed-transcript", "downgraded-source"]) {
   test(`persisted logging report: ${mutation}`, async (t) => {
     const { mkdtempSync, readFileSync, writeFileSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
@@ -136,7 +136,7 @@ for (const mutation of ["none", "stopped-request", "failed-request", "missing-te
     c.loggingTts = { schemaVersion: 1, client: readFileSync(new URL("client.jsonl", root), "utf8"),
       engines: [readFileSync(new URL("engine.jsonl", root), "utf8")] };
     const transcript = focusTranscript(c);
-    if (["stopped-request", "failed-request", "missing-terminal"].includes(mutation)) {
+    if (["stopped-request", "stopped-synthesis-error", "failed-request", "missing-terminal"].includes(mutation)) {
       const rows = c.loggingTts.client.trim().split("\n").map(JSON.parse);
       const first = c.commands.findIndex((command) => command.action === "first");
       const request = rows.find((row) => row.kind === "request" && row.data.operation === "speak" &&
@@ -144,8 +144,16 @@ for (const mutation of ["none", "stopped-request", "failed-request", "missing-te
       const index = rows.findIndex((row) => row.kind === "done" && row.data.dispatchId === request.data.dispatchId);
       assert.ok(index > 0);
       if (mutation === "missing-terminal") rows.splice(index, 1);
-      else { rows[index].kind = mutation === "stopped-request" ? "stop" : "error"; rows[index].data.interrupted = mutation === "stopped-request"; }
+      else { rows[index].kind = mutation.startsWith("stopped-") ? "stop" : "error"; rows[index].data.interrupted = mutation.startsWith("stopped-"); }
       c.loggingTts.client = stringify(rows.map((row, index) => ({ ...row, event: index + 1 })));
+      if (mutation === "stopped-synthesis-error") {
+        const engine = c.loggingTts.engines[0].trim().split("\n").map(JSON.parse);
+        const terminal = engine.find((row) => row.kind === "synthesis-complete" && row.data.dispatchId === request.data.dispatchId);
+        assert.ok(terminal);
+        terminal.kind = "synthesis-error";
+        terminal.data.result = -1;
+        c.loggingTts.engines[0] = stringify(engine);
+      }
     }
     if (mutation === "missing-engine") c.loggingTts.engines = [];
     if (mutation === "truncated-log") c.loggingTts.client = c.loggingTts.client.trimEnd();
@@ -161,7 +169,7 @@ for (const mutation of ["none", "stopped-request", "failed-request", "missing-te
     const shouldPass = ["none", "stopped-request"].includes(mutation);
     assert.equal(result.status === 0, shouldPass, result.stderr);
     if (mutation === "missing-terminal") assert.match(result.stderr, /missing terminal callback/);
-    if (mutation === "failed-request") assert.match(result.stderr, /dispatch or synthesis failed/);
+    if (["failed-request", "stopped-synthesis-error"].includes(mutation)) assert.match(result.stderr, /dispatch or synthesis failed/);
     if (shouldPass) {
       const summary = JSON.parse(readFileSync(join(out, "summary.json")));
       assert.equal(summary.screens.nested.talkBackFocus.loggingTts.requests, 9);
