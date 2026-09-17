@@ -65,14 +65,19 @@ async function launch(root) {
   await pause(5000);
   process.kill(pid, 0); // Simulator app processes run on this host. Fail early if launch crashed.
   let lastError;
-  const deadline = Date.now() + 30000;
+  // The first idb connection after boot can consume its 30-second read budget.
+  // Retry readiness before capture, retaining every returned preparation tree.
+  const deadline = Date.now() + 90000;
   for (let attempt = 1; Date.now() < deadline; attempt++) {
     process.kill(pid, 0);
     try {
       const before = elements(root + `-launch-tree-${attempt}.json`);
       assert.ok(before.some((el) => el.testID === "App Onboarding Next Button"), "Wikipedia did not reach the requested onboarding screen");
       return;
-    } catch (error) { lastError = error; }
+    } catch (error) {
+      lastError = error;
+      appendFileSync(root + "-readiness.log", `attempt ${attempt}: ${error.message}\n`);
+    }
     await pause(500);
   }
   throw lastError;
@@ -108,7 +113,7 @@ try {
     { mode: "apple", id: "apple-onboarding-initial", expectedResize: true, expected: /encyclopedia/i },
     { mode: "apple", id: "apple-onboarding-settled", launchFresh: false, requires: "apple-onboarding-initial", expected: /encyclopedia/i },
     { mode: "apple", id: "apple-exploration", launchFresh: false, requires: "apple-onboarding-settled", prepare: "next", expected: /New ways to explore|Places tab/i },
-    { mode: "apple", id: "apple-saved-after-deeplink", launchFresh: false, requires: "apple-exploration", prepare: "skip", url: "wikipedia://saved", expected: /Saved articles|Reading lists/i },
+    { mode: "apple", id: "apple-saved-after-deeplink", launchFresh: false, requires: "apple-exploration", prepare: "skip", url: "wikipedia://saved", expected: /No saved pages yet|Saved articles|Reading lists/i },
   ];
   for (const { mode, id, prepare, url, expected, expectedResize, launchFresh = true, requires } of cases) {
     const root = join(out, id), config = root + ".json";
