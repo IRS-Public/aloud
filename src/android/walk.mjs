@@ -154,7 +154,8 @@ async function walk() {
       // Enable it inside the marker pair so its initial focus announcement
       // is captured without restarting the app or changing the screen.
       execFileSync(process.execPath, [fileURLToPath(new URL("./talkback.mjs", import.meta.url)), "enable",
-        ...(cfg.android?.tts === "logging" ? ["--logging-tts"] : [])], {
+        ...(cfg.android?.tts === "logging" ? ["--logging-tts"] : []),
+        ...(cfg.android?.talkBack === "focus" ? ["--native-capture"] : [])], {
         stdio: "inherit",
       });
     }

@@ -155,3 +155,12 @@ for (const mutation of ["none", "missing-engine", "truncated-log", "changed-tran
     }
   });
 }
+
+// Diagnosis mode overrides pref_log_overlay=false in the pinned TalkBack build.
+// Native capture must turn diagnosis mode itself off to preserve screenshots.
+test("native capture preferences disable diagnostic overlays while startup retains diagnosis logging", async () => {
+  const { prefsXml } = await import("../src/android/talkback.mjs");
+  assert.match(prefsXml({ diagnosis: false }), /name="pref_diagnosis_mode" value="false"/);
+  assert.match(prefsXml({ diagnosis: false }), /name="pref_log_overlay" value="false"/);
+  assert.match(prefsXml(), /name="pref_diagnosis_mode" value="true"/);
+});
