@@ -12,8 +12,9 @@ the app are not failures of the capture tool.
   Exercise native controls and article content, current-screen and deep-link
   navigation, repeated runs, and restoration of accessibility/TTS state.
 - iOS: native Apple audit and real VoiceOver on an independently built app.
-  Verify the requested screen survives harness activation and foreground
-  transitions. Preserve actual speech and explicitly partial coverage.
+  Verify repeated onboarding captures, navigation to the exploration page,
+  and an Apple audit of the Saved deep link survive harness activation and
+  foreground transitions. Preserve actual speech and explicitly partial coverage.
 - Record toolchain versions, app build identities, screen identities, and raw
   evidence. A passing controlled fixture does not substitute for these runs.
 
@@ -81,8 +82,14 @@ traversal and remains failed evidence; the table describes a separate fresh run.
 
 The [Android native regression suites](https://github.com/IRS-Public/aloud/actions/runs/35251458224)
 passed for focus traversal, ATF capture, logging TTS, and queue/process recovery.
-All 244 device-free tests passed. External-app CI and iOS validation are still
-in progress; their final results will be recorded here before this PR is ready.
+All 244 device-free tests passed.
+
+[Wikipedia Android CI](https://github.com/IRS-Public/aloud/actions/runs/35254341388)
+also passed on Android 14 x86_64 with Node 24.20.0. The three native captures
+matched the local node/utterance counts; the article produced 90 nodes and 85
+transcript lines, including one stopped request. All state-restoration and
+incomplete-report rejection checks passed. Download `wikipedia-android-evidence`
+from that run for raw artifacts. iOS validation is still in progress.
 
 ## Fixes found by the external app
 
