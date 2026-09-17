@@ -23,7 +23,7 @@ async function launch(mode) {
 }
 const capture = (extra = {}) => createAtfCapturer({ out, target, ...extra });
 try {
-  enable();
+  enable({ diagnosis: false });
   for (const mode of ["bad", "good", "empty"]) {
     await launch("atf-" + mode);
     const e = await capture()(mode), n = validateAtfEvidence(e), summary = atfSummary(e);
@@ -68,7 +68,7 @@ try {
   await launch("atf-good");
   await assert.rejects(capture({ takeScreenshot: () => stopTalkBack(findTalkBack()) })("service-stopped"), /companion unavailable/);
   results.serviceStopped = "rejected";
-  enable(); await launch("permission");
+  enable({ diagnosis: false }); await launch("permission");
   const permission = adb(["logcat", "-d", "-s", "ALOUD_ATF_PERMISSION:I", "*:S"]);
   writeFileSync(join(out, "permission.log"), permission);
   assert.match(permission, /result=-17,data=receiver-not-invoked/); results.untrustedApp = "denied";
