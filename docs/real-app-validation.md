@@ -52,7 +52,11 @@ validation. The pinned app needs a one-line `isolated deinit` compatibility patc
 for its settings controller on this SDK. The patch is committed alongside the
 harness; the evidence includes the complete tracked source diff and app version.
 An empty `OpenSourceDebug.xcconfig` supplies upstream's generated simulator
-configuration without a signing identity.
+configuration. The simulator build uses ad-hoc signing to preserve the app's
+required app-group entitlements; no developer certificate is used. An earlier
+unsigned build crashed while initializing the shared data store, and Aloud
+correctly rejected the unavailable target. The suite retains crash diagnostics
+and checks the launched process before starting capture.
 
 ## Results
 

@@ -29,19 +29,25 @@ simctl("bootstatus", device.udid, "-b");
 simctl("install", device.udid, process.env.ALOUD_WIKIPEDIA_APP);
 const results = { app: { ...pin, ...appVersion }, toolchain: { version: toolchain, developerDirectory, releaseChannel }, simulator: device, cases: {} };
 writeFileSync(join(out, "provenance.json"), JSON.stringify(results, null, 2));
-function launch() {
+async function launch(root) {
   try { simctl("terminate", device.udid, pin.bundleId); } catch { /* not running */ }
-  simctl("launch", device.udid, pin.bundleId, "-DidShowOnboarding5.3", "NO", "-WMFEnableHomeTabForTesting", "NO", "-AppleLanguages", "(en)");
+  const output = simctl("launch", device.udid, pin.bundleId, "-DidShowOnboarding5.3", "NO", "-WMFEnableHomeTabForTesting", "NO", "-AppleLanguages", "(en)");
+  writeFileSync(root + "-launch.log", output);
+  const pid = Number(output.trim().match(/: (\d+)$/)?.[1]);
+  assert.ok(pid > 0, "simctl did not return the Wikipedia PID");
+  await new Promise((r) => setTimeout(r, 5000));
+  process.kill(pid, 0); // Simulator app processes run on this host. Fail early if launch crashed.
 }
 let failed = false;
 try {
   // Capture the same external screen twice. Each invocation exercises harness background/foreground transitions.
   for (const mode of ["apple", "voiceover"]) for (let attempt = 1; attempt <= 2; attempt++) {
-    launch();
     const id = `${mode}-onboarding-${attempt}`, root = join(out, id), config = root + ".json";
     writeFileSync(config, JSON.stringify({ out: root, app: { name: "Wikipedia", ios: { bundleId: pin.bundleId } },
       nav: { mode: "current-screen", screenId: id }, ios: { voiceOverMaxSteps: 10 } }));
     try {
+      console.log(`${id}: launching Wikipedia`);
+      await launch(root);
       const log = run(process.execPath, ["bin/aloud.mjs", "ios", "--config", config, "--no-gate",
         ...(mode === "apple" ? ["--apple-audit"] : ["--voiceover", "real"])], { timeout: 600000 });
       writeFileSync(root + ".log", log);
