@@ -59,6 +59,15 @@ unsigned build crashed while initializing the shared data store, and Aloud
 correctly rejected the unavailable target. The suite retains crash diagnostics
 and checks the launched process before starting capture.
 
+On the initial iOS onboarding screen, Apple's audit completes but changes the
+Skip button's frame: its width changes from 57 to about 54.67 points. Repeated
+diagnostic captures reproduced this exact change while the other normalized
+elements stayed equal. Aloud rejects the pairing and retains the raw native
+audit and both trees. The suite verifies that specific rejection, then makes
+a separate capture of the post-audit state without relaunching the app. The
+original rejected capture remains incomplete. The screen-consistency guard
+remains exact.
+
 ## Results
 
 Local Android validation on 2026-09-17 used Wikipedia `50608-r-2026-09-15`,
@@ -89,7 +98,16 @@ also passed on Android 14 x86_64 with Node 24.20.0. The three native captures
 matched the local node/utterance counts; the article produced 90 nodes and 85
 transcript lines, including one stopped request. All state-restoration and
 incomplete-report rejection checks passed. Download `wikipedia-android-evidence`
-from that run for raw artifacts. iOS validation is still in progress.
+from that run for raw artifacts.
+
+The [iOS diagnostic run](https://github.com/IRS-Public/aloud/actions/runs/35255884301/job/105319296430)
+captured real VoiceOver twice on Wikipedia onboarding: each retained 11
+utterances, stopped at the 10-step budget, preserved the matching tree, and
+restored VoiceOver state. Both have `coverage.complete: false`. Two Apple
+audits completed and then failed the screen-pairing guard because of the Skip
+button resize. That run was stopped after these four cases to inspect its
+diagnostics; it is not a successful full-suite run. The settled Apple audit
+and navigation cases are still being validated.
 
 ## Fixes found by the external app
 
