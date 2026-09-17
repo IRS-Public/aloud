@@ -82,7 +82,7 @@ async function launch(root) {
   }
   throw lastError;
 }
-function verifyResizeRejection(root, id, error) {
+function verifyResizeRejection(root, id, error, kind) {
   assert.match(String(error.stderr), /accessibility content changed during the Apple audit/);
   const native = JSON.parse(readFileSync(join(root, `ios/apple-audit/${id}.json`)));
   assert.equal(native.status, "completed");
@@ -95,14 +95,22 @@ function verifyResizeRejection(root, id, error) {
     return normalizeElements(JSON.parse(readFileSync(join(dir, name)))).map(({ raw, ...el }) => el);
   };
   const before = latest("before"), after = latest("after-apple-audit");
-  const skip = "App Onboarding Skip Button";
-  const a = before.filter((el) => el.testID === skip), b = after.filter((el) => el.testID === skip);
+  const saved = kind === "saved-navigation";
+  assert.ok(saved || kind === true, "unknown expected resize");
+  const testID = saved ? "Saved" : "App Onboarding Skip Button";
+  const a = before.filter((el) => el.testID === testID), b = after.filter((el) => el.testID === testID);
   assert.equal(a.length, 1); assert.equal(b.length, 1);
-  assert.notDeepEqual(a[0].frame, b[0].frame, "expected the observed Skip button resize");
-  const withoutSkipFrame = (els) => els.map((el) => el.testID === skip ? { ...el, frame: null } : el);
-  assert.deepEqual(withoutSkipFrame(before), withoutSkipFrame(after), "unexpected content change beyond the known button resize");
+  assert.equal(a[0].role, saved ? "Group" : "Button");
+  assert.notDeepEqual(a[0].frame, b[0].frame, "expected the observed element resize");
+  if (saved) {
+    assert.equal(a[0].roleDescription, "Nav bar");
+    assert.equal(a[0].frame.h, 144);
+    assert.deepEqual(b[0].frame, { ...a[0].frame, h: 224 });
+  }
+  const withoutResizedFrame = (els) => els.map((el) => el.testID === testID ? { ...el, frame: null } : el);
+  assert.deepEqual(withoutResizedFrame(before), withoutResizedFrame(after), "unexpected content change beyond the known resize");
   assert.throws(() => run(process.execPath, ["src/report/report.mjs", "--dir", join(root, "ios")]));
-  return { status: "unsupported", reason: "Apple audit resized the Skip button; pairing rejected", before: a[0].frame, after: b[0].frame, rejectionVerified: true };
+  return { status: "unsupported", reason: `Apple audit resized ${testID}; pairing rejected`, before: a[0].frame, after: b[0].frame, nativeIssues: native.issues.length, rejectionVerified: true };
 }
 let failed = false;
 try {
@@ -113,7 +121,8 @@ try {
     { mode: "apple", id: "apple-onboarding-initial", expectedResize: true, expected: /encyclopedia/i },
     { mode: "apple", id: "apple-onboarding-settled", launchFresh: false, requires: "apple-onboarding-initial", expected: /encyclopedia/i },
     { mode: "apple", id: "apple-exploration", launchFresh: false, requires: "apple-onboarding-settled", prepare: "next", expected: /New ways to explore|Places tab/i },
-    { mode: "apple", id: "apple-saved-after-deeplink", launchFresh: false, requires: "apple-exploration", prepare: "skip", url: "wikipedia://saved", expected: /No saved pages yet|Saved articles|Reading lists/i },
+    { mode: "apple", id: "apple-saved-after-deeplink", launchFresh: false, requires: "apple-exploration", prepare: "skip", url: "wikipedia://saved", expected: /No saved pages yet|Saved articles|Reading lists/i, expectedResize: "saved-navigation" },
+    { mode: "apple", id: "apple-saved-settled", launchFresh: false, requires: "apple-saved-after-deeplink", expected: /No saved pages yet|Saved articles|Reading lists/i },
   ];
   for (const { mode, id, prepare, url, expected, expectedResize, launchFresh = true, requires } of cases) {
     const root = join(out, id), config = root + ".json";
@@ -159,7 +168,7 @@ try {
       appendFileSync(root + ".log", `${error.stdout ?? ""}\n${error.stderr ?? ""}\n${error.stack}`);
       results.cases[id] = { status: "failed", error: error.message };
       if (expectedResize) {
-        try { results.cases[id] = verifyResizeRejection(root, id, error); }
+        try { results.cases[id] = verifyResizeRejection(root, id, error, expectedResize); }
         catch (verificationError) { appendFileSync(root + ".log", `\n${verificationError.stack}`); }
       }
       if (results.cases[id].status === "failed") failed = true;
