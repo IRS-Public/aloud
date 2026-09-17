@@ -13,8 +13,9 @@ the app are not failures of the capture tool.
   navigation, repeated runs, and restoration of accessibility/TTS state.
 - iOS: native Apple audit and real VoiceOver on an independently built app.
   Verify repeated onboarding captures, navigation to the exploration page,
-  and an Apple audit of the Saved deep link survive harness activation and
-  foreground transitions. Preserve actual speech and explicitly partial coverage.
+  and an Apple audit of Saved after explicitly confirming its deep link during
+  setup. Verify that these current-screen captures survive harness activation
+  and foreground transitions. Preserve actual speech and explicitly partial coverage.
 - Record toolchain versions, app build identities, screen identities, and raw
   evidence. A passing controlled fixture does not substitute for these runs.
 
@@ -72,7 +73,18 @@ elements stayed equal. Aloud rejects the pairing and retains the raw native
 audit and both trees. The suite verifies that specific rejection, then makes
 a separate capture of the post-audit state without relaunching the app. The
 original rejected capture remains incomplete. The screen-consistency guard
-remains exact.
+remains exact. The initial case also accepts a coherent capture if a newer
+runtime no longer causes the resize; it always validates the normal completed
+report before recording that outcome.
+
+Unattended iOS `deeplinks` mode encountered SpringBoard’s “Open in Wikipedia?”
+confirmation. Apple rejected the obscured target (`Invalid target app`); the
+failed capture retained the dialog tree and produced no passing report. That
+dialog also blocked later app launches in the same diagnostic run. The revised
+suite runs VoiceOver first and explicitly confirms the URL during setup before
+using `current-screen` for Saved. This is validation of a prepared deep-link
+screen, not successful unattended CLI deep-link navigation. That mode remains
+unresolved on this app; no automatic dialog dismissal was added to Aloud.
 
 ## Results
 
@@ -95,11 +107,11 @@ passes accessibility checks. All cases restored accessibility/TTS settings and
 TalkBack preferences. An earlier local attempt timed out in adb during article
 traversal and remains failed evidence; the table describes a separate fresh run.
 
-The [Android native regression suites](https://github.com/IRS-Public/aloud/actions/runs/35258520872)
+The [Android native regression suites](https://github.com/IRS-Public/aloud/actions/runs/35260257219)
 passed for focus traversal, ATF capture, logging TTS, and queue/process recovery.
 All 245 device-free tests passed.
 
-[Wikipedia Android CI](https://github.com/IRS-Public/aloud/actions/runs/35254341388/job/105314628464)
+[Wikipedia Android CI](https://github.com/IRS-Public/aloud/actions/runs/35260257230/job/105334057329)
 also passed on Android 14 x86_64 with Node 24.20.0. The three native captures
 matched the local node/utterance counts; the article produced 90 nodes and 85
 transcript lines, including one stopped request. All state-restoration and
@@ -112,8 +124,12 @@ utterances, stopped at the 10-step budget, preserved the matching tree, and
 restored VoiceOver state. Both have `coverage.complete: false`. Two Apple
 audits completed and then failed the screen-pairing guard because of the Skip
 button resize. That run was stopped after these four cases to inspect its
-diagnostics; it is not a successful full-suite run. The settled Apple audit
-and navigation cases are still being validated.
+diagnostics; it is not a successful full-suite run. A [later beta-6 run](https://github.com/IRS-Public/aloud/actions/runs/35260257230/job/105334057045)
+verified the exact initial resize rejection, then successfully captured the
+settled onboarding and exploration screens, each with one native audit issue.
+It failed at the unattended Saved deep link because of the system confirmation;
+the remaining VoiceOver setup attempts were blocked by the same dialog. The
+released-toolchain suite and prepared Saved capture are still being validated.
 
 ## Fixes found by the external app
 
