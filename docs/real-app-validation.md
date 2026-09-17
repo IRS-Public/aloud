@@ -60,8 +60,41 @@ and checks the launched process before starting capture.
 
 ## Results
 
-Validation is in progress. Final results will link the CI artifacts and distinguish
-captured screens, rejected captures, and remaining coverage.
+Local Android validation on 2026-09-17 used Wikipedia `50608-r-2026-09-15`,
+Android 14/API 34 (`sdk_gphone64_arm64`, build `UE1A.230829.050/12077443`), and
+Node 26.3.1. The final run produced:
+
+| Case | Native nodes | Transcript lines | Result |
+| --- | ---: | ---: | --- |
+| Onboarding, first capture | 13 | 7 | Both TalkBack boundaries and TTS accounting verified |
+| Onboarding, repeat | 13 | 7 | Same coverage; state restored |
+| Data & Privacy | 12 | 13 | Native navigation preserved; state restored |
+| Abacheri deep link | 90 | 88 | Six ATF checks completed; both TalkBack boundaries verified |
+| Hello, World! deep link | — | — | Incomplete ATF capture rejected at the node limit |
+
+The article ledger contains 90 requests including setup/rewind speech: 89
+completed and one stopped. The report labels the stopped request explicitly.
+The article has tree and ATF findings; successful capture does not mean the app
+passes accessibility checks. All cases restored accessibility/TTS settings and
+TalkBack preferences. An earlier local attempt timed out in adb during article
+traversal and remains failed evidence; the table describes a separate fresh run.
+
+The [Android native regression suites](https://github.com/IRS-Public/aloud/actions/runs/35251458224)
+passed for focus traversal, ATF capture, logging TTS, and queue/process recovery.
+All 244 device-free tests passed. External-app CI and iOS validation are still
+in progress; their final results will be recorded here before this PR is ready.
+
+## Fixes found by the external app
+
+- TalkBack diagnosis mode forced a visible logging overlay even with the
+  overlay preference disabled. Native capture now turns diagnosis mode off;
+  startup/logcat capture retains the logging configuration it requires.
+- TalkBack interrupted its own WebView boundary announcement when moving to
+  the native toolbar. The request and stop callback were fully accounted for,
+  but focus validation previously required every request to finish synthesis.
+  Validation now accepts accounted stops and labels them in the report.
+  Dispatch/synthesis errors, missing callbacks, incomplete journals, and
+  contradictory command or process identities still fail.
 
 ## Reproduce
 
