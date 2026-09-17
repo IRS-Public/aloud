@@ -58,3 +58,61 @@ jobs:
             aloud-report/real-app-ios
             !aloud-report/real-app-ios/**/build/**
           retention-days: 14
+  wikipedia-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm ci
+      - name: Prepare build tools and emulator
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/gradle.zip" https://services.gradle.org/distributions/gradle-8.14.3-bin.zip
+          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/gradle-8.14.3/bin" >> "$GITHUB_PATH"
+          mkdir -p ~/.gradle
+          cat > ~/.gradle/gradle.properties <<'PROPS'
+          org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m
+          org.gradle.daemon=false
+          org.gradle.workers.max=2
+          PROPS
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/cache/restore@v5
+        id: apk
+        with:
+          path: .aloud-cache/*.apk
+          key: talkback-companion-${{ hashFiles('src/android/get-talkback.sh', 'src/android/talkback-companion/**', 'src/android/tts-shared/**') }}
+      - name: Build companion if uncached
+        if: steps.apk.outputs.cache-hit != 'true'
+        run: bash src/android/get-talkback.sh --build --companion --no-native
+      - name: Prepare logging engine and pinned Wikipedia APK
+        run: |
+          if [ ! -f .aloud-cache/logging-tts.apk ]; then bash src/android/get-logging-tts.sh; fi
+          curl -fL --retry 3 "$(node -p 'JSON.parse(require("fs").readFileSync("test/real-app/wikipedia.json")).android.url')" -o "$RUNNER_TEMP/wikipedia.apk"
+      - name: Boot Android 14 emulator
+        run: bash src/android/boot-emulator-ci.sh
+      - name: Install capture services
+        run: |
+          "$ANDROID_HOME/platform-tools/adb" shell pm disable-user --user 0 com.google.android.googlequicksearchbox
+          node bin/aloud.mjs talkback install .aloud-cache/talkback.apk
+          "$ANDROID_HOME/platform-tools/adb" install -r -g .aloud-cache/logging-tts.apk
+      - name: Validate native capture against Wikipedia
+        run: node test/real-app/android.mjs
+        env:
+          ALOUD_WIKIPEDIA_APK: ${{ runner.temp }}/wikipedia.apk
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: wikipedia-android-evidence
+          path: |
+            aloud-report/real-app-android
+            ${{ runner.temp }}/emulator.log
+          retention-days: 14
