@@ -40,6 +40,17 @@ jobs:
           "$RUNNER_TEMP/idb-env/bin/pip" install fb-idb==1.1.7
           "$RUNNER_TEMP/idb-env/bin/idb" list-targets
           echo "$RUNNER_TEMP/idb-env/bin" >> "$GITHUB_PATH"
+      - name: Start disposable simulator while the app builds
+        run: |
+          node --input-type=module - <<'JS'
+          import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+          const devices = JSON.parse(execFileSync('xcrun', ['simctl', 'list', 'devices', 'available', '-j'])).devices;
+          const device = Object.entries(devices).filter(([runtime]) => /iOS-27/.test(runtime))
+            .flatMap(([, list]) => list).find((d) => d.name.includes('iPhone') && d.isAvailable);
+          assert.ok(device, 'an iOS 27 simulator is required');
+          if (device.state !== 'Booted') execFileSync('xcrun', ['simctl', 'boot', device.udid], { stdio: 'inherit' });
+          JS
       - name: Build pinned Wikipedia simulator app
         run: |
           mkdir -p aloud-report/real-app-ios

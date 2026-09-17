@@ -1,7 +1,7 @@
 // External-app acceptance on a disposable iOS 27 simulator; not a device-free unit test.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { normalizeElements, validateIosCapture } from "../../src/ios/tree.mjs";
 const pin = JSON.parse(readFileSync(new URL("./wikipedia.json", import.meta.url))).ios;
@@ -45,11 +45,14 @@ async function tap(identifier) {
   run("idb", ["ui", "tap", String(Math.round(f.x + f.w / 2)), String(Math.round(f.y + f.h / 2)), "--udid", device.udid]);
   await pause(2000);
 }
-async function launch(root) {
-  try { simctl("terminate", device.udid, pin.bundleId); } catch { /* not running */ }
+function enableBridge() {
   for (const key of ["ApplicationAccessibilityEnabled", "AccessibilityEnabled"]) {
     simctl("spawn", device.udid, "defaults", "write", "com.apple.Accessibility", key, "-bool", "true");
   }
+}
+async function launch(root) {
+  try { simctl("terminate", device.udid, pin.bundleId); } catch { /* not running */ }
+  enableBridge();
   const output = simctl("launch", device.udid, pin.bundleId, "-DidShowOnboarding5.3", "NO", "-WMFEnableHomeTabForTesting", "NO", "-AppleLanguages", "(en)");
   writeFileSync(root + "-launch.log", output);
   const pid = Number(output.trim().match(/: (\d+)$/)?.[1]);
@@ -69,17 +72,46 @@ async function launch(root) {
   }
   throw lastError;
 }
+function verifyResizeRejection(root, id, error) {
+  assert.match(String(error.stderr), /accessibility content changed during the Apple audit/);
+  const native = JSON.parse(readFileSync(join(root, `ios/apple-audit/${id}.json`)));
+  assert.equal(native.status, "completed");
+  assert.equal(native.bundleId, pin.bundleId);
+  assert.equal(native.screen, id);
+  const dir = join(root, "ios/capture-trees");
+  const latest = (phase) => {
+    const name = readdirSync(dir).filter((f) => f.startsWith(`${id}.${phase}.`)).sort((a, b) => a.localeCompare(b, "en", { numeric: true })).at(-1);
+    assert.ok(name, `missing ${phase} tree`);
+    return normalizeElements(JSON.parse(readFileSync(join(dir, name)))).map(({ raw, ...el }) => el);
+  };
+  const before = latest("before"), after = latest("after-apple-audit");
+  const skip = "App Onboarding Skip Button";
+  const a = before.filter((el) => el.testID === skip), b = after.filter((el) => el.testID === skip);
+  assert.equal(a.length, 1); assert.equal(b.length, 1);
+  assert.notDeepEqual(a[0].frame, b[0].frame, "expected the observed Skip button resize");
+  const withoutSkipFrame = (els) => els.map((el) => el.testID === skip ? { ...el, frame: null } : el);
+  assert.deepEqual(withoutSkipFrame(before), withoutSkipFrame(after), "unexpected content change beyond the known button resize");
+  assert.throws(() => run(process.execPath, ["src/report/report.mjs", "--dir", join(root, "ios")]));
+  return { status: "unsupported", reason: "Apple audit resized the Skip button; pairing rejected", before: a[0].frame, after: b[0].frame, rejectionVerified: true };
+}
 let failed = false;
 try {
-  // Capture the same external screen twice. Each invocation exercises harness background/foreground transitions.
-  const cases = ["apple", "voiceover"].flatMap((mode) => [1, 2].map((attempt) => ({ mode, id: `${mode}-onboarding-${attempt}`, expected: /Wikipedia|encyclopedia|language/i })));
-  cases.push({ mode: "apple", id: "apple-exploration", prepare: "next", expected: /New ways to explore|Places tab/i },
-    { mode: "apple", id: "apple-saved-deeplink", prepare: "skip", url: "wikipedia://saved", expected: /Saved articles|Reading lists/i });
-  for (const { mode, id, prepare, url, expected } of cases) {
+  // Keep the first rejected pairing distinct from a new capture of the changed,
+  // post-audit state. Never relabel or overwrite that first capture as successful.
+  const cases = [
+    { mode: "apple", id: "apple-onboarding-resize", expectedResize: true },
+    { mode: "apple", id: "apple-onboarding-settled", launchFresh: false, requires: "apple-onboarding-resize", expected: /encyclopedia/i },
+    { mode: "apple", id: "apple-exploration", launchFresh: false, requires: "apple-onboarding-settled", prepare: "next", expected: /New ways to explore|Places tab/i },
+    { mode: "apple", id: "apple-saved-deeplink", launchFresh: false, requires: "apple-exploration", prepare: "skip", url: "wikipedia://saved", expected: /Saved articles|Reading lists/i },
+    ...[1, 2].map((attempt) => ({ mode: "voiceover", id: `voiceover-onboarding-${attempt}`, expected: /Wikipedia|encyclopedia|language/i })),
+  ];
+  for (const { mode, id, prepare, url, expected, expectedResize, launchFresh = true, requires } of cases) {
     const root = join(out, id), config = root + ".json";
     try {
-      console.log(`${id}: launching Wikipedia`);
-      await launch(root);
+      console.log(`${id}: ${launchFresh ? "launching Wikipedia" : "preserving the prepared app state"}`);
+      if (requires) assert.ok(["captured", "unsupported"].includes(results.cases[requires]?.status), `prerequisite ${requires} failed`);
+      if (launchFresh) await launch(root);
+      else enableBridge();
       if (prepare) await tap(prepare === "next" ? "App Onboarding Next Button" : "App Onboarding Skip Button");
       let nav = { mode: "current-screen", screenId: id };
       if (url) {
@@ -91,6 +123,7 @@ try {
       const log = run(process.execPath, ["bin/aloud.mjs", "ios", "--config", config, "--no-gate",
         ...(mode === "apple" ? ["--apple-audit"] : ["--voiceover", "real"])], { timeout: 600000 });
       writeFileSync(root + ".log", log);
+      assert.ok(!expectedResize, "the first audit now preserves its screen; review and promote this case");
       const summary = JSON.parse(readFileSync(join(root, "ios/summary.json")));
       assert.ok(summary.screens[id]);
       const speech = JSON.parse(readFileSync(join(root, `ios/${id}.transcript.json`)));
@@ -107,9 +140,13 @@ try {
         results.cases[id] = { status: "captured", issues: tree.appleAudit.issues.length };
       }
     } catch (error) {
-      failed = true;
       appendFileSync(root + ".log", `${error.stdout ?? ""}\n${error.stderr ?? ""}\n${error.stack}`);
       results.cases[id] = { status: "failed", error: error.message };
+      if (expectedResize) {
+        try { results.cases[id] = verifyResizeRejection(root, id, error); }
+        catch (verificationError) { appendFileSync(root + ".log", `\n${verificationError.stack}`); }
+      }
+      if (results.cases[id].status === "failed") failed = true;
     }
     writeFileSync(join(out, "results.json"), JSON.stringify(results, null, 2));
     console.log(id, results.cases[id].status);
