@@ -13,9 +13,9 @@ the app are not failures of the capture tool.
   navigation, repeated runs, and restoration of accessibility/TTS state.
 - iOS: native Apple audit and real VoiceOver on an independently built app.
   Verify repeated onboarding captures, navigation to the exploration page,
-  and an Apple audit of Saved after explicitly confirming its deep link during
-  setup. Verify that these current-screen captures survive harness activation
-  and foreground transitions. Preserve actual speech and explicitly partial coverage.
+  and rejection of Saved audits whose navigation geometry changes. Confirm
+  its deep link explicitly during setup. Verify that successful current-screen
+  captures survive harness activation and foreground transitions. Preserve actual speech and explicitly partial coverage.
 - Record toolchain versions, app build identities, screen identities, and raw
   evidence. A passing controlled fixture does not substitute for these runs.
 
@@ -54,19 +54,16 @@ captures, not passing audits. The automated suite retains the ATF rejection and
 checks that report regeneration cannot promote it. The short Abacheri article
 is a separate WebView case; live Wikipedia content is not a fixed golden baseline.
 
-The `xcode-27` runner label has selected different images: the successful early
-VoiceOver diagnostic captures used beta 6 (`27A5252f`, simulator `24A5423a`),
-while a later app-build run used `27A266a` from a directory still named
-`Xcode_27_Release_Candidate.app`. [Apple’s release list](https://developer.apple.com/news/releases/)
-identifies `27A266a` as the September 14, 2026 Xcode 27 release (checked September
-17). CI now requires that exact released build before building the external app
-and records available simulator runtimes. The harness retains the directory
-hint and release reference separately; a directory name alone cannot establish
-release status. The early beta captures do not establish released-toolchain
-capture compatibility. A later run captured speech using released Xcode
-`27A266a` with simulator runtime `24A434`; that runtime differs from Apple’s
-September 14 iOS release (`24A437`). Keep toolchain and OS-runtime identities
-separate when assessing compatibility. The pinned app needs a one-line `isolated deinit` compatibility patch
+CI selects Xcode by build identity: `27A266a`, which [Apple’s release list](https://developer.apple.com/news/releases/)
+identifies as the September 14, 2026 Xcode 27 release (checked September 17).
+The installation directory still says `Xcode_27_Release_Candidate.app`; the
+runner label has also selected beta 6 on earlier jobs. A directory name or
+runner label alone cannot establish release status. The harness retains the
+version, directory hint, and release reference separately.
+
+The validated simulator runtime is iOS 27 build `24A434`, which differs from
+Apple’s September 14 iOS release (`24A437`). This validates the released Xcode
+build on the recorded simulator, not every released OS runtime. The pinned app needs a one-line `isolated deinit` compatibility patch
 for its settings controller on this SDK. The patch is committed alongside the
 harness; the evidence includes the complete tracked source diff and app version.
 An empty `OpenSourceDebug.xcconfig` supplies upstream's generated simulator
@@ -87,13 +84,19 @@ remains exact. The initial case also accepts a coherent capture if a newer
 runtime no longer causes the resize; it always validates the normal completed
 report before recording that outcome.
 
+On Saved, the native audit completes but changes the navigation bar height
+from 144 to 224 points; the next audit changes it back to 144. Other normalized
+elements stay equal. Both pairings remain unsupported. The suite verifies the
+specific geometry changes, completed native audit identities, and rejection
+when reports are regenerated. It does not loosen geometry matching or turn
+these captures into passing screen reports.
+
 Unattended iOS `deeplinks` mode encountered SpringBoard’s “Open in Wikipedia?”
 confirmation. Apple rejected the obscured target (`Invalid target app`); the
 failed capture retained the dialog tree and produced no passing report. That
-dialog also blocked later app launches in the same diagnostic run. The revised
-suite runs VoiceOver first and explicitly confirms the URL during setup before
-using `current-screen` for Saved. This is validation of a prepared deep-link
-screen, not successful unattended CLI deep-link navigation. That mode remains
+dialog also blocked later app launches in the same diagnostic run. The suite
+runs VoiceOver first and explicitly confirms the URL during setup before using
+`current-screen` for Saved. Unattended CLI deep-link navigation remains
 unresolved on this app; no automatic dialog dismissal was added to Aloud.
 
 ## Results
@@ -117,29 +120,39 @@ passes accessibility checks. All cases restored accessibility/TTS settings and
 TalkBack preferences. An earlier local attempt timed out in adb during article
 traversal and remains failed evidence; the table describes a separate fresh run.
 
-The [Android native regression suites](https://github.com/IRS-Public/aloud/actions/runs/35260257219)
+The [Android native regression suites](https://github.com/IRS-Public/aloud/actions/runs/35270741991)
 passed for focus traversal, ATF capture, logging TTS, and queue/process recovery.
 All 245 device-free tests passed.
 
-[Wikipedia Android CI](https://github.com/IRS-Public/aloud/actions/runs/35260257230/job/105334057329)
+[Wikipedia Android CI](https://github.com/IRS-Public/aloud/actions/runs/35270742053/job/105369111478)
 also passed on Android 14 x86_64 with Node 24.20.0. The three native captures
-matched the local node/utterance counts; the article produced 90 nodes and 85
+matched the local node/utterance counts; the article produced 90 nodes and 88
 transcript lines, including one stopped request. All state-restoration and
 incomplete-report rejection checks passed. Download `wikipedia-android-evidence`
 from that run for raw artifacts.
 
-The [iOS diagnostic run](https://github.com/IRS-Public/aloud/actions/runs/35255884301/job/105319296430)
-captured real VoiceOver twice on Wikipedia onboarding using beta 6: each retained 11
-utterances, stopped at the 10-step budget, preserved the matching tree, and
-restored VoiceOver state. Both have `coverage.complete: false`. Two Apple
-audits completed and then failed the screen-pairing guard because of the Skip
-button resize. That run was stopped after these four cases to inspect its
-diagnostics; it is not a successful full-suite run. A [later beta-6 run](https://github.com/IRS-Public/aloud/actions/runs/35260257230/job/105334057045)
-verified the exact initial resize rejection, then successfully captured the
-settled onboarding and exploration screens, each with one native audit issue.
-It failed at the unattended Saved deep link because of the system confirmation;
-the remaining VoiceOver setup attempts were blocked by the same dialog. The
-released-toolchain suite and prepared Saved capture are still being validated.
+Released-Xcode runs retained these iOS outcomes on the pinned Wikipedia build:
+
+| Case | Result |
+| --- | --- |
+| VoiceOver onboarding, first and repeat | 11 API utterances each; matching tree; VoiceOver state restored; explicitly partial at the 10-step budget |
+| Initial onboarding Apple audit | Native audit completed; Skip resize rejected; no passing report |
+| Separate post-audit onboarding capture | Coherent capture with one report-only native issue |
+| Exploration page after tapping Next | Coherent capture with one report-only native issue |
+| Saved after confirming its deep link | Native audit completed; navigation-bar expansion rejected |
+| Saved repeat from the changed state | Native audit completed; navigation-bar contraction rejected |
+
+The [full external-app suite passed](https://github.com/IRS-Public/aloud/actions/runs/35270742053)
+on implementation commit `417a8a3`. All seven iOS cases verified their expected
+outcomes: four coherent captures (two explicitly partial VoiceOver captures and
+two Apple audit reports), plus three specific rejected pairings. Download
+`wikipedia-ios-evidence` from the run for raw speech, audit records, before/after
+trees, screenshots, and provenance. Earlier failed diagnostic runs remain
+failed evidence; they were not converted into successful reports.
+
+A successful suite verifies capture and rejection behavior. It does not mean
+Wikipedia passes accessibility checks, nor that every tested screen produced
+a coherent report. Known unsupported cases stay explicitly incomplete.
 
 ## Fixes found by the external app
 
