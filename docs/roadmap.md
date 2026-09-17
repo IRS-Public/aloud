@@ -3,6 +3,10 @@
 This plan prioritizes evidence we can validate. A working API spike is a
 starting point; it does not establish complete audit coverage.
 
+The [external-app validation record](real-app-validation.md) tracks pinned
+Wikipedia builds, capture results, toolchain constraints, and remaining coverage.
+It distinguishes successful evidence collection from app accessibility findings.
+
 ## 1. Apple accessibility audit
 
 Tracking: [#21](https://github.com/IRS-Public/aloud/issues/21).

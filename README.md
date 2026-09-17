@@ -266,6 +266,7 @@ Roadmap, in implementation order:
    [Setup and coverage](docs/android-atf.md).
 
 Acceptance criteria and dependencies: [technical roadmap](docs/roadmap.md).
+External app results and limits: [Wikipedia validation](docs/real-app-validation.md).
 
 ## Prior art, and the word "first"
 
