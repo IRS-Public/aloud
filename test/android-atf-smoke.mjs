@@ -103,6 +103,25 @@ try {
     assert.deepEqual(settings(), before); assert.equal(shell("cat", prefsPath), prefs);
     results[failure ? "restoreAfterFailure" : "restoreAfterSuccess"] = "verified";
   }
+  // Exercise the pass ordering and shared requirements with all three companion modes enabled.
+  await launch("nested");
+  {
+    const before = settings(), prefs = shell("cat", prefsPath), root = join(out, "runner-combined"), config = root + ".json";
+    writeFileSync(config, JSON.stringify({ out: root, app: { android: { package: target } },
+      nav: { mode: "current-screen", screenId: "combined" } }));
+    let log;
+    try {
+      log = execFileSync(process.execPath, ["bin/aloud.mjs", "android", "--config", config, "--atf", "--talkback", "focus", "--tts", "logging", "--no-gate"],
+        { stdio: "pipe", timeout: 150000 });
+    } catch (e) { writeFileSync(root + ".log", String(e.stdout ?? "") + String(e.stderr ?? "")); throw e; }
+    writeFileSync(root + ".log", log);
+    const summary = JSON.parse(readFileSync(join(root, "android/summary.json"))).screens.combined;
+    assert.equal(summary.androidAtf.checks.length, 6);
+    assert.equal(summary.talkBackFocus.loggingTts.complete, true);
+    assert.deepEqual(settings(), before); assert.equal(shell("cat", prefsPath), prefs);
+    results.combinedAtfFocusLoggingTts = "verified";
+    console.log("Combined ATF, focus traversal, and logging TTS passed with exact state restoration");
+  }
   await launch("atf-good");
   const before = settings(), prefs = shell("cat", prefsPath), root = join(out, "runner-signal"), config = root + ".json";
   writeFileSync(config, JSON.stringify({ out: root, app: { android: { package: target } }, android: { atf: true },
