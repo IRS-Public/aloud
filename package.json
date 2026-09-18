@@ -28,10 +28,27 @@
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
+    "test:web": "node --test test/web-smoke.mjs",
+    "test:web:nvda": "node test/web-nvda-smoke.mjs",
     "prepublishOnly": "npm test"
   },
   "dependencies": {
     "@openacr/openacr": "^0.3.8",
     "js-yaml": "^5"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@guidepup/guidepup": "0.34.0",
+    "playwright": "1.63.0"
+  },
+  "peerDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@guidepup/guidepup": "0.34.0",
+    "playwright": "1.63.0"
+  },
+  "peerDependenciesMeta": {
+    "@axe-core/playwright": { "optional": true },
+    "@guidepup/guidepup": { "optional": true },
+    "playwright": { "optional": true }
   }
 }

@@ -1,0 +1,10 @@
+{
+  "app": { "name": "Example web app", "version": "1.0.0" },
+  "web": {
+    "url": "http://127.0.0.1:3000",
+    "screens": "screens-web.example.json",
+    "screenReader": "none",
+    "locale": "en-US",
+    "viewport": { "width": 1280, "height": 800 }
+  }
+}

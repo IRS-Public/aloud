@@ -6,6 +6,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { validateScreenId } from "./screen-id.mjs";
+import { WEB_DEFAULTS, validateWebConfig } from "./web/config.mjs";
 
 export const NAV_MODES = ["current-screen", "deeplinks", "bridge"];
 
@@ -16,6 +17,7 @@ const DEFAULTS = {
   },
   android: { talkBack: "startup", talkBackMaxSteps: 100, tts: "system", atf: false },
   ios: { appleAudit: false, voiceOver: "computed", voiceOverMaxSteps: 20 },
+  web: WEB_DEFAULTS,
   nav: {
     mode: "current-screen",
     bridge: {
@@ -45,6 +47,8 @@ const PATH_KEYS = [
   ["app", "android", "apk"],
   ["app", "ios", "app"],
   ["openacr", "out"],
+  ["web", "screens"],
+  ["web", "storageState"],
 ];
 
 function resolvePathsInPlace(obj, baseDir) {
@@ -80,6 +84,7 @@ function deepMerge(base, extra) {
 }
 
 export function validateConfig(cfg) {
+  if (cfg.web !== undefined) validateWebConfig(cfg.web);
   if (cfg.android?.atf !== undefined && typeof cfg.android.atf !== "boolean") throw new Error("android.atf must be a boolean");
   if (cfg.android !== undefined && (!isPlainObject(cfg.android) ||
       (cfg.android.talkBack !== undefined && !["startup", "focus"].includes(cfg.android.talkBack)))) {
@@ -129,6 +134,7 @@ export function validateConfig(cfg) {
 
 // Leg-specific requirements, checked by bin/aloud.mjs before a leg spawns.
 export function validateForLeg(cfg, leg, { requireVersion = true } = {}) {
+  if (leg === "web" && !cfg.web?.url && !cfg.web?.screens) throw new Error("web needs --url or --screens (config web.url / web.screens)");
   if (leg === "android" && !cfg.app?.android?.package) {
     throw new Error(
       "the android leg needs app.android.package (e.g. com.example.app) — set it in aloud.config.json",
@@ -180,7 +186,7 @@ export function loadConfig(configPath, overrides = {}) {
     cfg.nav.bridge.readyExpr = `typeof globalThis.${cfg.nav.bridge.globals.nav} === 'function'`;
   }
   if (!cfg.openacr.description && cfg.app?.name) {
-    cfg.openacr.description = `${cfg.app.name} mobile app for iOS and Android.`;
+    cfg.openacr.description = cfg.web?.url || cfg.web?.screens ? `${cfg.app.name} application.` : `${cfg.app.name} mobile app for iOS and Android.`;
   }
 
   validateConfig(cfg);

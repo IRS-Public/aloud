@@ -20,6 +20,8 @@ import { atfSummary, atfFindings, atfTreeNodes, validateAtfEvidence } from "../a
 import { runChecks as androidTreeChecks } from "../android/ui-tree.mjs";
 import { isDeepStrictEqual } from "node:util";
 import { validateVoiceOverCapture } from "../ios/voiceover-capture.mjs";
+import { isWebReport } from "../web/evidence.mjs";
+import { reportWeb } from "../web/report.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -46,6 +48,12 @@ const BASELINE = opt("baseline", isIos ? cfg?.baseline?.ios : cfg?.baseline?.and
 if (!existsSync(OUT)) {
   console.error(`no reports at ${OUT} — run the audit walk first`);
   process.exit(1);
+}
+
+if (isWebReport(OUT)) {
+  try { reportWeb(OUT, { gate: GATE }); }
+  catch (error) { console.error(error.message); process.exit(1); }
+  process.exit(0);
 }
 
 const read = (f) => JSON.parse(readFileSync(join(OUT, f), "utf8"));
