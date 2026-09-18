@@ -3,6 +3,10 @@
 This plan prioritizes evidence we can validate. A working API spike is a
 starting point; it does not establish complete audit coverage.
 
+The [external-app validation record](real-app-validation.md) tracks pinned
+Wikipedia builds, capture results, toolchain constraints, and remaining coverage.
+It distinguishes successful evidence collection from app accessibility findings.
+
 ## 1. Apple accessibility audit
 
 Tracking: [#21](https://github.com/IRS-Public/aloud/issues/21).
@@ -39,11 +43,16 @@ exercises repeated labels, dynamic content, scrolling, and modals.
 
 Still required before promotion to the default:
 
+- Verify complete utterance text on supported runtimes; the external-app run
+  observed long API strings ending at 64 characters, which Aloud preserves
+  exactly. See the [validation record](real-app-validation.md).
 - Establish a verified traversal-completion signal. Neither repeated
   speech nor `noSpeech` establishes the end of a screen.
 - Pair moving or changing content with coherent tree/screenshot evidence;
   the current walker rejects changed screens and retains raw diagnostics.
-- Validate repeatably on supported GA toolchains and external apps.
+- Expand repeatable validation to released OS runtimes and more external apps.
+  The first external captures use released Xcode 27 with simulator `24A434`;
+  the toolchain and OS runtime have separate build identities.
 
 ## 3. TalkBack focus stepping
 

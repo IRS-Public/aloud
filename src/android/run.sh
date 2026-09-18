@@ -65,6 +65,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 ATF="$(cfg 'c.android?.atf')"
+NATIVE_ARGS=()
+if [ "$(cfg 'c.android?.talkBack')" = "focus" ]; then NATIVE_ARGS=(--native-capture); fi
 if [ "$ATF" = "true" ] && [[ " $PASSES " != *" tree "* ]]; then
   echo "android.atf requires the tree pass (--pass tree or both)" >&2; exit 1
 fi
@@ -161,14 +163,14 @@ for PASS in $PASSES; do
     # current-screen enables TalkBack inside its capture markers so the
     # initial announcement is retained. Other modes announce on navigation.
     if [ "$NAV_MODE" != "current-screen" ]; then
-      node "$ALOUD_HOME/src/android/talkback.mjs" enable ${TTS_ARGS[@]+"${TTS_ARGS[@]}"}
+      node "$ALOUD_HOME/src/android/talkback.mjs" enable ${TTS_ARGS[@]+"${TTS_ARGS[@]}"} ${NATIVE_ARGS[@]+"${NATIVE_ARGS[@]}"}
     fi
     node "$ALOUD_HOME/src/android/walk.mjs" --pass transcript --port "$PORT" ${FLOW_ARGS[@]+"${FLOW_ARGS[@]}"}
     node "$ALOUD_HOME/src/android/talkback.mjs" disable
   else
     if [ "$ATF" = "true" ]; then
       echo "── native tree and ATF pass (companion on) ──"
-      node "$ALOUD_HOME/src/android/talkback.mjs" enable
+      node "$ALOUD_HOME/src/android/talkback.mjs" enable --native-capture
     else
       echo "── tree pass (TalkBack off) ──"
       node "$ALOUD_HOME/src/android/talkback.mjs" disable || true

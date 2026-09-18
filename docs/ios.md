@@ -37,8 +37,10 @@ Why: the Homebrew formula, when its bottle misses the current runner
 image, falls back to a source build that demands a full Xcode 26
 toolchain. That breaks every time the runner image updates. The v1.1.8
 binary is what brew shipped anyway. The Python client is `pip install
-fb-idb`, on Python 3.11 (its grpclib/protobuf pins are unproven on newer
-Pythons).
+fb-idb==1.1.7`, on Python 3.11. Python 3.14 fails before capture because
+the client calls `asyncio.get_event_loop()` without creating an event loop.
+Use a Python 3.11 virtual environment and run `idb list-targets` before building
+a target app.
 
 A dump can also race the tree's realization: on the IRS app, a walk-time
 dump showed two of six list rows without their button trait while a

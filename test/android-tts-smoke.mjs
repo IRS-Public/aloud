@@ -15,10 +15,10 @@ const original = saveAccessibilityState(state, findTalkBack(), { tts: true });
 const keys = [...TTS_KEYS, "accessibility_enabled", "enabled_accessibility_services"];
 const settings = () => Object.fromEntries(keys.map((k) => [k, shell("settings", "get", "secure", k)]));
 try {
-  enable({ tts: "logging" });
+  enable({ tts: "logging", diagnosis: false });
   for (const mode of (process.env.ALOUD_TTS_SMOKE_MODES ?? "nested,scroll,dialog").split(",")) {
     shell("am", "force-stop", target);
-    shell("am", "start", "-n", target + "/.MainActivity", "--es", "mode", mode);
+    shell("am", "start", "-W", "-n", target + "/.MainActivity", "--es", "mode", mode);
     await new Promise((r) => setTimeout(r, 3500));
     const capture = await createFocusCapturer({ out, target, loggingTts: true })(mode);
     const accounting = validateFocusTts(capture);
@@ -34,13 +34,16 @@ try {
     console.log(`${mode}: every captured request has a completed engine receipt`);
   }
   if (!process.env.ALOUD_TTS_SMOKE_MODES) {
+    // Isolate the write-failure injection from the previous dialog traversal's
+    // focus and speech state. The negative test must reach its intended fault.
+    enable({ tts: "logging", diagnosis: false });
     shell("am", "force-stop", target);
-    shell("am", "start", "-n", target + "/.MainActivity", "--es", "mode", "nested");
+    shell("am", "start", "-W", "-n", target + "/.MainActivity", "--es", "mode", "nested");
     await new Promise((r) => setTimeout(r, 3500));
-    let journalPath;
+    let journalPath, injected = false;
     try {
       await assert.rejects(createFocusCapturer({ out, target, loggingTts: true, runAdb: (args, opts) => {
-        if (journalPath && args.includes("next")) shell("chmod", "400", journalPath);
+        if (journalPath && args.includes("next")) { shell("chmod", "400", journalPath); injected = true; }
         const output = adb(args, opts);
         if (args.includes("hello")) {
           const data = output.match(/data="([A-Za-z0-9+/=]+)"/);
@@ -51,6 +54,7 @@ try {
         }
         return output;
       } })("write-failure"), /incomplete.*tts-journal-error/);
+      assert.equal(injected, true, "the journal failure must actually be injected");
       results.journalWriteFailure = "rejected";
     } finally { if (journalPath) shell("chmod", "600", journalPath); }
     disable(); stopTalkBack(findTalkBack());
@@ -61,7 +65,7 @@ try {
     shell("settings", "put", "secure", "tts_default_pitch", "93");
     for (const fail of [false, true]) {
       shell("am", "force-stop", target);
-      shell("am", "start", "-n", target + "/.MainActivity", "--es", "mode", "nested");
+      shell("am", "start", "-W", "-n", target + "/.MainActivity", "--es", "mode", "nested");
       const before = settings();
       const prefsPath = "/data/user_de/0/com.android.talkback/shared_prefs/com.android.talkback_preferences.xml";
       const prefs = shell("cat", prefsPath);
@@ -90,7 +94,7 @@ try {
     writeFileSync(config, JSON.stringify({ out: root, app: { android: { package: target } },
       android: { talkBack: "focus", tts: "logging" }, nav: { mode: "current-screen", screenId: "signal" } }));
     shell("am", "force-stop", target);
-    shell("am", "start", "-n", target + "/.MainActivity", "--es", "mode", "scroll");
+    shell("am", "start", "-W", "-n", target + "/.MainActivity", "--es", "mode", "scroll");
     const child = spawn("bash", ["src/android/run.sh", "--pass", "transcript", "--no-gate"], {
       env: { ...process.env, ALOUD_CONFIG: config }, detached: true, stdio: ["ignore", "pipe", "pipe"],
     });

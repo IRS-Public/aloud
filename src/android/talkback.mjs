@@ -13,7 +13,8 @@
 //   and direct XML edits are invisible to a RUNNING service (Android caches
 //   prefs in memory), so we force-stop, write, then enable — in that order.
 // - `pref_diagnosis_mode=true` forces VERBOSE speech logging regardless of
-//   `pref_log_level`, and is immune to version-migration resets; we set both.
+//   `pref_log_level`, and is immune to version-migration resets; startup uses both.
+//   Native captures disable diagnosis mode: it also forces a visible debug overlay.
 // - `first_time_user`/`has_training_exit`/`has_onboarding_exit` (plus the
 //   restore-marker and 16.2 onboarding-shown flags) suppress the first-run
 //   tutorial that would otherwise cover the screen and block the walk.
@@ -60,8 +61,8 @@ export function findTalkBack() {
 
 const component = (pkg) => `${pkg}/${SERVICE_CLASS}`;
 
-function prefsXml() {
-  const lines = Object.entries(AUDIT_PREFS).map(([k, v]) =>
+export function prefsXml({ diagnosis = true } = {}) {
+  const lines = Object.entries({ ...AUDIT_PREFS, pref_diagnosis_mode: diagnosis, pref_log_overlay: false }).map(([k, v]) =>
     typeof v === "boolean"
       ? `    <boolean name="${k}" value="${v}" />`
       : `    <string name="${k}">${v}</string>`,
@@ -79,13 +80,13 @@ function ensureRoot() {
   adb(["wait-for-device"]); // adbd restarts after `adb root`
 }
 
-export function configure(pkg) {
+export function configure(pkg, { diagnosis = true } = {}) {
   ensureRoot();
   // Write BEFORE the service runs — a live service never re-reads the file.
   stopTalkBack(pkg);
   const dir = `/data/user_de/0/${pkg}/shared_prefs`;
   const file = `${dir}/${pkg}_preferences.xml`;
-  const b64 = Buffer.from(prefsXml()).toString("base64");
+  const b64 = Buffer.from(prefsXml({ diagnosis })).toString("base64");
   shell("mkdir", "-p", dir);
   shell("sh", "-c", `'echo ${b64} | base64 -d > ${file}'`);
   // Own the file like the app would, or the service can't read/rewrite it.
@@ -93,16 +94,16 @@ export function configure(pkg) {
   shell("chown", "-R", `${uid}:${uid}`, dir);
   shell("chmod", "771", dir);
   shell("chmod", "660", file);
-  console.log(`configured ${file} (diagnosis mode + tutorial suppressed)`);
+  console.log(`configured ${file} (diagnosis mode ${diagnosis ? "on" : "off"}; tutorial suppressed)`);
 }
 
-export function enable({ tts = "system" } = {}) {
+export function enable({ tts = "system", diagnosis = true } = {}) {
   if (!["system", "logging"].includes(tts)) throw new Error("TTS mode must be system or logging");
   const pkg = findTalkBack();
   if (!pkg) {
     throw new Error("TalkBack is not installed — run: aloud talkback install <apk>");
   }
-  configure(pkg);
+  configure(pkg, { diagnosis });
   if (tts === "logging") {
     const engine = "org.irs_public.aloud.tts";
     if (!shell("pm", "list", "packages").split(/\r?\n/).includes(`package:${engine}`)) throw new Error("recording TTS engine is not installed — run: aloud tts install <apk>");
@@ -158,7 +159,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     if (cmd === "snapshot") saveAccessibilityState(arg, findTalkBack(), { preferences: !process.argv.includes("--settings-only"), tts: process.argv.includes("--tts") });
     else if (cmd === "restore") restoreAccessibilityState(arg);
-    else if (cmd === "enable") enable({ tts: process.argv.includes("--logging-tts") ? "logging" : "system" });
+    else if (cmd === "enable") enable({ tts: process.argv.includes("--logging-tts") ? "logging" : "system", diagnosis: !process.argv.includes("--native-capture") });
     else if (cmd === "disable") disable();
     else if (cmd === "status") status();
     else if (cmd === "configure") {

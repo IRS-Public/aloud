@@ -1,0 +1,155 @@
+name: External app validation
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['test/real-app/**', '.github/workflows/real-app.yml']
+permissions:
+  contents: read
+concurrency:
+  group: real-app-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  wikipedia-ios:
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: npm ci
+      - name: Read pinned source identity
+        id: pin
+        run: echo "revision=$(node -p 'JSON.parse(require("fs").readFileSync("test/real-app/wikipedia.json")).ios.revision')" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          repository: wikimedia/wikipedia-ios
+          ref: ${{ steps.pin.outputs.revision }}
+          path: .external/wikipedia-ios
+          persist-credentials: false
+      - name: Select released Xcode build
+        run: |
+          for app in /Applications/Xcode*.app; do
+            selected_developer_dir="$app/Contents/Developer"
+            version="$(DEVELOPER_DIR="$selected_developer_dir" xcodebuild -version)" || continue
+            if echo "$version" | grep -qx 'Build version 27A266a'; then
+              echo "DEVELOPER_DIR=$selected_developer_dir" >> "$GITHUB_ENV"
+              echo "Selected $app: $version"
+              exit 0
+            fi
+          done
+          echo 'The runner has no verified released Xcode 27 build (27A266a).' >&2
+          exit 1
+      - name: Install capture tools
+        run: |
+          brew install xcodegen
+          brew tap facebook/fb
+          brew trust --formula facebook/fb/idb-companion
+          brew install facebook/fb/idb-companion
+          python3 -m venv "$RUNNER_TEMP/idb-env"
+          "$RUNNER_TEMP/idb-env/bin/pip" install fb-idb==1.1.7
+          "$RUNNER_TEMP/idb-env/bin/idb" list-targets
+          echo "$RUNNER_TEMP/idb-env/bin" >> "$GITHUB_PATH"
+      - name: Build pinned Wikipedia simulator app
+        timeout-minutes: 15
+        run: |
+          mkdir -p aloud-report/real-app-ios
+          xcodebuild -version | tee aloud-report/real-app-ios/xcode.txt
+          echo "${DEVELOPER_DIR:-$(xcode-select -p)}" | tee aloud-report/real-app-ios/developer-directory.txt
+          ls -d /Applications/Xcode* > aloud-report/real-app-ios/installed-xcodes.txt
+          # The runner label has also selected beta 6. Require Apple's released
+          # build identity, even when the installation directory still says RC.
+          grep -qx 'Build version 27A266a' aloud-report/real-app-ios/xcode.txt
+          xcrun simctl list runtimes -j > aloud-report/real-app-ios/simulator-runtimes.json
+          # Upstream normally generates this file for personal device signing.
+          # Simulator ad-hoc signing preserves required app-group entitlements.
+          touch .external/wikipedia-ios/Configurations/OpenSourceDebug.xcconfig
+          git -C .external/wikipedia-ios apply ../../test/real-app/wikipedia-xcode27.patch
+          set -o pipefail
+          xcodebuild build -project .external/wikipedia-ios/Wikipedia.xcodeproj -scheme Wikipedia -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/wikipedia-build" ONLY_ACTIVE_ARCH=YES ARCHS="$(uname -m)" CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=YES DEVELOPMENT_TEAM= > aloud-report/real-app-ios/app-build.log 2>&1
+          cp "$RUNNER_TEMP/wikipedia-build/Build/Intermediates.noindex/Wikipedia.build/Debug-iphonesimulator/Wikipedia.build/Wikipedia.app-Simulated.xcent" aloud-report/real-app-ios/simulator-entitlements.plist
+      - name: Validate native capture against Wikipedia
+        run: node test/real-app/ios.mjs
+        env:
+          ALOUD_WIKIPEDIA_APP: ${{ runner.temp }}/wikipedia-build/Build/Products/Debug-iphonesimulator/Wikipedia.app
+          ALOUD_WIKIPEDIA_SOURCE: ${{ github.workspace }}/.external/wikipedia-ios
+      - name: Retain Wikipedia crash diagnostics
+        if: always()
+        run: |
+          mkdir -p aloud-report/real-app-ios/crashes
+          find ~/Library/Logs/DiagnosticReports -maxdepth 1 -name 'Wikipedia*.ips' -exec cp {} aloud-report/real-app-ios/crashes/ \;
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: wikipedia-ios-evidence
+          path: |
+            aloud-report/real-app-ios
+            !aloud-report/real-app-ios/**/build/**
+          retention-days: 14
+  wikipedia-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm ci
+      - name: Prepare build tools and emulator
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/gradle.zip" https://services.gradle.org/distributions/gradle-8.14.3-bin.zip
+          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/gradle-8.14.3/bin" >> "$GITHUB_PATH"
+          mkdir -p ~/.gradle
+          cat > ~/.gradle/gradle.properties <<'PROPS'
+          org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m
+          org.gradle.daemon=false
+          org.gradle.workers.max=2
+          PROPS
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/cache/restore@v5
+        id: apk
+        with:
+          path: .aloud-cache/*.apk
+          key: talkback-companion-${{ hashFiles('src/android/get-talkback.sh', 'src/android/talkback-companion/**', 'src/android/tts-shared/**') }}
+      - name: Build companion if uncached
+        if: steps.apk.outputs.cache-hit != 'true'
+        run: bash src/android/get-talkback.sh --build --companion --no-native
+      - uses: actions/cache/save@v5
+        if: steps.apk.outputs.cache-hit != 'true'
+        with:
+          path: .aloud-cache/*.apk
+          key: talkback-companion-${{ hashFiles('src/android/get-talkback.sh', 'src/android/talkback-companion/**', 'src/android/tts-shared/**') }}
+      - name: Prepare logging engine and pinned Wikipedia APK
+        run: |
+          # The companion cache key does not cover recording-engine sources.
+          bash src/android/get-logging-tts.sh
+          curl --http1.1 -fL --retry 3 --retry-all-errors --connect-timeout 30 --max-time 300 "$(node -p 'JSON.parse(require("fs").readFileSync("test/real-app/wikipedia.json")).android.url')" -o "$RUNNER_TEMP/wikipedia.apk"
+      - name: Boot Android 14 emulator
+        run: bash src/android/boot-emulator-ci.sh
+      - name: Install capture services
+        run: |
+          "$ANDROID_HOME/platform-tools/adb" shell pm disable-user --user 0 com.google.android.googlequicksearchbox
+          node bin/aloud.mjs talkback install .aloud-cache/talkback.apk
+          "$ANDROID_HOME/platform-tools/adb" install -r -g .aloud-cache/logging-tts.apk
+      - name: Validate native capture against Wikipedia
+        run: node test/real-app/android.mjs
+        env:
+          ALOUD_WIKIPEDIA_APK: ${{ runner.temp }}/wikipedia.apk
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: wikipedia-android-evidence
+          path: |
+            aloud-report/real-app-android
+            ${{ runner.temp }}/emulator.log
+          retention-days: 14

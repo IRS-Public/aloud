@@ -248,9 +248,9 @@ Roadmap, in implementation order:
    coverage. This work does not depend on the VoiceOver beta API.
 2. **Real VoiceOver on iOS.** Opt-in per-screen capture preserves raw speech,
    target identity, and explicit partial coverage. A verified completion
-   signal and GA toolchain validation remain required before it becomes the
-   default. Today's baselines store tree errors, so no transcript migration
-   is needed. [Tracking #23](https://github.com/IRS-Public/aloud/issues/23).
+   signal, complete utterance text, and broader released-runtime validation
+   remain required before it becomes the default. Today's baselines store tree
+   errors, so no transcript migration is needed. [Tracking #23](https://github.com/IRS-Public/aloud/issues/23).
 3. **TalkBack focus stepping.** Opt-in `--talkback focus` drives the pinned
    TalkBack gesture pipeline and captures focus and speech requests, including
    scrolling and duplicate labels. Native backward/forward boundaries are
@@ -266,6 +266,7 @@ Roadmap, in implementation order:
    [Setup and coverage](docs/android-atf.md).
 
 Acceptance criteria and dependencies: [technical roadmap](docs/roadmap.md).
+External app results and limits: [Wikipedia validation](docs/real-app-validation.md).
 
 ## Prior art, and the word "first"
 

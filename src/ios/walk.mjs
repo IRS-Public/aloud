@@ -68,9 +68,11 @@ function bootedUdid() {
 }
 
 const SHOTS_DIR = join(OUT, "shots");
+const TREES_DIR = join(OUT, "capture-trees");
 
 async function walk() {
   mkdirSync(SHOTS_DIR, { recursive: true });
+  mkdirSync(TREES_DIR, { recursive: true });
   const udid = bootedUdid();
   const appleAuditor = cfg.ios?.appleAudit
     ? createAppleAuditor({ out: OUT, udid, bundleId: BUNDLE_ID }) : null;
@@ -133,7 +135,7 @@ async function walk() {
       simctl("io", udid, "screenshot", join(SHOTS_DIR, `${screen.id}.png`));
       const appleAudit = appleAuditor?.capture(screen.id);
       if (appleAudit) {
-        const afterAudit = await settledElements(udid, screen.id);
+        const afterAudit = await settledElements(udid, screen.id, "after-apple-audit");
         // XCTest briefly backgrounds the app. Reject apps that reset their
         // screen on activation, or audits that leave changed content behind.
         // Raw idb metadata can vary; compare normalized content and geometry.
@@ -144,7 +146,7 @@ async function walk() {
       }
       const voiceOver = voiceOverCapturer?.capture(screen.id);
       if (voiceOver) {
-        const afterSpeech = await settledElements(udid, screen.id);
+        const afterSpeech = await settledElements(udid, screen.id, "after-voiceover");
         const fingerprint = (els) => JSON.stringify(els.map(({ raw, ...el }) => el));
         if (fingerprint(elements) !== fingerprint(afterSpeech)) {
           throw new Error(`screen "${screen.id}": accessibility content changed during VoiceOver capture; raw speech is retained but cannot be paired with this tree or screenshot`);
@@ -199,7 +201,7 @@ const describeAll = (udid) => sh("idb", ["ui", "describe-all", "--udid", udid]);
 // settles, and the last dump is still the best evidence we have).
 const SETTLE_TRIES = 6;
 const SETTLE_INTERVAL_MS = 500;
-async function settledElements(udid, screenId) {
+async function settledElements(udid, screenId, phase = "before") {
   let prev;
   let elements;
   let lastError;
@@ -207,6 +209,9 @@ async function settledElements(udid, screenId) {
     if (i) await sleep(SETTLE_INTERVAL_MS);
     try {
       const next = describeAll(udid);
+      // Keep both sides of a rejected pairing available for diagnosis. Never
+      // reconstruct or silently substitute a tree after native capture.
+      writeFileSync(join(TREES_DIR, `${screenId}.${phase}.${i + 1}.json`), next);
       elements = normalizeElements(parseIdbOutput(next));
       validateIosCapture(elements);
       if (next === prev) return elements;

@@ -15,7 +15,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderReportHtml } from "./html.mjs";
 import { validateTalkBackFocusCapture, focusTranscript } from "../android/talkback-focus.mjs";
-import { focusTtsSummary } from "../android/tts-evidence.mjs";
+import { focusTtsSummary, validateFocusTts } from "../android/tts-evidence.mjs";
 import { atfSummary, atfFindings, atfTreeNodes, validateAtfEvidence } from "../android/atf-evidence.mjs";
 import { runChecks as androidTreeChecks } from "../android/ui-tree.mjs";
 import { isDeepStrictEqual } from "node:util";
@@ -91,7 +91,8 @@ for (const f of readdirSync(OUT).sort()) {
     }
     screens[r.screen] = { ...screens[r.screen], transcript: r.transcript, source: r.source,
       ...(r.talkBackFocus ? { talkBackFocus: r.talkBackFocus } : {}),
-      ...(r.talkBackFocus?.speechSource === "logging-tts" ? { loggingTts: focusTtsSummary(r.talkBackFocus) } : {}),
+      ...(r.talkBackFocus?.speechSource === "logging-tts" ? { loggingTts: focusTtsSummary(r.talkBackFocus),
+        loggingTtsRequests: validateFocusTts(r.talkBackFocus).requests.filter((request) => request.sequence >= r.talkBackFocus.commands.findIndex((c) => c.action === "first")) } : {}),
       ...(r.voiceOver ? { voiceOver: r.voiceOver } : {}),
     };
   }

@@ -124,7 +124,7 @@ test("restores present and absent TTS settings before accessibility is re-enable
   assert.ok(engine >= 0 && enabled > engine);
 });
 
-for (const mutation of ["none", "missing-engine", "truncated-log", "changed-transcript", "downgraded-source"]) {
+for (const mutation of ["none", "stopped-request", "stopped-synthesis-error", "failed-request", "missing-terminal", "missing-engine", "truncated-log", "changed-transcript", "downgraded-source"]) {
   test(`persisted logging report: ${mutation}`, async (t) => {
     const { mkdtempSync, readFileSync, writeFileSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
@@ -136,6 +136,25 @@ for (const mutation of ["none", "missing-engine", "truncated-log", "changed-tran
     c.loggingTts = { schemaVersion: 1, client: readFileSync(new URL("client.jsonl", root), "utf8"),
       engines: [readFileSync(new URL("engine.jsonl", root), "utf8")] };
     const transcript = focusTranscript(c);
+    if (["stopped-request", "stopped-synthesis-error", "failed-request", "missing-terminal"].includes(mutation)) {
+      const rows = c.loggingTts.client.trim().split("\n").map(JSON.parse);
+      const first = c.commands.findIndex((command) => command.action === "first");
+      const request = rows.find((row) => row.kind === "request" && row.data.operation === "speak" &&
+        row.data.text && row.data.metadata.scope?.sequence >= first);
+      const index = rows.findIndex((row) => row.kind === "done" && row.data.dispatchId === request.data.dispatchId);
+      assert.ok(index > 0);
+      if (mutation === "missing-terminal") rows.splice(index, 1);
+      else { rows[index].kind = mutation.startsWith("stopped-") ? "stop" : "error"; rows[index].data.interrupted = mutation.startsWith("stopped-"); }
+      c.loggingTts.client = stringify(rows.map((row, index) => ({ ...row, event: index + 1 })));
+      if (mutation === "stopped-synthesis-error") {
+        const engine = c.loggingTts.engines[0].trim().split("\n").map(JSON.parse);
+        const terminal = engine.find((row) => row.kind === "synthesis-complete" && row.data.dispatchId === request.data.dispatchId);
+        assert.ok(terminal);
+        terminal.kind = "synthesis-error";
+        terminal.data.result = -1;
+        c.loggingTts.engines[0] = stringify(engine);
+      }
+    }
     if (mutation === "missing-engine") c.loggingTts.engines = [];
     if (mutation === "truncated-log") c.loggingTts.client = c.loggingTts.client.trimEnd();
     if (mutation === "changed-transcript") transcript.pop();
@@ -147,11 +166,26 @@ for (const mutation of ["none", "missing-engine", "truncated-log", "changed-tran
     const result = spawnSync(process.execPath, ["src/report/report.mjs", "--dir", out], {
       env: { ...process.env, ALOUD_CONFIG: "" }, encoding: "utf8",
     });
-    assert.equal(result.status === 0, mutation === "none", result.stderr);
-    if (mutation === "none") {
+    const shouldPass = ["none", "stopped-request"].includes(mutation);
+    assert.equal(result.status === 0, shouldPass, result.stderr);
+    if (mutation === "missing-terminal") assert.match(result.stderr, /missing terminal callback/);
+    if (["failed-request", "stopped-synthesis-error"].includes(mutation)) assert.match(result.stderr, /dispatch or synthesis failed/);
+    if (shouldPass) {
       const summary = JSON.parse(readFileSync(join(out, "summary.json")));
       assert.equal(summary.screens.nested.talkBackFocus.loggingTts.requests, 9);
-      assert.match(readFileSync(join(out, "index.html"), "utf8"), /No spoken audio was generated/);
+      const html = readFileSync(join(out, "index.html"), "utf8");
+      assert.match(html, /No spoken audio was generated/);
+      assert.equal(summary.screens.nested.talkBackFocus.loggingTts.stoppedRequests, mutation === "stopped-request" ? 1 : 0);
+      if (mutation === "stopped-request") assert.match(html, /stopped before completion/);
     }
   });
 }
+
+// Diagnosis mode overrides pref_log_overlay=false in the pinned TalkBack build.
+// Native capture must turn diagnosis mode itself off to preserve screenshots.
+test("native capture preferences disable diagnostic overlays while startup retains diagnosis logging", async () => {
+  const { prefsXml } = await import("../src/android/talkback.mjs");
+  assert.match(prefsXml({ diagnosis: false }), /name="pref_diagnosis_mode" value="false"/);
+  assert.match(prefsXml({ diagnosis: false }), /name="pref_log_overlay" value="false"/);
+  assert.match(prefsXml(), /name="pref_diagnosis_mode" value="true"/);
+});

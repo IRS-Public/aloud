@@ -18,12 +18,12 @@ const keys = ["enabled_accessibility_services", "accessibility_enabled", "tts_de
 const settings = () => Object.fromEntries(keys.map((k) => [k, shell("settings", "get", "secure", k)]));
 const prefsPath = "/data/user_de/0/com.android.talkback/shared_prefs/com.android.talkback_preferences.xml";
 async function launch(mode) {
-  shell("am", "force-stop", target); shell("am", "start", "-n", target + "/.MainActivity", "--es", "mode", mode);
+  shell("am", "force-stop", target); shell("am", "start", "-W", "-n", target + "/.MainActivity", "--es", "mode", mode);
   await pause(3500);
 }
 const capture = (extra = {}) => createAtfCapturer({ out, target, ...extra });
 try {
-  enable();
+  enable({ diagnosis: false });
   for (const mode of ["bad", "good", "empty"]) {
     await launch("atf-" + mode);
     const e = await capture()(mode), n = validateAtfEvidence(e), summary = atfSummary(e);
@@ -68,7 +68,7 @@ try {
   await launch("atf-good");
   await assert.rejects(capture({ takeScreenshot: () => stopTalkBack(findTalkBack()) })("service-stopped"), /companion unavailable/);
   results.serviceStopped = "rejected";
-  enable(); await launch("permission");
+  enable({ diagnosis: false }); await launch("permission");
   const permission = adb(["logcat", "-d", "-s", "ALOUD_ATF_PERMISSION:I", "*:S"]);
   writeFileSync(join(out, "permission.log"), permission);
   assert.match(permission, /result=-17,data=receiver-not-invoked/); results.untrustedApp = "denied";

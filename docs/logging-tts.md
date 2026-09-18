@@ -57,6 +57,15 @@ stopped request may have been flushed before reaching synthesis; its callback
 must establish that outcome. Missing records, failed writes, process changes,
 ambiguous identities, and unfinished requests remain explicit incomplete
 evidence. They cannot become a passing capture when reports are regenerated.
+A focus step may legitimately replace its own speech, for example when exiting
+an Android WebView: TalkBack queues a boundary announcement and immediately
+flushes it with the next control's label. Accept a fully accounted `stop` callback
+within the same focus step, retain the requested text, and label it **stopped
+before completion** in the report. Dispatch failures, synthesis errors, missing
+terminal callbacks, and lifecycles extending beyond the step still fail capture.
+Summary counts distinguish completed and stopped requests. Existing failed
+capture envelopes remain incomplete; this does not promote old failed runs.
+
 Raw journals are exported under `<out>/android/tts-logging/<client-session>/`.
 The transcript artifact embeds the journals needed to revalidate accounting;
 the HTML report links to both independent streams. Failed and interrupted

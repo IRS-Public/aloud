@@ -200,6 +200,10 @@ function validateScreens(screens, platform = "input") {
             l.complete !== true || l.engine !== "org.irs_public.aloud.tts" || !isCount(l.requests) || l.requests < 1 ||
             l.requests < s.utterances || !isCount(l.queueEvents) ||
             ![l.clientSession, l.engineSession].every((v) => typeof v === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(v))) invalid("logging TTS needs complete engine accounting");
+        if ((l.completedRequests !== undefined || l.stoppedRequests !== undefined) &&
+            (!isCount(l.completedRequests) || !isCount(l.stoppedRequests) || l.completedRequests + l.stoppedRequests !== l.requests)) {
+          invalid("logging TTS request outcomes do not match the request count");
+        }
       } else if (t.loggingTts !== undefined) invalid("logging TTS accounting needs explicit speech provenance");
     }
     if (s.transcriptSource === "voiceover" || s.voiceOver !== undefined) {
@@ -346,7 +350,7 @@ export function buildAcr({
     transcriptMethods += " Screens marked talkback-focus use the pinned TalkBack gesture pipeline and speech-request listener, with both native traversal boundaries verified. This does not prove audible delivery, correct focus order, or WCAG conformance.";
   }
   if (audits.some((audit) => Object.values(audit.screens).some((s) => s.talkBackFocus?.speechSource === "logging-tts"))) {
-    transcriptMethods += " Logging TTS captures additionally verify durable requests against independent engine receipts and Android completion callbacks. The recording engine generates synthetic silence, not spoken audio; request accounting does not establish audible delivery or conformance.";
+    transcriptMethods += " Logging TTS captures additionally verify durable requests against independent engine receipts and Android terminal callbacks, retaining stopped requests explicitly. The recording engine generates synthetic silence, not spoken audio; request accounting does not establish audible delivery or conformance.";
   }
   const note302 =
     `Not evaluated; needs human review. Related evidence: ${transcriptNotes} ${transcriptMethods} ` +
