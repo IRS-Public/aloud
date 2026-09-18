@@ -11,6 +11,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { loadConfig, validateForLeg } from "../src/config.mjs";
+import { isWebReport } from "../src/web/evidence.mjs";
 
 const ALOUD_HOME = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -32,6 +33,9 @@ const LEG_OPTIONS = {
 };
 
 const OPTIONS = {
+  web: { ...GLOBAL_OPTIONS, url: { type: "string" }, screens: { type: "string" }, flow: { type: "string" },
+    "screen-id": { type: "string" }, "screen-reader": { type: "string" }, "storage-state": { type: "string" },
+    headed: { type: "boolean" }, "no-gate": { type: "boolean" } },
   android: { ...LEG_OPTIONS, apk: { type: "string" }, pass: { type: "string" },
     talkback: { type: "string" }, "talkback-max-steps": { type: "string" }, tts: { type: "string" }, atf: { type: "boolean" } },
   ios: { ...LEG_OPTIONS, app: { type: "string" }, "apple-audit": { type: "boolean" },
@@ -49,6 +53,7 @@ const OPTIONS = {
     ios: { type: "string" },
     report: { type: "string" },
     "report-ios": { type: "string" },
+    "report-web": { type: "string" },
     date: { type: "string" },
     catalog: { type: "string" },
     version: { type: "string" },
@@ -64,12 +69,13 @@ Commands:
                real checks and report into ./aloud-demo-report [--out <dir>]
   android      Run the Android leg: TalkBack transcript pass + tree pass + report + gate
   ios          Run the iOS leg: computed VoiceOver transcript + tree checks + report + gate
+  web          Experimental Chromium page checks and optional NVDA command evidence (report-only)
   talkback     Manage TalkBack on the device: status | install <apk> | enable | disable |
                configure | get [--foss|--build]
   tts          Build or install the optional silent recording TTS engine
   report       Re-aggregate an existing report dir (--dir, --baseline, --gate)
   baseline     Accept current counts into a baseline: aloud baseline <report-dir> [--baseline <file>]
-  openacr      Emit a draft OpenACR (--android/--ios baselines or --report/--report-ios dirs)
+  openacr      Emit a draft OpenACR (--android/--ios baselines or --report/--report-ios/--report-web dirs)
 
 Global flags:
   --config <file>   Config file (default: ./aloud.config.json if present)
@@ -92,6 +98,14 @@ Leg flags (android, ios):
   --apple-audit                 iOS only: add report-only Apple accessibility audit evidence
   --voiceover computed|real     iOS speech source (default: computed; real needs Xcode 27)
   --voiceover-max-steps N       Maximum forward moves for real speech (1–100, default: 20)
+
+Web flags:
+  --url <url>                  HTTP(S) page or base URL for a manifest
+  --screens <file>             Web scenario manifest; --flow selects flows
+  --screen-reader none|nvda    NVDA requires a dedicated Windows desktop
+  --storage-state <file>       Playwright authentication state (kept out of artifacts)
+  --headed                    Show Chromium (always enabled with NVDA)
+  --no-gate                   Optional acknowledgment; web captures are always report-only
 
   aloud --help          Show this help
   aloud --version       Show the aloud version
@@ -216,6 +230,20 @@ function runTalkback(argv) {
   run(process.execPath, [join(ALOUD_HOME, "src", "android", "talkback.mjs"), ...argv]);
 }
 
+function runWeb(argv) {
+  const { values } = parse("web", argv);
+  if (values.help) return console.log(USAGE);
+  const overrides = { web: {} };
+  for (const [flag, key] of [["url", "url"], ["screens", "screens"], ["screen-reader", "screenReader"], ["storage-state", "storageState"], ["headed", "headed"]]) {
+    setPath(overrides, ["web", key], values[flag]);
+  }
+  const { cfg, resolvedPath } = resolveAndWriteConfig(values, overrides);
+  try { validateForLeg(cfg, "web"); } catch (error) { fail(error.message); }
+  const args = [join(ALOUD_HOME, "src", "web", "run.mjs")];
+  for (const flag of ["flow", "screen-id"]) if (values[flag]) args.push(`--${flag}`, values[flag]);
+  run(process.execPath, args, resolvedPath);
+}
+
 function runDemo(argv) {
   if (argv.includes("--help")) {
     return console.log(
@@ -235,6 +263,11 @@ function runReport(argv) {
   if (values.help) return console.log(USAGE);
   const { cfg, resolvedPath } = resolveAndWriteConfig(values);
   const dir = values.dir ? resolve(values.dir) : join(cfg.out, "android");
+  if (isWebReport(dir)) {
+    const args = [join(ALOUD_HOME, "src", "report", "report.mjs"), "--out", dir];
+    if (values.gate) args.push("--gate");
+    return run(process.execPath, args, resolvedPath);
+  }
   const isIos = basename(dir) === "ios" || basename(dir).endsWith("-ios");
   const baseline = values.baseline
     ? resolve(values.baseline)
@@ -252,6 +285,7 @@ function runBaseline(argv) {
   const reportDir = positionals[0];
   if (!reportDir) fail("Usage: aloud baseline <report-dir> [--baseline <file>]");
   const dir = resolve(reportDir);
+  if (isWebReport(dir)) fail("Experimental web evidence is report-only; baselines are not enabled");
   const { cfg, resolvedPath } = resolveAndWriteConfig(values);
   const isIos = basename(dir) === "ios" || basename(dir).endsWith("-ios");
   const baseline = values.baseline
@@ -280,7 +314,7 @@ function runOpenacr(argv) {
     fail(`aloud openacr: ${err.message}`);
   }
   const args = [join(ALOUD_HOME, "src", "report", "openacr.mjs")];
-  for (const flag of ["android", "ios", "report", "report-ios", "date", "catalog", "version"]) {
+  for (const flag of ["android", "ios", "report", "report-ios", "report-web", "date", "catalog", "version"]) {
     if (values[flag]) args.push(`--${flag}`, values[flag]);
   }
   if (values.out) args.push("--out", cfg.openacr.out);
@@ -302,6 +336,9 @@ switch (command) {
     break;
   case "demo":
     runDemo(rest);
+    break;
+  case "web":
+    runWeb(rest);
     break;
   case "android":
   case "ios":

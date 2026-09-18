@@ -1,0 +1,44 @@
+name: Experimental web evidence
+on:
+  pull_request:
+    paths: ['src/web/**', 'src/report/**', 'src/config.mjs', 'bin/**', 'test/web*', 'test/web-fixture/**', 'package*.json', '.github/workflows/web.yml']
+  workflow_dispatch:
+    inputs:
+      nvda:
+        description: Run the experimental NVDA fixtures on a dedicated Windows runner
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:web
+  nvda:
+    if: github.event_name == 'workflow_dispatch' && inputs.nvda
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npx playwright install chromium
+      - run: npx --yes @guidepup/setup@0.25.3 setup --ci
+      - run: npx --yes @guidepup/setup@0.25.3 install
+      - run: npm run test:web:nvda
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-nvda-evidence
+          path: aloud-report/web-nvda-smoke
+          retention-days: 14

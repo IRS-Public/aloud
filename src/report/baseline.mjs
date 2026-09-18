@@ -18,6 +18,7 @@
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { isWebReport } from "../web/evidence.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -37,6 +38,10 @@ const reportDir = positional[0]
     : null;
 if (!reportDir) {
   console.error("usage: aloud baseline <report-dir> [--baseline <file>]");
+  process.exit(1);
+}
+if (isWebReport(reportDir)) {
+  console.error("Experimental web evidence is report-only; baselines are not enabled");
   process.exit(1);
 }
 const isIos = /ios\/?$/.test(reportDir);
