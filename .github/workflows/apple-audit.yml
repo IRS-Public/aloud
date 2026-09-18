@@ -31,7 +31,7 @@ jobs:
         run: node test/ios-apple-audit-smoke.mjs
       - name: Keep native audit diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apple-audit-smoke
           path: |

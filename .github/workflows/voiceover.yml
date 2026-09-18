@@ -37,7 +37,7 @@ jobs:
           ALOUD_VO_SMOKE_CASE: ${{ matrix.fixture }}
       - name: Keep native speech and diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: voiceover-smoke-${{ matrix.fixture }}
           path: |
