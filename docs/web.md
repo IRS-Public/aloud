@@ -70,10 +70,10 @@ instead of embedding credentials in `fill` steps.
 
 ## NVDA command capture
 
-NVDA is an experimental adapter awaiting a recorded Windows acceptance run.
-Passing structural tests does not establish NVDA support. Use a dedicated
-Windows test desktop. Aloud refuses to start if NVDA is already running, so
-Guidepup cannot replace an everyday screen-reader session. Setup modifies the
+NVDA is an experimental adapter with recorded Windows fixture acceptance below.
+Its validation applies to the recorded environment and scripted scenarios. Use
+a dedicated Windows test desktop. Aloud refuses to start if NVDA is already
+running, so Guidepup cannot replace an everyday screen-reader session. Setup modifies the
 test machine and installs Guidepup's supported NVDA assets:
 
 ```sh
@@ -157,14 +157,46 @@ separate unit suite exercises malformed artifacts and command-log handling.
 Run `npm run test:web:nvda` on the prepared Windows desktop, or dispatch the
 **Experimental web evidence** workflow with the NVDA input enabled. It repeats
 form, dialog, live-region, duplicate-label, and long-output cases and retains
-raw artifacts. A successful Windows fixture run and a separately documented
-external web-app run are required before advertising validated NVDA coverage.
+raw artifacts. Dispatched workflows also run the live TodoMVC React application
+through task creation, completion, and keyboard filtering, twice per mode.
+Run that external suite locally with `npm run test:web:external`, or set
+`ALOUD_WEB_READER=nvda` on a prepared Windows desktop. Each checkpoint creates
+its own task because this deployment resets its in-memory state on navigation.
+The app is independently hosted and mutable; it is not a pinned golden baseline.
 Browser gates need their own reviewed coverage policy, environment-specific
 baselines, and negative fixtures before activation.
 
-Local validation on 2026-09-18 passed the 253 device-free tests and the real
-Chromium suite using Node 26.3.1, Darwin 25.5.0, Chromium 153.0.8010.12,
-Playwright 1.63.0, and axe-core 4.13.0. The packaged CLI was also installed into
-a clean temporary project: its mobile commands load without the optional
-browser dependencies. These results do not validate the NVDA adapter or an
-external production web app.
+On 2026-09-20, all 288 device-free tests passed after integration with the latest
+report-evidence validation on `main`. The Chromium CLI suite also passed using
+Node 26.3.1, Darwin 25.5.0, Chromium 153.0.8010.12, Playwright 1.63.0, and axe-core
+4.13.0. A clean packaged install was checked on 2026-09-18: mobile commands load
+without the optional browser dependencies.
+
+[Windows acceptance run 35528690779](https://github.com/IRS-Public/aloud/actions/runs/35528690779)
+completed both fixture passes with Chromium 153.0.8010.12, Windows 10.0.26100,
+Guidepup 0.34.0, and Guidepup's NVDA bundle `0.2.1-2026.2`. Both runs recorded
+successful cleanup, verified artifact receipts, and passed every focus and
+speech assertion. Review of the retained logs confirmed three distinct
+`Repeat, button` entries and the entire long accessible name, including its
+final verification phrase. The form error, returned dialog focus, and live
+status announcement were captured in both runs.
+Regenerating a report and OpenACR from the downloaded Windows artifacts also
+passed: the OpenACR schema and catalog validators accepted the output, and all
+87 web components remained `not-evaluated`.
+
+[Combined acceptance run 35528852547](https://github.com/IRS-Public/aloud/actions/runs/35528852547)
+passed the Windows fixtures again and the live
+[TodoMVC React app](https://todomvc.com/examples/react/dist/) twice in each mode:
+headless Chromium on Linux and headed Chromium with NVDA on Windows. Each
+external run captured all three named states with verified receipts and
+successful cleanup. NVDA returned the toggle-all label, `checked` after task
+completion, and `Completed, link` during keyboard filtering. The suite retains
+the app's actual axe findings (`heading-order`, `label`, and `region`); these
+are findings in the target app, not failures of evidence capture.
+
+The same external suite passed twice locally in structural mode. This validates
+scripted interactions on a public sample application; authenticated apps,
+frames, shadow content, and broader production application coverage remain
+unvalidated. Neither the fixture nor external passes establish full traversal
+or audible delivery. Raw CI captures, screenshots, and reports are retained in
+the linked runs' artifacts for 14 days.

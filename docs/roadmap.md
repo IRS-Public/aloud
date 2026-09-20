@@ -113,14 +113,16 @@ components remain `not-evaluated`.
 
 The NVDA adapter captures Guidepup's formatted command output on a dedicated
 Windows desktop. It never substitutes structural text for speech and never
-claims full traversal. Its native acceptance workflow is opt-in; a real Windows
-run and an external app validation record remain required before promotion.
+claims full traversal. Its opt-in native acceptance workflow passed repeated
+Windows fixtures on 2026-09-20, including form errors, modal focus return,
+live regions, duplicate labels, and long output. External TodoMVC scenarios
+exercise creation, completion, and filtering with retained evidence.
 See [web setup and limits](web.md).
 
 Next acceptance steps:
 
-- Run the repeated Windows form-error, modal-return, live-region, duplicate-label,
-  and long-output fixtures. Retain the exact browser, NVDA, and Guidepup identities.
+- Repeat Windows acceptance when browser, NVDA, or Guidepup versions change;
+  retain the exact environment identities and raw command output.
 - Validate authenticated and changing page states on an external web app, including
   frames and shadow content, and record unsupported cases without loosening checks.
 - Define separate scan, assertion, and capture-completeness policies before browser

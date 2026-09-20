@@ -148,9 +148,10 @@ open aloud-report/web/index.html
 The default captures page structure and axe findings without a screen reader.
 It does not generate a speech transcript. A scenario manifest adds named page
 states and keyboard/focus assertions; `--screen-reader nvda` opts into the
-experimental Windows command-capture adapter. Its real Windows validation is
-still required. Browser results cannot pass a regression gate or assign web
-conformance levels yet. [Web documentation and examples](docs/web.md).
+experimental Windows command-capture adapter. Repeated Windows fixture runs
+have passed; see the recorded environments and limits below. Browser results
+cannot pass a regression gate or assign web conformance levels yet.
+[Web documentation and examples](docs/web.md).
 
 ### Draft OpenACR
 
@@ -284,9 +285,9 @@ Roadmap, in implementation order:
    and overlap with tree findings. New results remain report-only.
    [Setup and coverage](docs/android-atf.md).
 6. **Web app evidence.** Experimental `aloud web` uses pinned Chromium and
-   axe-core, with a separate NVDA command-capture adapter. Validate the Windows
-   fixtures and an external web app before promoting screen-reader coverage
-   or introducing browser gates. [Scope and validation](docs/web.md).
+   axe-core, with a separate NVDA command-capture adapter. Repeated Windows
+   fixtures validate scripted command capture; browser gates still require
+   their own coverage policy. [Scope and validation](docs/web.md).
 
 Acceptance criteria and dependencies: [technical roadmap](docs/roadmap.md).
 External app results and limits: [Wikipedia validation](docs/real-app-validation.md).
