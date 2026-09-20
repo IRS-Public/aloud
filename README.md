@@ -18,6 +18,9 @@ an HTML evidence page, and a draft OpenACR conformance report.
 - **iOS**: computed VoiceOver transcripts by default. Opt-in real speech
   through Xcode 27's `XCUIVoiceOverService` uses
   `--voiceover real --no-gate` and labels traversal as partial.
+- **Web (experimental)**: Chromium page checks, screenshots, and structural
+  snapshots, with an opt-in NVDA command-capture adapter for Windows. Web
+  evidence is report-only. [Setup and validation status](docs/web.md).
 
 Both audit legs have passed real CI runs on the IRS mobile app project it
 was built for.
@@ -132,6 +135,23 @@ Apple findings to the evidence page. Findings are **report-only** while the
 integration is calibrated; they do not change the tree-check gate or
 OpenACR conformance levels. A failed or incomplete native capture stops the
 run. See [docs/ios.md](docs/ios.md#apple-accessibility-audit-opt-in).
+
+### Web apps (experimental)
+
+```bash
+npm install --save-dev playwright@1.63.0 @axe-core/playwright@4.13.0
+npx playwright install chromium
+npx aloud web --url http://127.0.0.1:3000
+open aloud-report/web/index.html
+```
+
+The default captures page structure and axe findings without a screen reader.
+It does not generate a speech transcript. A scenario manifest adds named page
+states and keyboard/focus assertions; `--screen-reader nvda` opts into the
+experimental Windows command-capture adapter. Repeated Windows fixture runs
+have passed; see the recorded environments and limits below. Browser results
+cannot pass a regression gate or assign web conformance levels yet.
+[Web documentation and examples](docs/web.md).
 
 ### Draft OpenACR
 
@@ -264,6 +284,10 @@ Roadmap, in implementation order:
    4.1.1 checks. Reports preserve exact element identities, skipped results,
    and overlap with tree findings. New results remain report-only.
    [Setup and coverage](docs/android-atf.md).
+6. **Web app evidence.** Experimental `aloud web` uses pinned Chromium and
+   axe-core, with a separate NVDA command-capture adapter. Repeated Windows
+   fixtures validate scripted command capture; browser gates still require
+   their own coverage policy. [Scope and validation](docs/web.md).
 
 Acceptance criteria and dependencies: [technical roadmap](docs/roadmap.md).
 External app results and limits: [Wikipedia validation](docs/real-app-validation.md).

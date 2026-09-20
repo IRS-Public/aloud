@@ -29,6 +29,7 @@ import { dirname, join } from "node:path";
 import { dump, load } from "js-yaml";
 import { validateVoiceOverCoverage } from "../ios/voiceover-capture.mjs";
 import { validateAtfSummary } from "../android/atf-evidence.mjs";
+import { readWebReport, webSummary } from "../web/evidence.mjs";
 
 // The catalog names the edition the draft is built against. WCAG 2.2 is
 // required: the touch-target rules map to 2.5.8, which exists only there.
@@ -236,6 +237,7 @@ function validateScreens(screens, platform = "input") {
 // { generated, screens: {...} }. Normalize both.
 export function normalizeAudit(data) {
   if (!isRecord(data)) throw new Error("invalid audit: expected a baseline or report object");
+  if (data.platform === "web") throw new Error("web evidence requires --report-web so raw captures can be verified");
   const audit = Object.hasOwn(data, "screens")
     ? { screens: data.screens, generated: data.generated ?? null }
     : { screens: data, generated: null };
@@ -306,6 +308,7 @@ export function buildAcr({
   catalog,
   android,
   ios,
+  web,
   date,
   productVersion,
   appName,
@@ -319,7 +322,13 @@ export function buildAcr({
   const audits = [];
   if (android != null) audits.push({ platform: "Android", screens: android.screens });
   if (ios != null) audits.push({ platform: "iOS", screens: ios.screens });
-  if (audits.length === 0) throw new Error("no audit input: provide at least one platform audit");
+  if (audits.length === 0 && !web) throw new Error("no audit input: provide at least one platform audit");
+  if (web && (web.platform !== "web" || web.reportOnly !== true || !isRecord(web.screens) || !Object.keys(web.screens).length ||
+    Object.values(web.screens).some((s) => s.errors !== null || s.ruleIds?.length !== 0 || s.web?.reportOnly !== true ||
+      s.web?.coverage?.scenarioComplete !== true || s.web?.coverage?.fullTraversal !== false))) throw new Error("invalid report-only web summary");
+  const webNotes = web ? ` Experimental web checks captured ${Object.keys(web.screens).length} named state(s) in ${web.environment.browser} ${web.environment.browserVersion}. ` +
+    `Speech source: ${web.environment.screenReader === "nvda" ? "NVDA command output formatted by Guidepup" : "none; no screen reader was run"}. ` +
+    "Scripted scenario completion does not establish full traversal or conformance. All web results are report-only; review raw axe results, incomplete checks, and interaction evidence in the HTML report." : "";
 
   // Refuse rule ids the emitter does not know. Without this, a new audit
   // rule with baseline errors would be invisible to every mapped criterion
@@ -379,7 +388,18 @@ export function buildAcr({
       }
       return { num: c.id, components: [{ name: component, adherence }] };
     });
-    chapters[chapter.id] = { criteria };
+    chapters[chapter.id] = { criteria: criteria.map((criterion, i) => {
+      const components = audits.length ? criterion.components : [];
+      const catalogCriterion = chapter.criteria[i];
+      if (web && catalogCriterion.components.includes("web")) components.push({ name: "web", adherence: {
+        level: "not-evaluated", notes: `Needs human review.${webNotes}`,
+      } });
+      // Non-web catalog components are left unevaluated in a web-only draft.
+      if (!components.length) components.push({ name: catalogCriterion.components[0], adherence: {
+        level: "not-evaluated", notes: NOT_EVALUATED_NOTE,
+      } });
+      return { ...criterion, components };
+    }) };
   }
 
   const completed = selectScreens(audits, (s) => s.errors !== null);
@@ -406,7 +426,7 @@ export function buildAcr({
     product: {
       name: appName,
       version: productVersion,
-      description: appDescription || `${appName} mobile app for iOS and Android.`,
+      description: appDescription || (web ? `${appName} application.` : `${appName} mobile app for iOS and Android.`),
     },
     author: {
       name: authorName || "Automated draft — aloud openacr",
@@ -416,14 +436,14 @@ export function buildAcr({
     notes:
       "DRAFT. This report is generated from the automated 508 audit " +
       "(https://github.com/IRS-Public/aloud/blob/main/docs/how-it-works.md). It records only what " +
-      `automation can prove. ${treeNotes}${missingNotes}${appleNotes}${atfNotes} ${transcriptNotes} ${transcriptMethods} Every criterion marked ` +
+      `automation can prove. ${treeNotes}${missingNotes}${appleNotes}${atfNotes}${webNotes} ${transcriptNotes} ${audits.length ? transcriptMethods : ""} Every criterion marked ` +
       "'not-evaluated' needs a human review. A Section 508 office must complete " +
       "those rows and replace the author contact before publication.",
     evaluation_methods_used:
-      "Automated accessibility-tree checks use device or simulator dumps " +
+      (audits.length ? "Automated accessibility-tree checks use device or simulator dumps " +
       (atfScreens.length ? "(AccessibilityNodeInfo in Android ATF mode, uiautomator in standard Android mode, idb on iOS). " : "(uiautomator on Android, idb on iOS). ") +
       `${treeNotes}${missingNotes}${appleNotes}${atfNotes} ${transcriptNotes} ${transcriptMethods} Rules and WCAG ` +
-      "mapping: src/android/ui-tree.mjs and src/ios/tree.mjs. " +
+      "mapping: src/android/ui-tree.mjs and src/ios/tree.mjs. " : "") + webNotes +
       "No human evaluation yet.",
     catalog: CATALOG_ID,
     chapters,
@@ -466,15 +486,16 @@ function main() {
 
   const android = loadAudit(opt("report", null), opt("android", null), cfg?.baseline?.android);
   const ios = loadAudit(opt("report-ios", null), opt("ios", null), cfg?.baseline?.ios);
-  if (!android && !ios) {
+  const web = opt("report-web", null) ? webSummary(readWebReport(opt("report-web", null))) : null;
+  if (!android && !ios && !web) {
     console.error(
-      "no audit input: pass --android/--ios baseline files or --report/--report-ios dirs, " +
+      "no audit input: pass --android/--ios baseline files or --report/--report-ios/--report-web dirs, " +
         "or set baseline paths in aloud.config.json",
     );
     process.exit(1);
   }
 
-  const generated = android?.generated ?? ios?.generated;
+  const generated = android?.generated ?? ios?.generated ?? web?.generated;
   const date = opt(
     "date",
     generated ? generated.slice(0, 10) : new Date().toISOString().slice(0, 10),
@@ -501,6 +522,7 @@ function main() {
     catalog,
     android,
     ios,
+    web,
     date,
     productVersion,
     appName,

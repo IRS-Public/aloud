@@ -20,6 +20,8 @@ import { atfSummary, atfFindings, atfTreeNodes, validateAtfEvidence } from "../a
 import { runChecks as androidTreeChecks } from "../android/ui-tree.mjs";
 import { isDeepStrictEqual } from "node:util";
 import { validateVoiceOverCapture } from "../ios/voiceover-capture.mjs";
+import { isWebReport } from "../web/evidence.mjs";
+import { reportWeb } from "../web/report.mjs";
 import { validateBaseline, validateTreeReport } from "./validation.mjs";
 
 const args = process.argv.slice(2);
@@ -49,6 +51,11 @@ if (!existsSync(OUT)) {
   process.exit(1);
 }
 
+if (isWebReport(OUT)) {
+  try { reportWeb(OUT, { gate: GATE }); }
+  catch (error) { console.error(error.message); process.exit(1); }
+  process.exit(0);
+}
 // Reject malformed baselines before emitting summaries or accepting a gate.
 const baseline = GATE && BASELINE
   ? validateBaseline(existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")) : {}, BASELINE)

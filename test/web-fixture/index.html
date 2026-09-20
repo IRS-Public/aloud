@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Aloud web fixture</title>
+<style>body{font:18px/1.5 system-ui;background:#fff;color:#111;padding:2rem}button,input{font:inherit;padding:.8rem;margin:.3rem}:focus-visible{outline:3px solid #174acb}dialog{padding:2rem}#unnamed{width:50px;height:50px}</style>
+</head><body><main><h1>Account settings</h1>
+<form novalidate><label for="email">Email</label><input id="email" type="email" aria-describedby="error"><button id="submit">Save email</button><p id="error" role="alert"></p></form>
+<button id="open" type="button">Open preferences</button>
+<dialog id="preferences" aria-labelledby="dialog-title"><h2 id="dialog-title">Preferences</h2><button id="close" autofocus>Close preferences</button></dialog>
+<button id="update">Check status</button><p id="status" role="status"></p>
+<button id="unnamed" type="button"></button>
+<button id="repeat-one">Repeat</button><button id="repeat-two">Repeat</button>
+<button id="long">This deliberately long accessible name must remain complete beyond sixty four characters including this final verification phrase</button>
+</main><script>
+const email=document.querySelector('#email'),error=document.querySelector('#error'),dialog=document.querySelector('dialog');
+document.querySelector('form').addEventListener('submit',e=>{e.preventDefault();if(!email.value){error.textContent='Enter an email address';email.setAttribute('aria-invalid','true');email.focus()}else{error.textContent='Email saved';email.removeAttribute('aria-invalid')}});
+document.querySelector('#open').addEventListener('click',()=>dialog.showModal());
+document.querySelector('#close').addEventListener('click',()=>dialog.close());
+document.querySelector('#update').addEventListener('click',()=>{const s=document.querySelector('#status');s.textContent=s.textContent==='Your account is up to date'?'Your account has no new changes':'Your account is up to date'});
+</script></body></html>

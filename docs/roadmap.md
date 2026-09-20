@@ -101,3 +101,31 @@ clearing after correction, plus read-only content, changing screens, process
 loss, permission denial, and cleanup. These checks remain report-only and add
 no OpenACR conformance claims. Broader app/framework validation and additional
 checks require their own fixtures before expanding the supported suite.
+
+## 6. Web app evidence
+
+The experimental `aloud web` leg captures named Chromium page states with
+axe-core findings, structural ARIA snapshots, screenshots, and scripted
+keyboard/focus assertions. Browser packages are optional peers. Run identities,
+expected states, artifact receipts, explicit speech sources, and cleanup
+status survive re-aggregation. Web results are report-only, and web OpenACR
+components remain `not-evaluated`.
+
+The NVDA adapter captures Guidepup's formatted command output on a dedicated
+Windows desktop. It never substitutes structural text for speech and never
+claims full traversal. Its opt-in native acceptance workflow passed repeated
+Windows fixtures on 2026-09-20, including form errors, modal focus return,
+live regions, duplicate labels, and long output. External TodoMVC scenarios
+exercise creation, completion, and filtering with retained evidence.
+See [web setup and limits](web.md).
+
+Next acceptance steps:
+
+- Repeat Windows acceptance when browser, NVDA, or Guidepup versions change;
+  retain the exact environment identities and raw command output.
+- Validate authenticated and changing page states on an external web app, including
+  frames and shadow content, and record unsupported cases without loosening checks.
+- Define separate scan, assertion, and capture-completeness policies before browser
+  gating. Baselines must identify the browser/reader/OS/locale/viewport and rule suite.
+- Validate additional browser and screen-reader combinations independently. A
+  Playwright WebKit run must not be labeled as Safari coverage.

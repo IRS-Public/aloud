@@ -1,0 +1,24 @@
+[
+  {
+    "id": "account",
+    "title": "Account settings",
+    "screens": [
+      {
+        "id": "account-home",
+        "title": "Account home",
+        "url": "/account",
+        "ready": "main"
+      },
+      {
+        "id": "preferences-open",
+        "title": "Preferences dialog",
+        "url": "/account",
+        "ready": "main",
+        "steps": [
+          { "action": "click", "selector": "#open-preferences" },
+          { "action": "wait", "selector": "[role=dialog]" }
+        ]
+      }
+    ]
+  }
+]

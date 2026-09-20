@@ -1,5 +1,10 @@
 # The draft OpenACR
 
+Experimental web reports use `aloud openacr --report-web aloud-report/web`.
+The emitter verifies raw captures and keeps every web component
+`not-evaluated`. Web findings and scripted interactions are report-only;
+they do not change native software conformance levels. See [web scope](web.md).
+
 ## What OpenACR is
 
 [OpenACR](https://github.com/GSA/openacr) is the GSA's machine-readable
