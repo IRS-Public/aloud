@@ -201,8 +201,13 @@ config) records per screen `{ errors, ruleIds }`. The gate is a ratchet:
 baseline. Run it to accept an initial baseline or after a fix lowers the
 counts, and commit the result with the change that earned it. The gate
 summary is computed once, in the walker, and embedded in each report as
-`.gate`; the baseline tool never re-derives it, so the gate and the
-baseline cannot drift. `--no-gate` on a leg skips the gate for that run.
+`.gate`. The report and baseline tools validate that summary against the
+error findings before using it. Invalid counts, duplicate or empty rule IDs,
+and contradictory findings stop the command. Baseline updates validate all
+existing entries and supplied tree reports before writing; an invalid input
+leaves the baseline unchanged. Valid filtered runs still preserve untouched
+screens. `--no-gate` on a leg skips the ratchet comparison, not validation of
+the supplied tree evidence.
 
 ## Draft OpenACR
 
