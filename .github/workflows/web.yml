@@ -1,7 +1,7 @@
 name: Experimental web evidence
 on:
   pull_request:
-    paths: ['src/web/**', 'src/report/**', 'src/config.mjs', 'bin/**', 'test/web*', 'test/web-fixture/**', 'package*.json', '.github/workflows/web.yml']
+    paths: ['src/web/**', 'src/report/**', 'src/config.mjs', 'bin/**', 'test/web*', 'test/web-fixture/**', 'test/real-app/web.mjs', 'package*.json', '.github/workflows/web.yml']
   workflow_dispatch:
     inputs:
       nvda:
@@ -22,6 +22,14 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:web
+      - run: npm run test:web:external
+        if: github.event_name == 'workflow_dispatch'
+      - uses: actions/upload-artifact@v4
+        if: always() && github.event_name == 'workflow_dispatch'
+        with:
+          name: web-external-chromium-evidence
+          path: aloud-report/web-external-none
+          retention-days: 14
   nvda:
     if: github.event_name == 'workflow_dispatch' && inputs.nvda
     runs-on: windows-latest
@@ -36,9 +44,14 @@ jobs:
       - run: npx --yes @guidepup/setup@0.25.3 setup --ci
       - run: npx --yes @guidepup/setup@0.25.3 install
       - run: npm run test:web:nvda
+      - run: npm run test:web:external
+        env:
+          ALOUD_WEB_READER: nvda
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: web-nvda-evidence
-          path: aloud-report/web-nvda-smoke
+          path: |
+            aloud-report/web-nvda-smoke
+            aloud-report/web-external-nvda
           retention-days: 14

@@ -30,6 +30,7 @@
     "test": "node --test test/*.test.mjs",
     "test:web": "node --test test/web-smoke.mjs",
     "test:web:nvda": "node test/web-nvda-smoke.mjs",
+    "test:web:external": "node test/real-app/web.mjs",
     "prepublishOnly": "npm test"
   },
   "dependencies": {
