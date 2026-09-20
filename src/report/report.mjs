@@ -20,6 +20,7 @@ import { atfSummary, atfFindings, atfTreeNodes, validateAtfEvidence } from "../a
 import { runChecks as androidTreeChecks } from "../android/ui-tree.mjs";
 import { isDeepStrictEqual } from "node:util";
 import { validateVoiceOverCapture } from "../ios/voiceover-capture.mjs";
+import { validateBaseline, validateTreeReport } from "./validation.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -48,11 +49,16 @@ if (!existsSync(OUT)) {
   process.exit(1);
 }
 
+// Reject malformed baselines before emitting summaries or accepting a gate.
+const baseline = GATE && BASELINE
+  ? validateBaseline(existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")) : {}, BASELINE)
+  : null;
+
 const read = (f) => JSON.parse(readFileSync(join(OUT, f), "utf8"));
 const screens = {};
 for (const f of readdirSync(OUT).sort()) {
   if (f.endsWith(".tree.json")) {
-    const r = read(f);
+    const r = validateTreeReport(read(f), f);
     if (r.androidAtf !== undefined || r.treeSource === "accessibility-node-info") {
       if (isIos || r.treeSource !== "accessibility-node-info" || r.androidAtf?.screen !== r.screen) throw new Error(`invalid Android ATF source in ${f}`);
       const native = validateAtfEvidence(r.androidAtf);
@@ -191,15 +197,13 @@ if (GATE) {
     console.error("--gate needs a baseline: pass --baseline <file> or set ALOUD_CONFIG");
     process.exit(1);
   }
-  const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")) : {};
   const failures = [];
   for (const id of ids) {
     if (screens[id].source === "voiceover") {
       failures.push(`${id}: VoiceOver traversal is partial (${screens[id].voiceOver.coverage.reason}) — use --no-gate for partial capture evidence`);
     }
     const gate = screens[id].gate;
-    if (!gate || !Number.isSafeInteger(gate.errors) || gate.errors < 0 ||
-        !Array.isArray(gate.ruleIds) || !gate.ruleIds.every((rule) => typeof rule === "string")) {
+    if (!gate) {
       failures.push(`${id}: no completed tree checks — run the tree pass before gating, or use --no-gate for capture-only evidence`);
       continue;
     }
