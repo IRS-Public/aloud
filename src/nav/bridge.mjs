@@ -17,12 +17,33 @@ import { flattenManifest } from "./index.mjs";
 // expression threw inside the app — a swallowed ReferenceError from a
 // dev-bridge global that isn't installed yet reads as success and produces
 // silent-garbage walks, so exceptions must be loud.
-export async function hermesEval(expr, port = "8081") {
+export function selectHermesTarget(list, appId) {
+  const candidates = appId ? list.filter((target) => target.appId === appId) : list;
+  return (
+    candidates.find(
+      (target) =>
+        /Experience|Hermes|main/i.test(target.title || "") && target.webSocketDebuggerUrl,
+    ) || candidates.find((target) => target.webSocketDebuggerUrl)
+  );
+}
+
+export function configuredAppId(ctx) {
+  return ctx.platform === "android"
+    ? ctx.config?.app?.android?.package
+    : ctx.platform === "ios"
+      ? ctx.config?.app?.ios?.bundleId
+      : undefined;
+}
+
+export async function hermesEval(expr, port = "8081", appId) {
   const list = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
-  const target =
-    list.find((t) => /Experience|Hermes|main/i.test(t.title || "") && t.webSocketDebuggerUrl) ||
-    list.find((t) => t.webSocketDebuggerUrl);
-  if (!target) throw new Error("no Hermes inspector target — is the DEBUG app running on Metro?");
+  const target = selectHermesTarget(list, appId);
+  if (!target) {
+    const suffix = appId ? ` for app ${appId}` : "";
+    throw new Error(
+      `no Hermes inspector target${suffix} — is the DEBUG app running on Metro?`,
+    );
+  }
   const ws = new WebSocket(target.webSocketDebuggerUrl);
   const value = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`eval timeout: ${expr}`)), 10000);
@@ -65,6 +86,7 @@ export async function createNavigator(ctx) {
     ...(bridgeCfg.globals ?? {}),
   };
   const port = String(bridgeCfg.port ?? "8081");
+  const appId = configuredAppId(ctx);
   const readyExpr = bridgeCfg.readyExpr || `typeof globalThis.${globals.nav} === 'function'`;
 
   if (!ctx.manifest) {
@@ -88,7 +110,7 @@ export async function createNavigator(ctx) {
       ? bridgeCfg.hopRoutesSignedOut
       : hopRoutes;
 
-  const evalInApp = (expr) => hermesEval(expr, port);
+  const evalInApp = (expr) => hermesEval(expr, port, appId);
   let persona; // undefined = unknown, null = signed out
 
   return {
