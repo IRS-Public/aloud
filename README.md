@@ -8,10 +8,10 @@
 [![license: CC0-1.0](https://img.shields.io/badge/license-CC0--1.0-blue.svg)](LICENSE)
 [![node >= 22](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](package.json)
 
-aloud drives real screen readers across the screens of your mobile app. It
-captures what they actually speak. It runs Section 508 / WCAG checks on the
-accessibility tree of each screen. It writes per-screen speech transcripts,
-an HTML evidence page, and a draft OpenACR conformance report.
+aloud collects accessibility evidence for mobile and web apps: screen-reader
+transcripts, accessibility checks, screenshots, HTML reports, and draft
+OpenACR documents. Each platform labels how speech was captured or computed;
+web checks run without a screen reader by default.
 
 - **Android**: real TalkBack, built from Google's source at a pinned commit.
   The transcript is what TalkBack spoke, captured from its speech log.
@@ -22,8 +22,9 @@ an HTML evidence page, and a draft OpenACR conformance report.
   snapshots, with an opt-in NVDA command-capture adapter for Windows. Web
   evidence is report-only. [Setup and validation status](docs/web.md).
 
-Both audit legs have passed real CI runs on the IRS mobile app project it
-was built for.
+Both mobile audit legs have passed real CI runs on the IRS mobile app project
+it was built for. Browser validation covers Chromium fixtures and the public
+TodoMVC React app, including repeated NVDA runs on Windows.
 
 ## Why
 
@@ -67,10 +68,13 @@ reconstruction.
 
 ## Quickstart
 
-aloud is a standalone CLI. Point it at an app build. Get transcripts and a
-draft OpenACR. You do not need CI, and you do not need to change your app.
-Install it as in the demo above, then write a small config (see `examples/aloud.config.example.json`). Save it as
-`aloud.config.json` in your project root.
+aloud is a standalone CLI. Point it at a mobile app build or a running web
+app. You do not need CI or changes to your app. For a URL, jump to
+[Web apps](#web-apps-experimental).
+
+For mobile audits, install it as in the demo above, then write a small config
+(see `examples/aloud.config.example.json`). Save it as `aloud.config.json` in
+your project root.
 
 ```json
 {
@@ -138,6 +142,10 @@ run. See [docs/ios.md](docs/ios.md#apple-accessibility-audit-opt-in).
 
 ### Web apps (experimental)
 
+Start your web app, then capture its URL with Chromium. The default mode
+needs no emulator, simulator, or screen reader. Browser dependencies are
+optional for mobile-only installs.
+
 ```bash
 npm install --save-dev playwright@1.63.0 @axe-core/playwright@4.13.0
 npx playwright install chromium
@@ -145,13 +153,20 @@ npx aloud web --url http://127.0.0.1:3000
 open aloud-report/web/index.html
 ```
 
-The default captures page structure and axe findings without a screen reader.
-It does not generate a speech transcript. A scenario manifest adds named page
-states and keyboard/focus assertions; `--screen-reader nvda` opts into the
-experimental Windows command-capture adapter. Repeated Windows fixture runs
-have passed; see the recorded environments and limits below. Browser results
-cannot pass a regression gate or assign web conformance levels yet.
-[Web documentation and examples](docs/web.md).
+The default captures page structure, axe findings, and screenshots without
+generating speech. Use the [web config](examples/aloud.web.config.example.json)
+and [scenario manifest](examples/screens-web.example.json) to capture named
+page states and assert keyboard focus.
+
+On a dedicated Windows desktop, `--screen-reader nvda` adds Guidepup-formatted
+NVDA command output and speech assertions. Follow the
+[NVDA setup instructions](docs/web.md#nvda-command-capture) first. Chromium
+fixtures and the external TodoMVC scenarios have passed repeated runs,
+including NVDA on Windows; [recorded results and limits](docs/web.md#validation-and-promotion)
+describe the tested scope.
+
+Web evidence is **report-only**: browser baselines and regression gates are
+disabled, and every web OpenACR component remains `not-evaluated`.
 
 ### Draft OpenACR
 
@@ -165,12 +180,16 @@ npx aloud openacr
 To draft from a fresh run without a baseline, pass the report dirs:
 `npx aloud openacr --report aloud-report/android --report-ios aloud-report/ios`.
 
+For web evidence, configure `app.name` and `app.version`, then run
+`npx aloud openacr --report-web aloud-report/web`. This can be combined with
+the mobile report inputs; web criteria remain unevaluated.
+
 This emits `acr-draft.yaml`, a machine-readable accessibility conformance
 report in the GSA [OpenACR](https://github.com/GSA/openacr) format. It is a
 draft on purpose: only criteria the automated rules cover get a conformance
 level, and every note says so. See [docs/openacr.md](docs/openacr.md).
 
-With zero setup, aloud audits whatever screen is currently open
+For mobile apps, aloud audits whatever screen is currently open
 (`--nav current-screen`, the default). Give it a screens manifest
 (`examples/screens-deeplinks.example.json`) to walk your whole app by deep
 links, or use bridge mode (`examples/screens-bridge.example.json`) for apps
@@ -190,6 +209,10 @@ aloud runs fine on GitHub-hosted runners. Copy the templates in
   the audit, uploads the evidence page.
 
 Both templates use only GitHub-owned actions. See [docs/ci.md](docs/ci.md).
+
+The repository's [browser acceptance workflow](.github/workflows/web.yml)
+runs Chromium fixtures on relevant pull requests. Manual dispatch adds the
+external web-app scenarios and can enable Windows NVDA validation.
 
 ## How it works
 
@@ -213,7 +236,13 @@ speech with `source: "voiceover"`, raw capture evidence, and explicit partial
 coverage. Partial speech cannot pass the gate. Requirements and screen-state
 limits are documented in [docs/ios.md](docs/ios.md).
 
-Findings gate against a per-screen baseline you accept explicitly with
+**Web** captures configured Chromium page states with Playwright, runs axe-core,
+and retains ARIA snapshots, screenshots, and keyboard/focus assertions. Opt-in
+NVDA adds captured command output. Run inventories and artifact hashes are
+verified when reports are regenerated. Scripted scenario completion does not
+establish full traversal or conformance; see [web coverage](docs/web.md).
+
+Mobile tree-check findings gate against a per-screen baseline you accept with
 `aloud baseline`. It is a ratchet: counts only go down, and a rule id the
 baseline has never seen fails even under the count.
 
@@ -258,7 +287,9 @@ Working today, proven in CI:
 
 - Android TalkBack transcripts and tree checks, two-pass.
 - iOS computed VoiceOver transcripts and tree checks.
-- Ratchet gate, HTML evidence page, draft OpenACR emitter.
+- Experimental Chromium checks and keyboard/focus scenarios, with opt-in NVDA
+  command capture validated on Windows and the external TodoMVC React app.
+- Mobile ratchet gate, HTML evidence pages, and draft OpenACR emitter.
 
 Roadmap, in implementation order:
 
@@ -290,7 +321,8 @@ Roadmap, in implementation order:
    their own coverage policy. [Scope and validation](docs/web.md).
 
 Acceptance criteria and dependencies: [technical roadmap](docs/roadmap.md).
-External app results and limits: [Wikipedia validation](docs/real-app-validation.md).
+External app results and limits: [Wikipedia mobile validation](docs/real-app-validation.md)
+and [TodoMVC browser validation](docs/web.md#validation-and-promotion).
 
 ## Prior art, and the word "first"
 
@@ -314,7 +346,9 @@ wrong, open an issue; we would genuinely like to know.
 
 \* Real TalkBack on Android today. On iOS the default transcript is computed and
 labeled as computed; opt-in real VoiceOver captures are partial on Xcode 27
-GA, with the experimental harness already in this repo.
+GA, with the experimental harness already in this repo. Web defaults to
+structural checks; opt-in NVDA preserves Guidepup-formatted command output
+and remains report-only.
 
 ## License
 
