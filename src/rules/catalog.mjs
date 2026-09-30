@@ -151,7 +151,10 @@ export const CRITERIA = deepFreeze({
       "one CSS px), unless the spacing exception applies: a 24-unit circle centred on the " +
       "undersized target intersects no other target and no other undersized target's circle. " +
       "The inline, user-agent control, essential, and equivalent-control exceptions need human " +
-      "judgment, so a flagged target may still meet the criterion on review",
+      "judgment, so a flagged target may still meet the criterion on review. Automation does not " +
+      "judge some targets at all, so review them by hand: disabled targets, targets with no on-screen " +
+      "area, targets nested inside a labeled clickable ancestor of at least 24dp or clipped at a " +
+      "scroll edge (Android), and switch-family controls (iOS)",
   },
   "4.1.2": {
     covers:
@@ -212,9 +215,11 @@ export function ruleSpec(ruleId, platform) {
 
 // Split a gate-shaped entry ({ errors, ruleIds }, as baselines and
 // summaries store it) written before a reclassification. Reclassified ids
-// leave the error list. Each accounted for at least one error, so the
-// remaining count is at most errors minus their number (exactly zero when
-// none remain). `unchecked` names the criteria the entry holds no current
+// leave the error list. The old count does not say how many errors each
+// id accounted for, only that each accounted for at least one, so the
+// remaining count is the fewest the entry proves: one per kept id (zero
+// when none remain). Anything higher could let a kept rule regress
+// unnoticed. `unchecked` names the criteria the entry holds no current
 // evidence for: the old findings cannot say whether the successor rule
 // would have fired. The entry must already be valid; this never throws.
 export function splitReclassified({ errors, ruleIds }) {
@@ -222,11 +227,19 @@ export function splitReclassified({ errors, ruleIds }) {
   if (retired.length === 0) return { errors, ruleIds, retired, unchecked: [] };
   const kept = ruleIds.filter((id) => !Object.hasOwn(RECLASSIFIED, id));
   return {
-    errors: kept.length ? errors - retired.length : 0,
+    errors: kept.length,
     ruleIds: kept,
     retired,
     unchecked: [...new Set(retired.flatMap((id) => RECLASSIFIED[id].was.criteria))],
   };
+}
+
+// The criteria a reclassification can leave unchecked on a platform's
+// evidence ("Android", "iOS", or undefined for either).
+export function reclassifiedCriteria(platform) {
+  return [...new Set(Object.entries(RECLASSIFIED)
+    .filter(([id]) => platform === undefined || RULES[id].platform === platform)
+    .flatMap(([, entry]) => entry.was.criteria))];
 }
 
 // Rule ids that give evidence toward a criterion, in catalog order,

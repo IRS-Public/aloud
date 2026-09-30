@@ -20,6 +20,7 @@ import {
   RULES,
   rulesForCriterion,
   ruleSpec,
+  reclassifiedCriteria,
   splitReclassified,
 } from "../src/rules/catalog.mjs";
 import { AUTOMATED_CRITERIA, CATALOG_ID } from "../src/report/openacr.mjs";
@@ -180,6 +181,14 @@ describe("target-size rules", () => {
     assert.doesNotMatch(covers, /48x48|44x44/);
   });
 
+  it("names in the 2.5.8 covers text the targets automation never judges", () => {
+    // Without this, a clean draft reads as if every target was measured.
+    const covers = CRITERIA["2.5.8"].covers;
+    for (const skipped of ["disabled", "no on-screen area", "labeled clickable ancestor", "scroll edge", "switch-family"]) {
+      assert.ok(covers.includes(skipped), `covers text omits skipped targets: ${skipped}`);
+    }
+  });
+
   it("records each reclassified id's old meaning and its error successor", () => {
     assert.deepEqual(Object.keys(RECLASSIFIED).sort(), ["ios-touch-target-small", "native-touch-target-small"]);
     for (const [id, entry] of Object.entries(RECLASSIFIED)) {
@@ -203,9 +212,22 @@ describe("splitReclassified", () => {
     });
   });
 
-  it("takes at least one error per retired id from a mixed entry", () => {
-    assert.deepEqual(splitReclassified({ errors: 3, ruleIds: ["ios-interactive-unlabeled", "ios-touch-target-small"] }), {
-      errors: 2, ruleIds: ["ios-interactive-unlabeled"], retired: ["ios-touch-target-small"], unchecked: ["2.5.8"],
+  it("keeps only the errors a mixed entry proves: one per remaining rule id", () => {
+    // 5 errors could be 1 unlabeled control and 4 small targets. Keeping
+    // 4 would let 3 new unlabeled controls pass the gate unnoticed.
+    assert.deepEqual(splitReclassified({ errors: 5, ruleIds: ["native-interactive-unlabeled", "native-touch-target-small"] }), {
+      errors: 1, ruleIds: ["native-interactive-unlabeled"], retired: ["native-touch-target-small"], unchecked: ["2.5.8"],
     });
+    assert.deepEqual(splitReclassified({
+      errors: 6, ruleIds: ["ios-interactive-unlabeled", "ios-image-unlabeled", "ios-touch-target-small"],
+    }).errors, 2);
+  });
+});
+
+describe("reclassifiedCriteria", () => {
+  it("lists the criteria a reclassification can leave unchecked, per platform", () => {
+    assert.deepEqual(reclassifiedCriteria("Android"), ["2.5.8"]);
+    assert.deepEqual(reclassifiedCriteria("iOS"), ["2.5.8"]);
+    assert.deepEqual(reclassifiedCriteria(), ["2.5.8"]);
   });
 });

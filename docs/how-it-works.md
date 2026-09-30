@@ -150,19 +150,30 @@ Errors count toward the gate; warns appear in the report only.
 WCAG 2.5.8 needs a target to be at least 24x24 CSS px. aloud reads that as
 24dp on Android and 24pt on iOS. It also applies the spacing exception: an
 undersized target still passes if a 24-unit circle centred on it does not
-touch any other target, or another undersized target's circle. aloud cannot
-judge the inline, user-agent-control, essential and equivalent-control
-exceptions, so those still need a human. The 48dp and 44pt platform
-guidelines stay in the report as warnings.
+overlap any other target, or another undersized target's circle. A circle
+that only touches another target or circle at a single point does not
+count as an overlap. aloud cannot judge the inline, user-agent-control,
+essential and equivalent-control exceptions, so those still need a human.
+It also skips some targets entirely: disabled ones, ones with no on-screen
+area, switch-family controls on iOS, and, on Android, targets clipped at a
+scroll edge or nested inside a labeled clickable ancestor of at least 24dp.
+Review those by hand. The 48dp and 44pt platform guidelines stay in the
+report as warnings.
 
 Reports and baselines written before this split still load. A baseline
-that accepted the old 48dp/44pt ids as errors drops those ids and their
-count. A new 24-unit violation still fails the gate. An old tree report
-that gated on the 48dp/44pt rule cannot show whether 2.5.8 is met. So
-`aloud report` fails that screen, `aloud baseline` refuses it, and the
-OpenACR draft leaves 2.5.8 `not-evaluated` until the tree pass is re-run.
-ATF reports carry the native evidence, so aloud recomputes them in the
-current classification.
+entry that accepted the old 48dp/44pt ids as errors drops those ids. The
+old count cannot say how many errors belong to the other rules, so the
+entry keeps one error per remaining rule id, the fewest it proves. If the
+screen really had more, the gate fails with a hint to re-accept it with
+`aloud baseline`. A new 24-unit violation still fails the gate. `aloud
+baseline` keeps old entries for screens it did not re-run exactly as
+written, and the OpenACR draft reads such an entry as leaving 2.5.8
+unchecked on that screen. An old tree report that gated on the 48dp/44pt
+rule cannot show whether 2.5.8 is met. So `aloud report` fails that screen,
+`aloud baseline` refuses it, and the OpenACR draft leaves 2.5.8
+`not-evaluated` until the tree pass is re-run. ATF reports carry the
+native evidence, so both commands recompute them in the current
+classification.
 
 The dump format omits `stateDescription`, `roleDescription`, hints, and `paneTitle`.
 Opt-in `--atf` uses the companion's `AccessibilityNodeInfo` snapshot for both

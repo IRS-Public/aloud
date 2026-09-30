@@ -4,6 +4,8 @@
 //
 // The gate summary is computed in the walker and embedded as `.gate`.
 // Validate it against the findings before accepting its unchanged values.
+// Android ATF reports are recomputed from their native evidence first,
+// exactly as `aloud report` does (see tree-report.mjs).
 // True merge: a filtered run (e.g.
 // `--flow payments`) updates only the screens it walked.
 //
@@ -21,7 +23,8 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { cliArgs } from "../cli-args.mjs";
 import { platformForReportDir } from "./platform.mjs";
-import { migrateTreeReport, migrationNote, readBaseline, validateTreeReport } from "./validation.mjs";
+import { readTreeReport } from "./tree-report.mjs";
+import { migrationNote, readBaseline } from "./validation.mjs";
 
 const { opt, positionals } = cliArgs(
   "baseline.mjs",
@@ -64,26 +67,31 @@ if (!existsSync(reportDir)) {
   process.exit(1);
 }
 
-// Entries naming reclassified rule ids come back in the current
-// classification, so the rewrite below also migrates untouched screens.
-const { baseline, migrated } = readBaseline(existsSync(baselinePath)
-  ? JSON.parse(readFileSync(baselinePath, "utf8"))
-  : {}, baselinePath);
+// Validate the existing file first. Screens this run does not cover are
+// written back exactly as they were: an entry from before a rule
+// reclassification is the only record that a criterion was never checked
+// on that screen at the current rule (the OpenACR draft reads it and
+// leaves the criterion unevaluated), so rewriting it in the current
+// classification would turn that gap into a silent pass.
+const existing = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, "utf8")) : {};
+const { migrated } = readBaseline(existing, baselinePath);
+const baseline = { ...existing };
 const updated = [];
 const files = readdirSync(reportDir)
   .filter((f) => f.endsWith(".tree.json"))
   .sort();
 
 for (const file of files) {
-  const report = validateTreeReport(JSON.parse(readFileSync(join(reportDir, file), "utf8")), file);
-  // A report from before the touch-target reclassification holds no
-  // evidence for the rule that now gates 2.5.8; accepting it would bless
-  // counts nobody measured.
-  const { uncheckedCriteria } = migrateTreeReport(report);
-  if (uncheckedCriteria.length) {
+  // The same reading `aloud report` uses: ATF reports are recomputed from
+  // their native evidence, so their gate is the current one.
+  const report = readTreeReport(JSON.parse(readFileSync(join(reportDir, file), "utf8")), file, { isIos });
+  // An ordinary report from before the touch-target reclassification
+  // holds no evidence for the rule that now gates 2.5.8; accepting it
+  // would bless counts nobody measured.
+  if (report.uncheckedCriteria) {
     console.error(
       `${report.screen}: ${file} predates the current target-size rules, so WCAG ` +
-        `${uncheckedCriteria.join(", ")} was not checked — re-run the tree pass before accepting a baseline.`,
+        `${report.uncheckedCriteria.join(", ")} was not checked — re-run the tree pass before accepting a baseline.`,
     );
     process.exit(1);
   }
@@ -99,7 +107,7 @@ if (updated.length === 0) {
 const note = migrationNote(
   migrated.filter(({ screen }) => !updated.includes(screen)),
   baselinePath,
-  "This run rewrites them in the current classification.",
+  "This run keeps those entries as written; include those screens in a run to rewrite them.",
 );
 if (note) console.warn(note);
 

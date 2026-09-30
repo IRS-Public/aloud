@@ -23,10 +23,12 @@ export function validateGate(gate, field) {
 // Validate a baseline as written, then return it in the current rule
 // classification. Baselines written before a reclassification (see
 // RECLASSIFIED in src/rules/catalog.mjs) list ids that are now report-only
-// warnings. Those ids leave the entry, taking at least one error each with
-// them, so the ratchet keeps holding every other rule and a screen that now
-// trips the successor rule fails as a new rule id. `migrated` lists the
-// screens that changed, for a note to the user; the input is not modified.
+// warnings. Those ids leave the entry, and the entry keeps only the errors
+// it proves belong to the other rules (one per kept id; see
+// splitReclassified). The ratchet so keeps holding every other rule, and
+// a screen that now trips the successor rule fails as a new rule id.
+// `migrated` lists each changed screen with its old and new allowance, for
+// a note to the user; the input is not modified.
 export function readBaseline(baseline, field = "baseline") {
   if (!isRecord(baseline)) throw new Error(`${field} must be an object keyed by screen id`);
   const current = {};
@@ -36,7 +38,7 @@ export function readBaseline(baseline, field = "baseline") {
     validateGate(gate, `${field} screen "${screen}"`);
     const { errors, ruleIds, retired } = splitReclassified(gate);
     current[screen] = { ...gate, errors, ruleIds };
-    if (retired.length) migrated.push({ screen, retired });
+    if (retired.length) migrated.push({ screen, retired, was: gate.errors, now: errors });
   }
   return { baseline: current, migrated };
 }
@@ -46,14 +48,17 @@ export function validateBaseline(baseline, field = "baseline") {
   return readBaseline(baseline, field).baseline;
 }
 
-// One line naming the screens readBaseline migrated, or "" when none were.
+// One line naming the screens readBaseline migrated and what each entry
+// now allows, or "" when none were migrated.
 export function migrationNote(migrated, field = "baseline", advice = "Run `aloud baseline` to rewrite the file.") {
   if (!migrated.length) return "";
   const ids = [...new Set(migrated.flatMap(({ retired }) => retired))];
+  const allowances = migrated.map(({ screen, was, now }) => `${screen} ${was} -> ${now}`).join(", ");
   return `note: ${field} lists ${ids.join(", ")} as gating error(s) on ${migrated.length} screen(s) ` +
     `(${migrated.map(({ screen }) => screen).join(", ")}); ` +
     `${ids.map((id) => RECLASSIFIED[id].change).join("; ")}. ` +
-    `Those entries now allow one fewer error per retired id. ${advice}`;
+    "The old counts do not say how many errors belong to the remaining rules, so each entry now allows " +
+    `one error per remaining rule id (${allowances}). ${advice}`;
 }
 
 export function validateTreeReport(report, field = "tree report") {

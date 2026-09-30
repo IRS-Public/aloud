@@ -182,18 +182,29 @@ describe("evidence from before the target-size reclassification", () => {
     assert.match(result.stderr, /lists native-touch-target-small as gating error\(s\) on 1 screen\(s\) \(home\)/);
   });
 
-  it("keeps holding every other rule an old baseline accepted", (t) => {
-    // 3 errors across two rules, one of them retired: at most 2 remain for
-    // the label rule, so a third label error still fails.
+  it("keeps holding every other rule an old baseline accepted, at the fewest errors the entry proves", (t) => {
+    // 3 errors across two rules, one of them retired: the entry proves only
+    // one label error, so a second one fails, with a hint to re-accept.
     const baseline = { home: { errors: 3, ruleIds: [RULE, OLD] } };
+    const one = fixture(t, { reports: [tree()], baseline });
+    const passed = one.run("report");
+    assert.equal(passed.status, 0, passed.stdout + passed.stderr);
+    assert.match(passed.stderr, /allows one error per remaining rule id \(home 3 -> 1\)/);
     const two = fixture(t, { reports: [tree({ violations: [finding(), finding()], gate: { errors: 2, ruleIds: [RULE] } })], baseline });
-    assert.equal(two.run("report").status, 0);
-    const three = fixture(t, {
-      reports: [tree({ violations: [finding(), finding(), finding()], gate: { errors: 3, ruleIds: [RULE] } })], baseline,
-    });
-    const result = three.run("report");
+    const result = two.run("report");
     assert.equal(result.status, 1, result.stdout + result.stderr);
-    assert.match(result.stderr, /home: 3 error\(s\), baseline allows 2/);
+    assert.match(result.stderr, /home: 2 error\(s\), baseline allows 1 \(the entry predates the target-size reclassification/);
+  });
+
+  it("states each migrated entry's new allowance, not a fixed one per retired id", (t) => {
+    const f = fixture(t, {
+      reports: [tree({ violations: [], gate: clean })],
+      baseline: { home: { errors: 3, ruleIds: [OLD] } },
+    });
+    const result = f.run("report");
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stderr, /\(home 3 -> 0\)/);
+    assert.doesNotMatch(result.stderr, /one fewer/);
   });
 
   it("fails a screen that newly violates the 24dp rule, even where the old baseline accepted 48dp errors", (t) => {
@@ -206,18 +217,19 @@ describe("evidence from before the target-size reclassification", () => {
     assert.match(result.stderr, /new rule id\(s\) native-target-size-minimum/);
   });
 
-  it("rewrites untouched old entries in the current classification when accepting a baseline", (t) => {
+  it("keeps untouched old entries exactly as written when accepting a baseline", (t) => {
+    // Rewriting `other` as { errors: 3, ruleIds: [RULE] } would erase the
+    // only record that its 2.5.8 was never checked at 24dp, and the OpenACR
+    // draft would then report 2.5.8 as supported there.
+    const other = { errors: 4, ruleIds: [RULE, OLD] };
     const f = fixture(t, {
       reports: [tree({ violations: [finding(NEW)], gate: { errors: 1, ruleIds: [NEW] } })],
-      baseline: { home: { errors: 1, ruleIds: [OLD] }, other: { errors: 4, ruleIds: [RULE, OLD] } },
+      baseline: { home: { errors: 1, ruleIds: [OLD] }, other },
     });
     const accepted = f.run("baseline");
     assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
-    assert.match(accepted.stderr, /on 1 screen\(s\) \(other\).*This run rewrites them/);
-    assert.deepEqual(JSON.parse(f.readBaseline()), {
-      home: { errors: 1, ruleIds: [NEW] },
-      other: { errors: 3, ruleIds: [RULE] },
-    });
+    assert.match(accepted.stderr, /on 1 screen\(s\) \(other\).*keeps those entries as written/);
+    assert.deepEqual(JSON.parse(f.readBaseline()), { home: { errors: 1, ruleIds: [NEW] }, other });
   });
 
   it("reads an old tree report but will not gate or baseline it", (t) => {

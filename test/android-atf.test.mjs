@@ -186,6 +186,13 @@ test("persisted ATF reports from before the target-size reclassification revalid
       assert.equal(summary.uncheckedCriteria, undefined, "native evidence lets 2.5.8 be recomputed");
       const html = readFileSync(join(dir, "index.html"), "utf8");
       assert.match(html, /Platform guideline · no WCAG criterion/);
+      // `aloud baseline` reads the same evidence the same way: it accepts
+      // the recomputed gate instead of refusing the old report.
+      const baselinePath = join(dir, "..", `${e.screen}-baseline-${Date.now()}.json`);
+      try {
+        execFileSync(process.execPath, ["src/report/baseline.mjs", dir, "--baseline", baselinePath], { env: { ...process.env, ALOUD_CONFIG: "" }, stdio: "pipe" });
+        assert.deepEqual(JSON.parse(readFileSync(baselinePath, "utf8")), { [e.screen]: currentGate });
+      } finally { rmSync(baselinePath, { force: true }); }
     }
     // The old shape still has to match the native evidence exactly.
     t.violations = old.map((v) => v.ruleId === small.ruleId ? { ...v, detail: "edited" } : v); t.gate = oldGate; write();

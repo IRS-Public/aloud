@@ -16,21 +16,12 @@ import { join } from "node:path";
 import { renderReportHtml } from "./html.mjs";
 import { validateTalkBackFocusCapture, focusTranscript } from "../android/talkback-focus.mjs";
 import { focusTtsSummary, validateFocusTts } from "../android/tts-evidence.mjs";
-import { atfSummary, atfFindings, atfTreeNodes, validateAtfEvidence } from "../android/atf-evidence.mjs";
-import { runChecks as androidTreeChecks } from "../android/ui-tree.mjs";
-import { isDeepStrictEqual } from "node:util";
 import { validateVoiceOverCapture } from "../ios/voiceover-capture.mjs";
 import { reportWeb } from "../web/report.mjs";
 import { cliArgs } from "../cli-args.mjs";
 import { platformForReportDir } from "./platform.mjs";
-import { RECLASSIFIED } from "../rules/catalog.mjs";
-import {
-  beforeReclassification,
-  migrateTreeReport,
-  migrationNote,
-  readBaseline,
-  validateTreeReport,
-} from "./validation.mjs";
+import { readTreeReport } from "./tree-report.mjs";
+import { migrationNote, readBaseline } from "./validation.mjs";
 
 const args = cliArgs("report.mjs", {
   dir: { type: "string" },
@@ -71,9 +62,11 @@ if (PLATFORM === "web") {
 // Entries naming reclassified rule ids are read in the current
 // classification (see readBaseline), with a note saying so.
 let baseline = null;
+let migratedScreens = new Set();
 if (GATE && BASELINE) {
   const loaded = readBaseline(existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")) : {}, BASELINE);
   baseline = loaded.baseline;
+  migratedScreens = new Set(loaded.migrated.map(({ screen }) => screen));
   const note = migrationNote(loaded.migrated, BASELINE);
   if (note) console.warn(note);
 }
@@ -82,47 +75,10 @@ const read = (f) => JSON.parse(readFileSync(join(OUT, f), "utf8"));
 const screens = {};
 for (const f of readdirSync(OUT).sort()) {
   if (f.endsWith(".tree.json")) {
-    let r = validateTreeReport(read(f), f);
-    if (r.androidAtf !== undefined || r.treeSource === "accessibility-node-info") {
-      if (isIos || r.treeSource !== "accessibility-node-info" || r.androidAtf?.screen !== r.screen) throw new Error(`invalid Android ATF source in ${f}`);
-      const native = validateAtfEvidence(r.androidAtf);
-      const violations = androidTreeChecks(atfTreeNodes(native), { densityDpi: native.densityDpi, appPackage: native.target });
-      const errors = violations.filter((v) => v.severity === "error");
-      const gate = { errors: errors.length, ruleIds: [...new Set(errors.map((v) => v.ruleId))].sort() };
-      // Tree reports written before findings carried `criteria` lack that
-      // key on every finding. Compare those without it (the catalog derives
-      // it from the rule id), then carry the recomputed findings forward.
-      // A report that has `criteria` on some findings but not others is
-      // compared as-is and fails.
-      // Reports written before the touch-target reclassification list the
-      // reclassified ids as errors and lack the successor rules; compare
-      // those against the findings as the rules made them then. Either
-      // way the recomputed findings and gate replace the persisted ones:
-      // the raw native evidence is enough to run the current rules.
-      const legacy = r.violations.every((v) => !Object.hasOwn(v, "criteria"));
-      const predatesReclassification = r.violations.some((v) =>
-        v.severity === "error" && Object.hasOwn(RECLASSIFIED, v.ruleId));
-      const then = predatesReclassification ? beforeReclassification(violations) : violations;
-      const expected = legacy ? then.map(({ criteria, ...v }) => v) : then;
-      const expectedErrors = then.filter((v) => v.severity === "error");
-      const expectedGate = { errors: expectedErrors.length, ruleIds: [...new Set(expectedErrors.map((v) => v.ruleId))].sort() };
-      if (!isDeepStrictEqual(expected, r.violations) || !isDeepStrictEqual(expectedGate, r.gate)) {
-        throw new Error(`Android ATF tree findings differ from native evidence in ${f}`);
-      }
-      r.violations = violations;
-      r.gate = gate;
-      r.atfSummary = atfSummary(r.androidAtf);
-      r.atfFindings = atfFindings(native, r.violations);
-      r.atfNodes = native.nodes;
-    } else {
-      // An ordinary tree report from before the touch-target
-      // reclassification: read it in the current classification, with the
-      // criteria its old findings cannot speak to marked unchecked.
-      const migrated = migrateTreeReport(r);
-      r = migrated.uncheckedCriteria.length
-        ? { ...migrated.report, uncheckedCriteria: migrated.uncheckedCriteria }
-        : migrated.report;
-    }
+    // ATF reports are recomputed from their native evidence; older
+    // ordinary reports come back with any criteria they cannot speak to
+    // marked unchecked (see tree-report.mjs).
+    const r = readTreeReport(read(f), f, { isIos });
     screens[r.screen] = { ...screens[r.screen], ...r };
   } else if (f.endsWith(".transcript.json")) {
     const r = read(f);
@@ -276,7 +232,13 @@ if (GATE) {
       continue;
     }
     if (gate.errors > base.errors) {
-      failures.push(`${id}: ${gate.errors} error(s), baseline allows ${base.errors}`);
+      // A migrated entry allows only the errors it proves (see
+      // readBaseline), which can be fewer than the screen really had.
+      const hint = migratedScreens.has(id)
+        ? " (the entry predates the target-size reclassification, so it allows one error per remaining rule id; " +
+          "if these errors are known, run `aloud baseline` to accept them)"
+        : "";
+      failures.push(`${id}: ${gate.errors} error(s), baseline allows ${base.errors}${hint}`);
     }
     const newRules = gate.ruleIds.filter((r) => !base.ruleIds.includes(r));
     if (newRules.length) {

@@ -142,14 +142,12 @@ describe("normalizeAudit", () => {
     assert.equal(a.generated, null);
   });
 
-  it("reads a baseline written before the target-size reclassification", () => {
+  it("returns a baseline written before the target-size reclassification as written", () => {
+    // buildAcr checks the old ids against the platform they are filed
+    // under before it reads them in the current classification.
     const raw = readJson("fixtures/baseline-ios-legacy.json");
     const a = normalizeAudit(raw);
-    // The old 44pt id leaves the error list, taking one error with it, and
-    // 2.5.8 becomes unchecked on that screen; the file is not modified.
-    assert.deepEqual(a.screens.pay, { errors: 2, ruleIds: ["ios-interactive-unlabeled"], uncheckedCriteria: ["2.5.8"] });
-    assert.deepEqual(a.screens["guest-home"], { errors: 0, ruleIds: [] });
-    assert.deepEqual(raw.pay.ruleIds, ["ios-interactive-unlabeled", "ios-touch-target-small"]);
+    assert.deepEqual(a.screens, raw);
   });
 
   it("accepts report.mjs summary.json", () => {
@@ -378,6 +376,28 @@ describe("buildAcr on evidence from before the target-size reclassification", ()
     assert.equal(findCriterion(ios, "2.5.8").level, "not-evaluated");
   });
 
+  it("reads a mixed old entry's other rules as failing and leaves 2.5.8 unchecked", () => {
+    const acr = build({ android: null, ios: normalizeAudit(readJson("fixtures/baseline-ios-legacy.json")) });
+    const adherence = findCriterion(acr, "4.1.2");
+    assert.match(adherence.notes, /iOS pay: ios-interactive-unlabeled/);
+    assert.doesNotMatch(adherence.notes, /ios-touch-target-small/);
+  });
+
+  it("rejects an old id filed under the other platform instead of dropping it", () => {
+    // An iOS baseline passed as Android: its only errors were the old 44pt
+    // id. Dropping it first would count iOS screens as clean Android ones.
+    for (const android of [
+      normalizeAudit({ pay: { errors: 1, ruleIds: ["ios-touch-target-small"] } }),
+      { screens: { pay: { errors: 1, ruleIds: ["ios-touch-target-small"] } } },
+    ]) {
+      assert.throws(() => build({ android, ios: null }), /"ios-touch-target-small" \(Android pay\): this rule runs on iOS/);
+    }
+    assert.throws(
+      () => build({ android: null, ios: normalizeAudit({ pay: { errors: 1, ruleIds: ["native-touch-target-small"] } }) }),
+      /"native-touch-target-small" \(iOS pay\): this rule runs on Android/,
+    );
+  });
+
   it("migrates screens passed to buildAcr without normalizeAudit too", () => {
     const acr = build({ android: { screens: readJson("fixtures/baseline-android-legacy.json") }, ios: null });
     assert.equal(findCriterion(acr, "2.5.8").level, "not-evaluated");
@@ -386,7 +406,9 @@ describe("buildAcr on evidence from before the target-size reclassification", ()
   it("accepts summaries that already mark a criterion unchecked, and rejects malformed marks", () => {
     const summary = normalizeAudit({ screens: { home: { errors: 0, ruleIds: [], uncheckedCriteria: ["2.5.8"] } } });
     assert.equal(findCriterion(build({ android: summary, ios: null }), "2.5.8").level, "not-evaluated");
-    for (const uncheckedCriteria of [[], ["2.5.8", "2.5.8"], ["9.9.9"], ["2.4.6"], "2.5.8"]) {
+    // Only a criterion a reclassified rule used to count toward can be
+    // unchecked on completed evidence; 1.1.1 was never reclassified.
+    for (const uncheckedCriteria of [[], ["2.5.8", "2.5.8"], ["9.9.9"], ["2.4.6"], ["1.1.1"], ["4.1.2"], "2.5.8"]) {
       assert.throws(() => normalizeAudit({ home: { errors: 0, ruleIds: [], uncheckedCriteria } }), /uncheckedCriteria/);
     }
     assert.throws(() => normalizeAudit({ home: { errors: null, ruleIds: [], uncheckedCriteria: ["2.5.8"] } }),

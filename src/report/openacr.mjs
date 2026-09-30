@@ -35,6 +35,7 @@ import {
   CRITERIA,
   RECLASSIFIED,
   RULES as RULE_CATALOG,
+  reclassifiedCriteria,
   rulesForCriterion,
   splitReclassified,
 } from "../rules/catalog.mjs";
@@ -127,6 +128,7 @@ function transcriptCoverage(audits) {
 const NOT_EVALUATED_NOTE = "Not covered by the automated audit. Needs human review.";
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isCount = (value) => Number.isSafeInteger(value) && value >= 0;
+const PLATFORMS = ["Android", "iOS"];
 
 // A missing tree check is an explicit null, never an implicit zero. Reject
 // malformed or contradictory evidence before any criterion can see it.
@@ -202,11 +204,15 @@ function validateScreens(screens, platform = "input") {
     if (s.appleAudit !== undefined && platform === "Android") {
       invalid("Apple audit evidence belongs to iOS");
     }
+    // Only a rule reclassification leaves a criterion unchecked on
+    // completed evidence, so only the criteria a reclassified rule on this
+    // platform used to count toward may be listed.
     if (s.uncheckedCriteria !== undefined) {
       const unchecked = s.uncheckedCriteria;
+      const allowed = reclassifiedCriteria(PLATFORMS.includes(platform) ? platform : undefined);
       if (!Array.isArray(unchecked) || unchecked.length === 0 || new Set(unchecked).size !== unchecked.length ||
-          !unchecked.every((num) => Object.hasOwn(AUTOMATED_CRITERIA, num))) {
-        invalid("uncheckedCriteria must list unique criteria the automated rules reach");
+          !unchecked.every((num) => allowed.includes(num))) {
+        invalid(`uncheckedCriteria must list unique criteria a reclassified rule used to count toward (${allowed.join(", ")})`);
       }
       if (s.errors === null) invalid("uncheckedCriteria needs completed tree checks");
     }
@@ -233,7 +239,9 @@ function migrateScreens(screens) {
 // ── inputs ──
 // Baselines are a flat map { screenId: { errors, ruleIds } };
 // report.mjs's summary.json wraps the same shape as
-// { generated, screens: {...} }. Normalize both.
+// { generated, screens: {...} }. Normalize both. The screens come back as
+// written: buildAcr checks their rule ids against the platform they are
+// filed under before reading them in the current classification.
 export function normalizeAudit(data) {
   if (!isRecord(data)) throw new Error("invalid audit: expected a baseline or report object");
   if (data.platform === "web") throw new Error("web evidence requires --report-web so raw captures can be verified");
@@ -244,7 +252,38 @@ export function normalizeAudit(data) {
   if (audit.generated !== null && typeof audit.generated !== "string") {
     throw new Error("invalid audit: generated must be a date string or null");
   }
-  return { ...audit, screens: migrateScreens(audit.screens) };
+  return audit;
+}
+
+// Refuse rule ids the emitter does not know, or that belong to the other
+// platform. Without this, a new audit rule with baseline errors would be
+// invisible to every mapped criterion and the report would claim
+// "supports" while the audit is failing. Runs on the screens as written,
+// before migrateScreens drops reclassified ids, so an iOS baseline passed
+// as Android still fails on its old 44pt id.
+function validateRuleIds(screens, platform) {
+  for (const [id, s] of Object.entries(screens)) {
+    for (const r of s.ruleIds) {
+      const rule = RULE_CATALOG[r];
+      if (rule && rule.platform !== platform) {
+        throw new Error(`invalid audit rule id "${r}" (${platform} ${id}): this rule runs on ${rule.platform}`);
+      }
+      // A reclassified id was a gating error when the evidence was written.
+      if (Object.hasOwn(RECLASSIFIED, r)) continue;
+      if (rule?.severity === "warn") {
+        throw new Error(
+          `invalid audit rule id "${r}" (${platform} ${id}): this rule is a report-only warning; ` +
+            "baselines and gates count errors only",
+        );
+      }
+      if (!RULES[r]) {
+        throw new Error(
+          `unknown audit rule id "${r}" (${platform} ${id}): add it, with its criteria, ` +
+            "to src/rules/catalog.mjs",
+        );
+      }
+    }
+  }
 }
 
 // For one criterion, list the screens whose baseline error rule ids
@@ -329,12 +368,13 @@ export function buildAcr({
   if (!appName) {
     throw new Error("buildAcr needs an app name (config app.name)");
   }
-  // Validate before migrating, so a malformed input fails on its own terms;
-  // normalizeAudit output passes through unchanged.
+  // Validate the screens as written, then read them in the current
+  // classification.
   const audits = [];
   for (const [platform, audit] of [["Android", android], ["iOS", ios]]) {
     if (audit == null) continue;
     validateScreens(audit.screens, platform);
+    validateRuleIds(audit.screens, platform);
     audits.push({ platform, screens: migrateScreens(audit.screens) });
   }
   if (audits.length === 0 && !web) throw new Error("no audit input: provide at least one platform audit");
@@ -344,32 +384,6 @@ export function buildAcr({
   const webNotes = web ? ` Experimental web checks captured ${Object.keys(web.screens).length} named state(s) in ${web.environment.browser} ${web.environment.browserVersion}. ` +
     `Speech source: ${web.environment.screenReader === "nvda" ? "NVDA command output formatted by Guidepup" : "none; no screen reader was run"}. ` +
     "Scripted scenario completion does not establish full traversal or conformance. All web results are report-only; review raw axe results, incomplete checks, and interaction evidence in the HTML report." : "";
-
-  // Refuse rule ids the emitter does not know. Without this, a new audit
-  // rule with baseline errors would be invisible to every mapped criterion
-  // and the report would claim "supports" while the audit is failing.
-  for (const { platform, screens } of audits) {
-    validateScreens(screens, platform);
-    for (const [id, s] of Object.entries(screens)) {
-      for (const r of s.ruleIds) {
-        if (RULE_CATALOG[r]?.severity === "warn") {
-          throw new Error(
-            `invalid audit rule id "${r}" (${platform} ${id}): this rule is a report-only warning; ` +
-              "baselines and gates count errors only",
-          );
-        }
-        if (!RULES[r]) {
-          throw new Error(
-            `unknown audit rule id "${r}" (${platform} ${id}): add it, with its criteria, ` +
-              "to src/rules/catalog.mjs",
-          );
-        }
-        if (RULES[r].platform !== platform) {
-          throw new Error(`invalid audit rule id "${r}" (${platform} ${id}): this rule runs on ${RULES[r].platform}`);
-        }
-      }
-    }
-  }
 
   const transcriptNotes = transcriptCoverage(audits);
   const hasRealVoiceOver = audits.some((audit) => Object.values(audit.screens).some((s) => s.transcriptSource === "voiceover"));
