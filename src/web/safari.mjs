@@ -53,8 +53,11 @@ export function domOutline() {
   const implicit = {
     A: (el) => el.hasAttribute("href") ? "link" : null, BUTTON: () => "button", SUMMARY: () => "button",
     H1: () => "heading", H2: () => "heading", H3: () => "heading", H4: () => "heading", H5: () => "heading", H6: () => "heading",
-    NAV: () => "navigation", MAIN: () => "main", HEADER: () => "banner", FOOTER: () => "contentinfo",
-    ASIDE: () => "complementary", FORM: () => "form", SECTION: () => "region", DIALOG: () => "dialog",
+    NAV: () => "navigation", MAIN: () => "main",
+    // A header or footer inside sectioning content is generic (HTML-AAM);
+    // only a page-level one is a banner or contentinfo landmark.
+    HEADER: (el, scoped) => scoped ? null : "banner", FOOTER: (el, scoped) => scoped ? null : "contentinfo",
+    ARTICLE: () => "article", ASIDE: () => "complementary", FORM: () => "form", SECTION: () => "region", DIALOG: () => "dialog",
     UL: () => "list", OL: () => "list", LI: () => "listitem", TABLE: () => "table", TR: () => "row",
     TH: () => "columnheader", TD: () => "cell", FIELDSET: () => "group", DETAILS: () => "group", P: () => "paragraph",
     IMG: (el) => el.getAttribute("alt") === "" ? null : "img", TEXTAREA: () => "textbox", OPTION: () => "option",
@@ -67,13 +70,19 @@ export function domOutline() {
   // Roles named by their content, and roles listed only when named.
   const fromContent = ["link", "button", "heading", "tab", "option", "cell", "columnheader", "menuitem", "treeitem"];
   const namedOnly = ["region", "form"];
+  // Elements and roles that scope a header or footer to their section.
+  const sectioningTags = ["ARTICLE", "ASIDE", "MAIN", "NAV", "SECTION"];
+  const sectioningRoles = ["article", "complementary", "main", "navigation", "region"];
   const skipped = ["SCRIPT", "STYLE", "TEMPLATE", "NOSCRIPT", "HEAD"];
   const collapse = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
-  const hidden = (el) => {
+  // Removed with its whole subtree: nothing inside can be exposed.
+  const removed = (el) => {
     if (el.hidden || el.getAttribute("aria-hidden") === "true") return true;
-    const style = getComputedStyle(el);
-    return style.display === "none" || style.visibility === "hidden";
+    return getComputedStyle(el).display === "none";
   };
+  // Invisible itself, but a descendant can set visibility: visible again,
+  // so only this element and its own text are left out.
+  const invisible = (el) => ["hidden", "collapse"].includes(getComputedStyle(el).visibility);
   const contentText = (el) => collapse(el.innerText ?? el.textContent);
   const name = (el, role) => {
     const labelledBy = collapse(el.getAttribute("aria-labelledby"));
@@ -105,36 +114,59 @@ export function domOutline() {
       const value = el.getAttribute(`aria-${key}`);
       if (value !== null) found.push(`${key}=${value}`);
     }
-    if (role === "heading") found.push(`level=${el.getAttribute("aria-level") || el.tagName.slice(1)}`);
+    if (role === "heading") {
+      // aria-level, then the h1-h6 number, then ARIA's default level 2.
+      const level = el.getAttribute("aria-level") || (/^H[1-6]$/.test(el.tagName) ? el.tagName.slice(1) : "2");
+      found.push(`level=${level}`);
+    }
     return found.length ? ` [${found.join(", ")}]` : "";
   };
   const lines = [];
-  const walk = (node, depth) => {
+  // `shown` says whether the node itself is visible, which decides its own
+  // text; `scoped` says whether it sits inside sectioning content.
+  const walk = (node, depth, { shown, scoped }) => {
     const children = node.shadowRoot ? node.shadowRoot.childNodes : node.childNodes;
     for (const child of children) {
       if (child.nodeType === 3) {
         const value = collapse(child.textContent);
-        if (value) lines.push(`${"  ".repeat(depth)}- text: ${JSON.stringify(value)}`);
+        if (value && shown) lines.push(`${"  ".repeat(depth)}- text: ${JSON.stringify(value)}`);
         continue;
       }
-      if (child.nodeType !== 1 || skipped.includes(child.tagName) || hidden(child)) continue;
+      if (child.nodeType !== 1 || skipped.includes(child.tagName) || removed(child)) continue;
       const explicit = collapse(child.getAttribute("role")).split(" ")[0];
-      let role = explicit || (implicit[child.tagName] ? implicit[child.tagName](child) : null);
+      let role = explicit || (implicit[child.tagName] ? implicit[child.tagName](child, scoped) : null);
       if (role === "presentation" || role === "none") role = null;
+      const childShown = !invisible(child);
+      if (!childShown) role = null;
       const label = role ? name(child, role) : "";
       if (role && namedOnly.includes(role) && !label) role = null;
+      const inside = {
+        shown: childShown,
+        scoped: scoped || sectioningTags.includes(child.tagName) || sectioningRoles.includes(role),
+      };
       if (!role) {
-        walk(child, depth);
+        walk(child, depth, inside);
         continue;
       }
       lines.push(`${"  ".repeat(depth)}- ${role}${label ? ` ${JSON.stringify(label)}` : ""}${states(child, role)}`);
       // Content already named the item; its descendants would repeat it.
-      if (!fromContent.includes(role)) walk(child, depth + 1);
+      if (!fromContent.includes(role)) walk(child, depth + 1, inside);
     }
   };
-  walk(document.body, 0);
+  walk(document.body, 0, { shown: !invisible(document.body), scoped: false });
   return lines.join("\n");
 }
+
+// An AppleScript run with argv: item 1 is the owned window's id, as `w`.
+export const windowScript = (body) =>
+  `on run argv\n  tell application "Safari"\n    set w to window id ((item 1 of argv) as integer)\n${body}\n  end tell\nend run`;
+
+// Runs the page JavaScript in the file named by item 2 of argv. `source` is
+// a Safari property (a page's HTML), so it cannot name the variable: inside
+// the tell block the property would take the name, not the file contents.
+export const javascriptScript = windowScript(
+  "    set aloudScript to read (POSIX file (item 2 of argv)) as «class utf8»\n" +
+  "    return do JavaScript aloudScript in current tab of w");
 
 // The real Safari, through osascript. Page JavaScript travels in a temporary
 // file so large sources such as axe-core stay under argument limits.
@@ -144,7 +176,6 @@ export function safariIo() {
       { encoding: "utf8", timeout: 15000, maxBuffer: 64 * 1024 * 1024 });
     return stdout.replace(/\n$/, "");
   };
-  const windowScript = (body) => `on run argv\n  tell application "Safari"\n    set w to window id ((item 1 of argv) as integer)\n${body}\n  end tell\nend run`;
   return {
     now: () => Date.now(),
     sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
@@ -166,15 +197,14 @@ export function safariIo() {
       try {
         const file = join(dir, "page.js");
         writeFileSync(file, source);
-        return await osascript(windowScript(
-          "    set source to read (POSIX file (item 2 of argv)) as «class utf8»\n    return do JavaScript source in current tab of w"), [id, file]);
+        return await osascript(javascriptScript, [id, file]);
       } finally { rmSync(dir, { recursive: true, force: true }); }
     },
     // The window's screen rectangle. Needs Screen Recording permission for
     // Safari's content, which the runner setup is expected to grant.
     screenshot: (path, [left, top, right, bottom]) =>
       run("/usr/sbin/screencapture", ["-x", "-R", `${left},${top},${right - left},${bottom - top}`, path], { timeout: 15000 }),
-    fetch: (url) => fetch(url),
+    fetch: (url, options) => fetch(url, options),
     axeSource: axeCoreSource,
   };
 }
@@ -281,12 +311,20 @@ async function openContext(io, { locale, viewport, storageState } = {}) {
     // request checks it first, and Safari's navigation timing too when it
     // reports one.
     goto: async (url) => {
-      const preflight = await io.fetch(url);
+      const preflight = await preflightRequest(io, url, navigationTimeoutMs);
       if (!preflight.ok) return { ok: () => false, status: () => preflight.status };
+      // A URL that differs from the current one only by its fragment keeps
+      // the same document, so the mark never goes away. Wait for the URL
+      // itself instead.
+      const current = await evaluate(() => document.URL);
+      const sameDocument = sameDocumentUrl(current, url);
       await evaluate(() => { document.aloudPrevious = true; return true; });
       await io.setUrl(id, url);
-      await until(() => evaluate(() => !document.aloudPrevious && document.readyState === "complete"),
-        navigationTimeoutMs, `Safari did not load ${url} within ${navigationTimeoutMs}ms`);
+      const loaded = sameDocument
+        ? () => evaluate((target) => document.URL === target && document.readyState === "complete", url)
+        : () => evaluate(() => !document.aloudPrevious && document.readyState === "complete");
+      await until(loaded, navigationTimeoutMs, `Safari did not load ${url} within ${navigationTimeoutMs}ms`);
+      if (sameDocument) await evaluate(() => { delete document.aloudPrevious; return true; });
       const status = await evaluate(() => performance.getEntriesByType("navigation")[0]?.responseStatus ?? null);
       const ok = status === null || status === 0 ? preflight.ok : status >= 200 && status < 300;
       return { ok: () => ok, status: () => status || preflight.status };
@@ -328,6 +366,34 @@ async function openContext(io, { locale, viewport, storageState } = {}) {
     throw error;
   }
   return context;
+}
+
+// True when going from `current` to `target` is a same-document fragment
+// navigation: the target has a fragment and otherwise matches the current
+// URL. Safari keeps the document, as browsers do for in-page links.
+export function sameDocumentUrl(current, target) {
+  let from, to;
+  try { from = new URL(current); to = new URL(target); } catch { return false; }
+  if (!to.hash && !target.endsWith("#")) return false;
+  from.hash = "";
+  to.hash = "";
+  return from.href === to.href;
+}
+
+// The direct request that stands in for the HTTP status Apple Events cannot
+// see. It is bounded by the navigation timeout, so a server that accepts the
+// connection and never answers fails the run instead of hanging it. The body
+// is not needed and is cancelled.
+export async function preflightRequest(io, url, timeoutMs) {
+  let response;
+  try {
+    response = await io.fetch(url, { signal: AbortSignal.timeout(timeoutMs), redirect: "follow" });
+  } catch (error) {
+    const reason = error?.name === "TimeoutError" ? `no response within ${timeoutMs}ms` : error?.message ?? String(error);
+    throw new Error(`Safari capture could not request ${url} from Node to check its status: ${reason}`, { cause: error });
+  }
+  await response.body?.cancel().catch(() => {});
+  return { ok: response.ok, status: response.status };
 }
 
 // Size the window so the page area matches the viewport: set the outer size,

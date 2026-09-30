@@ -144,7 +144,7 @@ Web flags:
                                Safari on a disposable GitHub-hosted macOS runner only
   --storage-state <file>       Playwright authentication state (kept out of artifacts;
                                Chromium only)
-  --headed                    Show Chromium (always enabled with NVDA)
+  --headed                    Show the browser (Chromium; always shown with NVDA or VoiceOver)
   --no-gate                   Optional acknowledgment; web captures are always report-only
 
   aloud --help          Show this help

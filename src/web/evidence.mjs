@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { validateScreenId } from "../screen-id.mjs";
-import { WEB_READERS, capturesSpeech, validateStep, webUrl } from "./config.mjs";
+import { SNAPSHOT_SOURCES, SPEECH_SOURCES, WEB_READERS, capturesSpeech, validateStep, webUrl } from "./config.mjs";
 import { safariKey } from "./voiceover.mjs";
 import { validateProvenance } from "../provenance.mjs";
 
@@ -11,11 +11,6 @@ const object = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const text = (v) => typeof v === "string" && v.trim().length > 0;
 const strings = (v) => Array.isArray(v) && v.every((s) => typeof s === "string");
 const require = (ok, message) => { if (!ok) throw new Error(`invalid web evidence: ${message}`); };
-
-// What each screen reader's speech is labelled, and each browser's
-// structural snapshot.
-const SPEECH_SOURCES = { none: "none", nvda: "nvda-guidepup", voiceover: "voiceover-guidepup" };
-const SNAPSHOT_SOURCES = { chromium: "playwright-aria-snapshot", safari: "safari-dom-outline" };
 
 export function isWebReport(dir) {
   return existsSync(join(dir, "web-run.json")) || (existsSync(dir) && readdirSync(dir).some((f) => f.endsWith(".web.json")));

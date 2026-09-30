@@ -9,11 +9,14 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   SETTLE, assertNativeDesktop, awaitQuiet, matchingOwnedProcesses, parseVoiceOverProcesses, resetVoiceOverTimeoutForTests,
-  safariKey, settleVoiceOver, speechLog, startVoiceOver, stopOwnedVoiceOver, stopVoiceOver, voiceOverCommand, withAttempts,
+  VOICEOVER_COMMANDS, macosKeyScript, safariKey, settleVoiceOver, speechLog, startVoiceOver, stopOwnedVoiceOver, stopVoiceOver,
+  voiceOverCommand, voiceOverListen, withAttempts,
 } from "../src/web/voiceover.mjs";
-import { createSafari, domOutline, pageResult, pageScript } from "../src/web/safari.mjs";
+import {
+  createSafari, domOutline, javascriptScript, pageResult, pageScript, preflightRequest, sameDocumentUrl,
+} from "../src/web/safari.mjs";
 import { loadConfig } from "../src/config.mjs";
-import { WEB_DEFAULTS, validateWebConfig, webScreens } from "../src/web/config.mjs";
+import { READER_STEP_COMMANDS, WEB_DEFAULTS, validateWebConfig, webScreens } from "../src/web/config.mjs";
 import { hash, readWebReport, validateWebCapture, webSummary } from "../src/web/evidence.mjs";
 import { renderWebReport } from "../src/web/report.mjs";
 import { captureWeb } from "../src/web/run.mjs";
@@ -38,6 +41,8 @@ function fakeIo({ processes = new Map(), phrases = ["Ready"] } = {}) {
     ...clock,
     table: processes,
     killed: [],
+    sent: [],
+    sendKey: async (key) => { io.sent.push([key, io.time]); },
     voiceOverProcesses: async () => new Map(io.table),
     kill: (pid, signal) => { io.killed.push([pid, signal]); io.table.delete(pid); },
     lastPhrase: async () => phrases[0],
@@ -513,6 +518,10 @@ test("persisted VoiceOver runs require Safari provenance and render their own sp
     write(run);
     const acr = buildAcr({ appName: "Fixture", productVersion: "1", date: "2026-09-30", web: webSummary(readWebReport(dir)) });
     assert.match(acr.notes, /VoiceOver command output formatted by Guidepup/);
+    // The ACR carries the same Safari limits as the HTML report.
+    assert.match(acr.notes, /untrusted page scripts/);
+    assert.match(acr.notes, /Option\+Tab/);
+    assert.match(acr.notes, /DOM outline, not Safari's accessibility tree/);
     assert.throws(() => buildAcr({ appName: "Fixture", productVersion: "1", date: "2026-09-30",
       web: { ...webSummary(evidence), environment: { ...run.environment, screenReader: "jaws" } } }), /unknown screen reader/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -544,6 +553,7 @@ test("a VoiceOver capture drives Safari and VoiceOver end to end with fakes and 
     { action: "click", selector: "#email" },
     { action: "press", key: "Shift+Tab", expect: { speechIncludes: "Save email" } },
     { action: "voiceover", command: "next" },
+    { action: "press", key: "Enter", listenMs: 1500, expect: { speechIncludes: "Save email" } },
   ] }] }]));
   try {
     const cfg = loadConfig(undefined, { out: dir, web: { screens, screenReader: "voiceover", timeoutMs: 1000 } });
@@ -565,7 +575,11 @@ test("a VoiceOver capture drives Safari and VoiceOver end to end with fakes and 
     assert.equal(form.ariaSnapshot, '- main\n  - heading "Account settings" [level=1]');
     assert.deepEqual(form.steps.map((step) => [step.sentKey, step.speech]), [
       [undefined, []], ["Option+Shift+Tab", ["Save email, button"]], [undefined, ["Save email, button"]],
+      ["Enter", ["Save email, button"]],
     ]);
+    // The listen step typed its key through the operating system.
+    assert.deepEqual(io.sent.map(([key]) => key), ["Enter"]);
+    assert.ok(io.slept.includes(1500));
     assert.ok(voiceOver.calls.some((call) => call[0] === "press" && call[1] === "Option+Shift+Tab"));
     assert.equal(world.document.elements["#email"].clicked, 1);
     // Cleanup stopped the reader and closed the owned window.
@@ -573,4 +587,156 @@ test("a VoiceOver capture drives Safari and VoiceOver end to end with fakes and 
     assert.deepEqual(world.closed, ["7"]);
     assert.ok(existsSync(join(out, "index.html")));
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ── review fixes ──
+
+test("the page JavaScript AppleScript never names a variable after Safari's source property", () => {
+  // Inside `tell application "Safari"`, `source` is the page's HTML, not a
+  // local variable, so `do JavaScript source` would not run the file.
+  assert.doesNotMatch(javascriptScript, /\bsource\b/);
+  assert.match(javascriptScript, /set aloudScript to read \(POSIX file \(item 2 of argv\)\) as «class utf8»/);
+  assert.match(javascriptScript, /do JavaScript aloudScript in current tab of w/);
+});
+
+test("the Safari status preflight is bounded, cancels its body, and explains a failure", async () => {
+  let cancelled = 0, seen;
+  const answering = { fetch: async (url, options) => {
+    seen = options;
+    return { ok: true, status: 200, body: { cancel: async () => { cancelled++; } } };
+  } };
+  assert.deepEqual(await preflightRequest(answering, "http://127.0.0.1:3000/", 1000), { ok: true, status: 200 });
+  assert.ok(seen.signal instanceof AbortSignal);
+  assert.equal(cancelled, 1);
+  // A server that accepts the connection and never answers.
+  const stalled = { fetch: (url, { signal }) => new Promise((_, reject) => {
+    signal.addEventListener("abort", () => reject(signal.reason));
+  }) };
+  await assert.rejects(preflightRequest(stalled, "http://127.0.0.1:3000/", 30), /no response within 30ms/);
+  const untrusted = { fetch: async () => { throw new TypeError("fetch failed: self-signed certificate"); } };
+  await assert.rejects(preflightRequest(untrusted, "https://localhost/", 1000), /could not request https:\/\/localhost\/ from Node.*self-signed/);
+});
+
+test("a Safari goto that changes only the fragment waits for the URL, not a new document", async () => {
+  assert.equal(sameDocumentUrl("https://a.test/app/", "https://a.test/app/#/completed"), true);
+  assert.equal(sameDocumentUrl("https://a.test/app/#/active", "https://a.test/app/#/completed"), true);
+  assert.equal(sameDocumentUrl("https://a.test/app/#/completed", "https://a.test/app/#/completed"), true);
+  // Leaving the fragment off, or changing the path or query, loads a document.
+  assert.equal(sameDocumentUrl("https://a.test/app/#/completed", "https://a.test/app/"), false);
+  assert.equal(sameDocumentUrl("https://a.test/app/", "https://a.test/other/#x"), false);
+  assert.equal(sameDocumentUrl("https://a.test/app/?a=1", "https://a.test/app/?a=2#x"), false);
+  assert.equal(sameDocumentUrl("about:blank", "https://a.test/#x"), false);
+
+  const { io, world } = fakeSafari();
+  // Safari keeps the document for a fragment change, as a browser does.
+  const load = io.setUrl;
+  io.setUrl = async (id, url) => {
+    if (sameDocumentUrl(world.document.URL, url)) world.document.URL = url;
+    else await load(id, url);
+  };
+  const context = await (await createSafari(io).launch()).newContext({});
+  context.setDefaultNavigationTimeout(500);
+  const page = await context.newPage();
+  const app = "http://127.0.0.1:3000/app/";
+  assert.equal((await page.goto(app)).ok(), true);
+  const before = world.document;
+  assert.equal((await page.goto(`${app}#/completed`)).ok(), true);
+  assert.equal(world.document, before);
+  assert.equal(await page.url(), `${app}#/completed`);
+  assert.equal(world.document.aloudPrevious, undefined);
+  // A later full navigation still waits for the new document.
+  assert.equal((await page.goto(app)).ok(), true);
+  assert.notEqual(world.document, before);
+});
+
+test("a failed VoiceOver start does not report Guidepup's not-running stop as a cleanup failure", async () => {
+  const io = fakeIo();
+  const voiceOver = fakeVoiceOver({ io, startFailures: 5 });
+  // Guidepup 0.34.0 throws from stop() whenever no start() resolved.
+  voiceOver.stop = async () => { voiceOver.calls.push(["stop"]); throw new Error("VoiceOver not running"); };
+  const error = await start(io, voiceOver).catch((failure) => failure);
+  assert.match(error.message, /VoiceOver did not start/);
+  assert.doesNotMatch(error.message, /cleanup after failed startup also failed/);
+  assert.equal(voiceOver.calls.some(([name]) => name === "stop"), false);
+
+  // A process that survives cleanup is still reported.
+  const stuck = fakeIo();
+  stuck.kill = () => {};
+  const leaky = fakeVoiceOver({ io: stuck });
+  leaky.start = async () => { stuck.table.set(900, `now ${VO}`); throw new Error("VoiceOver not ready (-600)"); };
+  await assert.rejects(start(stuck, leaky), /cleanup after failed startup also failed/);
+});
+
+test("the DOM outline uses ARIA's default heading level, scopes headers, and keeps visible children of hidden parents", () => {
+  const body = element("BODY", {}, [
+    element("HEADER", {}, [text("Site")]),
+    element("DIV", { role: "heading" }, [text("Step 2")]),
+    element("SPAN", { role: "heading", "aria-level": "3" }, [text("Details")]),
+    element("ARTICLE", {}, [element("HEADER", {}, [text("Post header")]), element("FOOTER", {}, [text("Post footer")])]),
+    element("DIV", { role: "region", "aria-label": "News" }, [element("FOOTER", {}, [text("Region footer")])]),
+    element("FOOTER", {}, [text("Legal")]),
+    element("DIV", {}, [text("Invisible words"), element("BUTTON", {}, [text("Shown again")], { style: { display: "block", visibility: "visible" } })],
+      { style: { display: "block", visibility: "hidden" } }),
+  ]);
+  const saved = { document: globalThis.document, getComputedStyle: globalThis.getComputedStyle };
+  globalThis.document = { body, getElementById: () => null };
+  globalThis.getComputedStyle = (el) => el.style ?? { display: "block", visibility: "visible" };
+  try {
+    assert.equal(domOutline(), [
+      "- banner",
+      '  - text: "Site"',
+      '- heading "Step 2" [level=2]',
+      '- heading "Details" [level=3]',
+      "- article",
+      '  - text: "Post header"',
+      '  - text: "Post footer"',
+      '- region "News"',
+      '  - text: "Region footer"',
+      "- contentinfo",
+      '  - text: "Legal"',
+      '- button "Shown again"',
+    ].join("\n"));
+  } finally {
+    Object.assign(globalThis, saved);
+    if (saved.document === undefined) delete globalThis.document;
+    if (saved.getComputedStyle === undefined) delete globalThis.getComputedStyle;
+  }
+});
+
+test("VoiceOver press steps can hold a capture open with listenMs, through an allowed operating-system key", async () => {
+  // Config: only VoiceOver press steps, bounded windows, and simple keys.
+  const web = { ...structuredClone(WEB_DEFAULTS), url: "https://example.test/", screenReader: "voiceover" };
+  const manifest = (steps) => [{ id: "flow", screens: [{ id: "form", url: "/form", steps }] }];
+  assert.doesNotThrow(() => webScreens(web, manifest([{ action: "press", key: "x", listenMs: 2500, expect: { speechIncludes: "over" } }])));
+  for (const [step, pattern] of [
+    [{ action: "press", key: "Tab", listenMs: 2000 }, /accepts only a letter/],
+    [{ action: "press", key: "Enter", listenMs: 500 }, /from 1000 to 30000/],
+    [{ action: "press", key: "Enter", listenMs: 1500.5 }, /from 1000 to 30000/],
+    [{ action: "voiceover", command: "next", listenMs: 2000 }, /valid only for press/],
+  ]) assert.throws(() => webScreens(web, manifest([step])), pattern);
+  assert.throws(() => webScreens({ ...web, screenReader: "nvda" }, manifest([{ action: "press", key: "Enter", listenMs: 2000 }])), /requires web.screenReader voiceover/);
+
+  // The key script: letters, digits and named keys only.
+  assert.equal(macosKeyScript("x"), 'tell application "Safari" to activate\ntell application "System Events" to keystroke "x"');
+  assert.match(macosKeyScript("Enter"), /key code 36$/);
+  assert.match(macosKeyScript("Space"), /key code 49$/);
+  for (const key of ['"', "Tab", "xy", "", undefined]) assert.throws(() => macosKeyScript(key), /unsupported operating system key/);
+
+  // The listen window: settle, clear once, then one capture around the key and the wait.
+  const io = fakeIo();
+  const voiceOver = fakeVoiceOver({ io, log: ["1 character over"] });
+  const reader = await start(io, voiceOver);
+  voiceOver.calls.length = 0;
+  assert.deepEqual(await voiceOverListen(reader, "x", 2500, 1000), ["1 character over"]);
+  assert.deepEqual(voiceOver.calls.map(([name]) => name), ["clear", "capture", "clear", "capture"]);
+  assert.deepEqual(io.sent.map(([key]) => key), ["x"]);
+  assert.equal(io.slept.at(-1), 2500);
+  await assert.rejects(voiceOverListen(reader, "Tab", 2500, 1000), /unsupported operating system key/);
+  await assert.rejects(voiceOverListen(reader, "x", 10, 1000), /listen window/);
+  await stopVoiceOver(reader);
+  await assert.rejects(voiceOverListen(reader, "x", 2500, 1000), /not started by startVoiceOver/);
+});
+
+test("the VoiceOver driver and the config share one cursor command list", () => {
+  assert.equal(VOICEOVER_COMMANDS, READER_STEP_COMMANDS.voiceover);
 });

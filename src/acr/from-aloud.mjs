@@ -613,9 +613,16 @@ function webNote(web) {
   };
   if (!Object.hasOwn(speeches, screenReader)) throw new Error(`invalid report-only web summary: unknown screen reader ${screenReader}`);
   const speech = speeches[screenReader];
+  // Safari is driven through Apple Events, which changes what its evidence
+  // can say; the HTML report states the same limits.
+  const safari = browser === "safari"
+    ? " In Safari, setup actions (click, fill, wait) ran as untrusted page scripts, Tab and Shift+Tab " +
+      "were sent as Option+Tab and Option+Shift+Tab, and the structural evidence is a DOM outline, " +
+      "not Safari's accessibility tree."
+    : "";
   return (
     `Experimental web checks captured ${Object.keys(web.screens).length} named state(s) in ` +
-    `${browser} ${browserVersion}. Speech source: ${speech}. Scripted scenario completion does not ` +
+    `${browser} ${browserVersion}. Speech source: ${speech}.${safari} Scripted scenario completion does not ` +
     "establish full traversal or conformance. All web results are report-only; review raw axe results, " +
     "incomplete checks, and interaction evidence in the HTML report."
   );

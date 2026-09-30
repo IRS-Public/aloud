@@ -5,12 +5,14 @@ import { join, resolve } from "node:path";
 import { release } from "node:os";
 import { pathToFileURL } from "node:url";
 import { cliArgs } from "../cli-args.mjs";
-import { WEB_READERS, WEB_VERSIONS, validateWebConfig, webScreens } from "./config.mjs";
+import { SNAPSHOT_SOURCES, SPEECH_SOURCES, WEB_READERS, WEB_VERSIONS, validateWebConfig, webScreens } from "./config.mjs";
 import { webDependency } from "./dependencies.mjs";
 import { hash, validateWebCapture } from "./evidence.mjs";
 import { startNvda, nvdaCommand, stopNvda } from "./nvda.mjs";
 import { safari as safariLauncher } from "./safari.mjs";
-import { assertNativeDesktop, safariKey, settleVoiceOver, startVoiceOver, stopVoiceOver, voiceOverCommand } from "./voiceover.mjs";
+import {
+  assertNativeDesktop, safariKey, settleVoiceOver, startVoiceOver, stopVoiceOver, voiceOverCommand, voiceOverListen,
+} from "./voiceover.mjs";
 import { reportWeb } from "./report.mjs";
 import { collectProvenance, formatTools } from "../provenance.mjs";
 
@@ -18,11 +20,11 @@ const json = (path, value) => {
   writeFileSync(`${path}.tmp`, `${JSON.stringify(value, null, 2)}\n`);
   renameSync(`${path}.tmp`, path);
 };
-// Each screen reader's start, command, and stop functions, and the label its
-// captured speech carries in evidence.
+// Each screen reader's start, command, and stop functions. VoiceOver can
+// also hold a capture open after a key (`listenMs` press steps).
 const READERS = {
-  nvda: { start: startNvda, command: nvdaCommand, stop: stopNvda, speechSource: "nvda-guidepup" },
-  voiceover: { start: startVoiceOver, command: voiceOverCommand, stop: stopVoiceOver, speechSource: "voiceover-guidepup" },
+  nvda: { start: startNvda, command: nvdaCommand, stop: stopNvda },
+  voiceover: { start: startVoiceOver, command: voiceOverCommand, stop: stopVoiceOver, listen: voiceOverListen },
 };
 
 async function bounded(operation, timeoutMs, label) {
@@ -92,13 +94,13 @@ export async function captureWeb(cfg, { flow = [], screenId = "current", depende
     // The structural snapshot and axe scan for this browser. Safari has no
     // accessibility snapshot for scripts, so it records a DOM outline.
     const snapshot = safari ? () => page.structuralSnapshot() : () => page.locator("body").ariaSnapshot();
-    const snapshotSource = safari ? "safari-dom-outline" : "playwright-aria-snapshot";
+    const snapshotSource = SNAPSHOT_SOURCES[browserName];
     const scan = safari ? () => page.axe() : () => new AxeBuilder({ page }).analyze();
     for (const screen of screens) {
       if (interrupted) throw new Error("web capture interrupted");
       const capture = { schemaVersion: 1, platform: "web", runId: run.runId, screen: screen.id,
         title: screen.title ?? screen.id, requestedUrl: screen.url, status: "running", steps: [],
-        speechSource: reader ? readerKit.speechSource : "none", navigationSpeech: [],
+        speechSource: SPEECH_SOURCES[reader ? web.screenReader : "none"], navigationSpeech: [],
         coverage: { scope: "scripted-scenario", scenarioComplete: false, fullTraversal: false } };
       const file = join(out, `${screen.id}.web.json`);
       try {
@@ -110,8 +112,10 @@ export async function captureWeb(cfg, { flow = [], screenId = "current", depende
           await page.bringToFront();
           if (!await page.evaluate(() => document.hasFocus())) throw new Error("browser document does not own keyboard focus");
           // NVDA starts at the top of the document with Control+Home.
-          // VoiceOver has no equivalent key that Aloud has validated, so it
-          // records what VoiceOver said as the page loaded, with no command.
+          // VoiceOver has no equivalent key that Aloud has validated, so no
+          // command is sent: it records what VoiceOver said while it settled
+          // after load and focus. Speech from before that settle, such as
+          // the title announced as Safari loaded, is not captured.
           capture.navigationSpeech = web.screenReader === "voiceover"
             ? await settleVoiceOver(reader, web.timeoutMs)
             : await command("press", "Control+Home");
@@ -125,7 +129,8 @@ export async function captureWeb(cfg, { flow = [], screenId = "current", depende
           else if (action.action === "press") {
             // Safari receives Option+Tab for Tab; record the key actually sent.
             if (web.screenReader === "voiceover") step.sentKey = safariKey(action.key);
-            if (reader) step.speech = await command("press", action.key);
+            if (reader && action.listenMs) step.speech = await readerKit.listen(reader, action.key, action.listenMs, web.timeoutMs);
+            else if (reader) step.speech = await command("press", action.key);
             else await page.keyboard.press(action.key);
           } else if (action.action === "click") await page.locator(action.selector).click();
           else if (action.action === "fill") await page.locator(action.selector).fill(action.value);

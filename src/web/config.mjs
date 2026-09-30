@@ -29,6 +29,20 @@ export const READER_STEP_COMMANDS = {
   voiceover: ["next", "previous", "nextHeading", "nextLandmark", "nextLink", "act", "interact", "stopInteracting"],
 };
 
+// What each screen reader's captured speech is labelled in evidence, and
+// each browser's structural snapshot. run.mjs writes these; evidence.mjs
+// checks them.
+export const SPEECH_SOURCES = { none: "none", nvda: "nvda-guidepup", voiceover: "voiceover-guidepup" };
+export const SNAPSHOT_SOURCES = { chromium: "playwright-aria-snapshot", safari: "safari-dom-outline" };
+
+// A VoiceOver `press` step with `listenMs` sends its key through the
+// operating system inside one capture held open that long, for products
+// that announce after a longer pause than Guidepup's capture waits. Only
+// these keys can be typed that way, so no manifest text reaches a script.
+export const LISTEN_KEYS = ["Backspace", "Enter", "Space"];
+export const LISTEN_MS = { min: 1000, max: 30000 };
+export const listenKey = (key) => LISTEN_KEYS.includes(key) || /^[a-z0-9]$/i.test(key);
+
 export function validateWebConfig(web) {
   only(web, [...Object.keys(WEB_DEFAULTS), "url", "screens", "storageState"], "web config");
   if (!Object.hasOwn(WEB_READERS, web.screenReader)) throw new Error("web.screenReader must be none, nvda, or voiceover");
@@ -50,7 +64,7 @@ export function validateWebConfig(web) {
 // One scenario step, checked against the run's screen reader. Speech can be
 // asserted only on steps that the reader itself captured.
 export function validateStep(step, reader) {
-  only(step, ["action", "selector", "value", "key", "command", "expect"], "web step");
+  only(step, ["action", "selector", "value", "key", "command", "listenMs", "expect"], "web step");
   const fields = { click: ["selector"], fill: ["selector", "value"], press: ["key"], wait: ["selector"], nvda: ["command"], voiceover: ["command"] };
   if (!fields[step.action]) throw new Error(`unknown web action: ${step.action}`);
   for (const key of fields[step.action]) {
@@ -64,6 +78,16 @@ export function validateStep(step, reader) {
   }
   if (step.action === "voiceover" && (reader !== "voiceover" || !READER_STEP_COMMANDS.voiceover.includes(step.command))) {
     throw new Error("voiceover action requires VoiceOver and a supported cursor command");
+  }
+  if (step.listenMs !== undefined) {
+    if (step.action !== "press") throw new Error("listenMs is valid only for press");
+    if (reader !== "voiceover") throw new Error("listenMs requires web.screenReader voiceover");
+    if (!Number.isInteger(step.listenMs) || step.listenMs < LISTEN_MS.min || step.listenMs > LISTEN_MS.max) {
+      throw new Error(`listenMs must be an integer from ${LISTEN_MS.min} to ${LISTEN_MS.max}`);
+    }
+    if (!listenKey(step.key)) {
+      throw new Error(`press with listenMs accepts only a letter, a digit, ${LISTEN_KEYS.join(", ")}; got ${step.key}`);
+    }
   }
   if (step.expect !== undefined) {
     only(step.expect, ["focused", "speechIncludes"], "web expectation");

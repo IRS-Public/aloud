@@ -128,10 +128,13 @@ refuses to run it on a developer's Mac. It requires macOS and all of
 These variables prevent accidents; they are not a security boundary. It also
 refuses to start when VoiceOver is already running, and at cleanup it stops
 only the VoiceOver processes it started (matched by process id and start
-time). The runner needs Guidepup's setup, Safari's "Allow JavaScript from
-Apple Events", and full keyboard access:
+time). The runner needs the pinned Guidepup and `@axe-core/playwright` peers
+(the adapter is not loaded, but its pinned axe-core build is what Aloud
+injects into Safari; Playwright itself is not needed), Guidepup's setup,
+Safari's "Allow JavaScript from Apple Events", and full keyboard access:
 
 ```sh
+npm install --save-dev @guidepup/guidepup@0.34.0 @axe-core/playwright@4.13.0
 npx --yes @guidepup/setup@0.25.3 setup --ci
 npx --yes @guidepup/setup@0.25.3 install
 defaults write com.apple.Safari AllowJavaScriptFromAppleEvents -bool true
@@ -155,11 +158,23 @@ changes what the evidence can say:
   `stopInteracting`. `speechIncludes` works on these and on `press` steps.
 - Before each command, Aloud waits until VoiceOver's last phrase has been
   unchanged for one second (at most five), so earlier speech does not land
-  in the command's log. After navigation it records what VoiceOver said as
-  the page loaded; no command is sent, unlike NVDA's `Control+Home`.
+  in the command's log. After navigation no command is sent, unlike NVDA's
+  `Control+Home`: Aloud records only what VoiceOver said during that settle,
+  after the page loaded and Safari was brought forward. Speech from earlier
+  in the load, such as the page title, is not captured, so an empty
+  initial log does not mean nothing was announced.
+- Guidepup ends a capture about a second after speech goes quiet. For an
+  announcement a product delays longer (a debounced live region), add
+  `listenMs` (1000 to 30000) to a `press` step: the key is typed through
+  System Events inside one capture held open that long. Only a letter, a
+  digit, `Backspace`, `Enter`, or `Space` can be sent this way.
+  `{ "action": "press", "key": "x", "listenMs": 2500, "expect": { "speechIncludes": "characters over" } }`
 - Apple Events cannot see HTTP status, so a direct request from Node checks
-  the URL first, and Safari's navigation timing is checked too when Safari
-  reports a status.
+  the URL first (bounded by `web.timeoutMs`), and Safari's navigation timing
+  is checked too when Safari reports a status. Node must be able to reach and
+  trust the URL: a local HTTPS certificate that only Safari's Keychain trusts
+  fails this request. A URL that differs from the current page only by its
+  fragment is an in-page navigation; Aloud waits for the URL to change.
 - The structural snapshot is a DOM outline computed in the page
   (`safari-dom-outline`): roles, simple names, and common states. It is not
   Safari's accessibility tree.
@@ -180,11 +195,13 @@ started in that process.
 
 The run writes `web-run.json`, per-state `*.web.json`, screenshots, a summary,
 and a self-contained HTML page. `web-run.json` records the run's provenance
-(commit, dirty state, machine, CI run, and the Playwright, axe-core,
-Chromium or Safari, and NVDA or VoiceOver versions; see [how-it-works](how-it-works.md)), even for
-a failed run, and the summary and HTML page state it. Before each final checkpoint it records a
-Playwright ARIA snapshot; after axe and screenshot capture it checks that the
-URL and ARIA snapshot still match. This detects exposed structural changes,
+(commit, dirty state, machine, CI run, and the axe-core, Chromium or Safari,
+and NVDA or VoiceOver versions, plus Playwright for Chromium runs; see
+[how-it-works](how-it-works.md)), even for a failed run, and the summary and
+HTML page state it. Before each final checkpoint it records a structural
+snapshot (a Playwright ARIA snapshot in Chromium, the DOM outline in Safari);
+after axe and screenshot capture it checks that the URL and snapshot still
+match. This detects exposed structural changes,
 not every visual or layout change. Axe may examine content outside the
 captured viewport. Frames and shadow content retain axe's own applicability
 results; neither the snapshot nor successful execution proves all content
