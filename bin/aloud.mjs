@@ -46,7 +46,15 @@ const OPTIONS = {
     baseline: { type: "string" },
     gate: { type: "boolean" },
   },
-  baseline: { ...GLOBAL_OPTIONS, baseline: { type: "string" } },
+  baseline: {
+    ...GLOBAL_OPTIONS,
+    baseline: { type: "string" },
+    prune: { type: "boolean" },
+    accept: { type: "string" },
+    kind: { type: "string" },
+    summary: { type: "string" },
+    issue: { type: "string" },
+  },
   openacr: {
     ...GLOBAL_OPTIONS,
     android: { type: "string" },
@@ -85,6 +93,7 @@ Commands:
   tts          Build or install the optional silent recording TTS engine
   report       Re-aggregate an existing report dir (--dir, --baseline, --gate)
   baseline     Accept current counts into a baseline: aloud baseline <report-dir> [--baseline <file>]
+               [--prune] [--accept <screen>:<ruleId> --kind <kind> --summary "..." [--issue <ref>]]
   openacr      Emit a draft OpenACR (--android/--ios baselines or --report/--report-ios/--report-web dirs)
                [--date YYYY-MM-DD] [--version <v>] [--catalog <file>: same chapters and criteria
                as the bundled 2.5-edition-wcag-2.2-508-en catalog]
@@ -112,6 +121,13 @@ Leg flags (android, ios):
   --apple-audit                 iOS only: add report-only Apple accessibility audit evidence
   --voiceover computed|real     iOS speech source (default: computed; real needs Xcode 27)
   --voiceover-max-steps N       Maximum forward moves for real speech (1–100, default: 20)
+
+Baseline flags:
+  --prune                       Drop screens this run did not cover (renamed or removed)
+  --accept <screen>:<ruleId>    Record why a baselined error is accepted (add or replace)
+  --kind <kind>                 product-bug | platform-gap | accepted-risk
+  --summary "..."               One sentence, at most 140 characters
+  --issue <ref>                 Optional tracker URL or id
 
 Web flags:
   --url <url>                  HTTP(S) page or base URL for a manifest
@@ -294,11 +310,21 @@ function runReport(argv) {
   run(process.execPath, args, resolvedPath);
 }
 
+// Flags given more than once. parseArgs keeps the last value, and which
+// one was meant is unknowable, so the caller refuses instead.
+function repeatedFlags(argv, names) {
+  return names.filter((name) =>
+    argv.filter((arg) => arg === `--${name}` || arg.startsWith(`--${name}=`)).length > 1);
+}
+
 function runBaseline(argv) {
   const { values, positionals } = parse("baseline", argv, { allowPositionals: true });
   if (values.help) return console.log(USAGE);
   const reportDir = positionals[0];
   if (!reportDir) fail("Usage: aloud baseline <report-dir> [--baseline <file>]");
+  // One accepted reason per run: a second --accept would be dropped.
+  const repeated = repeatedFlags(argv, ["accept", "kind", "summary", "issue"]);
+  if (repeated.length) fail(`aloud baseline: ${repeated.map((name) => `--${name}`).join(", ")} given more than once; accept one reason per run`);
   const dir = resolve(reportDir);
   const platform = platformForReportDir(dir);
   if (platform === "web") fail("Experimental web evidence is report-only; baselines are not enabled");
@@ -309,11 +335,13 @@ function runBaseline(argv) {
     : isIos
       ? cfg.baseline.ios
       : cfg.baseline.android;
-  run(
-    process.execPath,
-    [join(ALOUD_HOME, "src", "report", "baseline.mjs"), dir, "--baseline", baseline],
-    resolvedPath,
-  );
+  const args = [join(ALOUD_HOME, "src", "report", "baseline.mjs"), dir, "--baseline", baseline];
+  if (values.prune) args.push("--prune");
+  // --flag=value, so a summary that starts with "-" is not read as a flag.
+  for (const flag of ["accept", "kind", "summary", "issue"]) {
+    if (values[flag] !== undefined) args.push(`--${flag}=${values[flag]}`);
+  }
+  run(process.execPath, args, resolvedPath);
 }
 
 // Drop flags given an empty value (--date ""), which count as absent, as

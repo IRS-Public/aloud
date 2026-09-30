@@ -12,7 +12,14 @@
 // Only run this to ACCEPT current counts (initial baseline, or after a
 // fix lowers them). Commit the result alongside the change that earned it.
 //
-//   aloud baseline <report-dir> [--baseline <file>]
+//   aloud baseline <report-dir> [--baseline <file>] [--prune]
+//     [--accept <screen>:<ruleId> --kind <kind> --summary "..." [--issue <ref>]]
+//
+// Accepted reasons (src/report/accepted.mjs) already in the baseline carry
+// over for rule ids that still fire. --accept adds or replaces one, after
+// the merge. --prune drops screens this run did not cover (renamed or
+// removed screens) instead of keeping them. The merge itself is
+// mergeBaseline in baseline-merge.mjs.
 //
 // With no args, the report dir and baseline come from the resolved
 // config (env ALOUD_CONFIG): <out>/android and baseline.android, or the
@@ -22,18 +29,41 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { cliArgs } from "../cli-args.mjs";
+import { parseAcceptFlags } from "./accepted.mjs";
+import { mergeBaseline } from "./baseline-merge.mjs";
 import { platformForReportDir } from "./platform.mjs";
 import { readTreeReport } from "./tree-report.mjs";
-import { migrationNote, readBaseline } from "./validation.mjs";
+import { migrationNote } from "./validation.mjs";
 
-const { opt, positionals } = cliArgs(
+const USAGE =
+  "usage: aloud baseline <report-dir> [--baseline <file>] [--prune] " +
+  '[--accept <screen>:<ruleId> --kind <kind> --summary "..." [--issue <ref>]]';
+
+const { opt, flag, positionals } = cliArgs(
   "baseline.mjs",
-  { baseline: { type: "string" } },
+  {
+    baseline: { type: "string" },
+    prune: { type: "boolean" },
+    accept: { type: "string" },
+    kind: { type: "string" },
+    summary: { type: "string" },
+    issue: { type: "string" },
+  },
   { allowPositionals: true },
 );
 // One report dir per run: a second one would be silently ignored.
 if (positionals.length > 1) {
-  console.error("usage: aloud baseline <report-dir> [--baseline <file>]");
+  console.error(USAGE);
+  process.exit(1);
+}
+
+// Check the accept flags before reading anything, so a typo never
+// half-runs.
+let accept;
+try {
+  accept = parseAcceptFlags({ accept: opt("accept"), kind: opt("kind"), summary: opt("summary"), issue: opt("issue") });
+} catch (error) {
+  console.error(`aloud baseline: ${error.message}`);
   process.exit(1);
 }
 
@@ -47,7 +77,7 @@ const reportDir = positionals[0]
     ? join(cfg.out, "android")
     : null;
 if (!reportDir) {
-  console.error("usage: aloud baseline <report-dir> [--baseline <file>]");
+  console.error(USAGE);
   process.exit(1);
 }
 const platform = platformForReportDir(reportDir);
@@ -67,16 +97,11 @@ if (!existsSync(reportDir)) {
   process.exit(1);
 }
 
-// Validate the existing file first. Screens this run does not cover are
-// written back exactly as they were: an entry from before a rule
-// reclassification is the only record that a criterion was never checked
-// on that screen at the current rule (the OpenACR draft reads it and
-// leaves the criterion unevaluated), so rewriting it in the current
-// classification would turn that gap into a silent pass.
+// Screens this run does not cover are written back exactly as they were
+// (see baseline-merge.mjs). The existing file is validated first, and
+// every report is read before anything is written.
 const existing = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, "utf8")) : {};
-const { migrated } = readBaseline(existing, baselinePath);
-const baseline = { ...existing };
-const updated = [];
+const gates = {};
 const files = readdirSync(reportDir)
   .filter((f) => f.endsWith(".tree.json"))
   .sort();
@@ -95,30 +120,56 @@ for (const file of files) {
     );
     process.exit(1);
   }
-  baseline[report.screen] = report.gate;
-  updated.push(report.screen);
+  gates[report.screen] = report.gate;
 }
 
-if (updated.length === 0) {
+if (Object.keys(gates).length === 0) {
   console.error("No gate reports found — nothing written.");
   process.exit(1);
 }
 
+let result;
+try {
+  result = mergeBaseline(existing, gates, { prune: flag("prune"), accept, field: baselinePath });
+} catch (error) {
+  console.error(`aloud baseline: ${error.message}`);
+  process.exit(1);
+}
+const { baseline, updated, kept, pruned, dropped, migrated, unexplained } = result;
+
 const note = migrationNote(
-  migrated.filter(({ screen }) => !updated.includes(screen)),
+  migrated,
   baselinePath,
   "This run keeps those entries as written; include those screens in a run to rewrite them.",
 );
 if (note) console.warn(note);
 
-const untouched = Object.keys(baseline).filter((s) => !updated.includes(s));
-if (untouched.length > 0) {
+if (kept.length > 0) {
   console.warn(
-    `note: ${untouched.length} screen(s) kept from the existing baseline (not in this run): ` +
-      `${untouched.join(", ")}. If a screen was renamed or removed, prune its entry manually.`,
+    `note: ${kept.length} screen(s) kept from the existing baseline (not in this run): ` +
+      `${kept.join(", ")}. If a screen was renamed or removed, re-run with --prune to drop it.`,
+  );
+}
+if (pruned.length > 0) {
+  console.warn(`note: --prune removed ${pruned.length} screen(s) not in this run: ${pruned.join(", ")}.`);
+}
+if (dropped.length > 0) {
+  console.warn(
+    `note: dropped ${dropped.length} accepted reason(s) for rule ids that no longer fire: ` +
+      `${dropped.map(({ screen, ruleId }) => `${screen}:${ruleId}`).join(", ")}.`,
+  );
+}
+// A warning, not a failure: baselines from before accepted reasons have
+// none, and must keep working.
+if (unexplained.length > 0) {
+  const count = unexplained.reduce((n, { ruleIds }) => n + ruleIds.length, 0);
+  console.warn(
+    `warning: ${count} baselined rule id(s) have no accepted reason: ` +
+      `${unexplained.map(({ screen, ruleIds }) => `${screen}: ${ruleIds.join(", ")}`).join("; ")}. ` +
+      'Record why with --accept <screen>:<ruleId> --kind product-bug|platform-gap|accepted-risk --summary "...".',
   );
 }
 
-const sorted = Object.fromEntries(Object.entries(baseline).sort(([a], [b]) => a.localeCompare(b)));
-writeFileSync(baselinePath, `${JSON.stringify(sorted, null, 2)}\n`);
+writeFileSync(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
+if (accept) console.log(`accepted ${accept.screen}:${accept.entry.ruleId} as ${accept.entry.kind}`);
 console.log(`baseline updated for ${updated.length} screen(s) → ${baselinePath}`);

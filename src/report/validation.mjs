@@ -1,5 +1,6 @@
 import { validateScreenId } from "../screen-id.mjs";
 import { RECLASSIFIED, RULES, splitReclassified } from "../rules/catalog.mjs";
+import { keepAccepted, validateAccepted } from "./accepted.mjs";
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isRuleId = (value) => typeof value === "string" && value.trim().length > 0;
@@ -29,15 +30,23 @@ export function validateGate(gate, field) {
 // a screen that now trips the successor rule fails as a new rule id.
 // `migrated` lists each changed screen with its old and new allowance, for
 // a note to the user; the input is not modified.
+//
+// An entry may also list the reasons its errors are accepted (see
+// src/report/accepted.mjs). Each must name one of the entry's rule ids as
+// written; a reason for a reclassified id leaves the entry along with it.
 export function readBaseline(baseline, field = "baseline") {
   if (!isRecord(baseline)) throw new Error(`${field} must be an object keyed by screen id`);
   const current = {};
   const migrated = [];
   for (const [screen, gate] of Object.entries(baseline)) {
     validateScreenId(screen, `${field} screen id`);
-    validateGate(gate, `${field} screen "${screen}"`);
+    const context = `${field} screen "${screen}"`;
+    validateGate(gate, context);
+    if (gate.accepted !== undefined) validateAccepted(gate.accepted, gate.ruleIds, `${context}.accepted`);
     const { errors, ruleIds, retired } = splitReclassified(gate);
-    current[screen] = { ...gate, errors, ruleIds };
+    const { accepted: written, ...rest } = gate;
+    const { kept } = keepAccepted(written, ruleIds);
+    current[screen] = { ...rest, errors, ruleIds, ...(kept.length ? { accepted: kept } : {}) };
     if (retired.length) migrated.push({ screen, retired, was: gate.errors, now: errors });
   }
   return { baseline: current, migrated };

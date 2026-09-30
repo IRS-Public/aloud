@@ -42,8 +42,8 @@ scrolling. See [the protocol](talkback-focus.md).
 
 `aloud android` and `aloud ios` run the whole leg: install the build
 (`--apk` / `--app`), walk, report, gate. `aloud report` re-aggregates an
-existing report dir. `aloud baseline` accepts current counts. `aloud
-openacr` emits the draft conformance report, and `aloud acr` builds one from
+existing report dir. `aloud baseline` accepts current counts, and records
+why an error is accepted (`--accept`). `aloud openacr` emits the draft conformance report, and `aloud acr` builds one from
 any findings document (see [docs/openacr.md](openacr.md)). Both run in the
 `aloud` process through `src/cli/openacr.mjs`.
 
@@ -239,7 +239,8 @@ reader can.
 
 The baseline file (default `aloud-baseline-android.json` /
 `aloud-baseline-ios.json`, or `baseline.android` / `baseline.ios` in the
-config) records per screen `{ errors, ruleIds }`. The gate is a ratchet:
+config) records per screen `{ errors, ruleIds }`, plus optional accepted
+reasons (see [below](#accepted-findings)). The gate is a ratchet:
 
 - A screen fails if its error count rises above the baseline.
 - A rule id the baseline has never seen fails even under the count.
@@ -259,6 +260,58 @@ existing entries and supplied tree reports before writing; an invalid input
 leaves the baseline unchanged. Valid filtered runs still preserve untouched
 screens. `--no-gate` on a leg skips the ratchet comparison, not validation of
 the supplied tree evidence.
+
+A screen this run did not cover is kept as written, with a note. When a
+screen was renamed or removed, pass `--prune` to drop every screen the run
+did not cover instead of editing the file by hand.
+
+### Accepted findings
+
+A baselined error can carry the reason it is allowed to stand:
+
+```bash
+aloud baseline aloud-report/android \
+  --accept checkout:native-target-size-minimum --kind platform-gap \
+  --summary "The system date picker draws 20dp arrows" \
+  --issue https://tracker.example.com/APP-7
+```
+
+This writes an `accepted` list on the screen's entry:
+
+```json
+"checkout": {
+  "errors": 2,
+  "ruleIds": ["native-target-size-minimum"],
+  "accepted": [{
+    "ruleId": "native-target-size-minimum",
+    "kind": "platform-gap",
+    "summary": "The system date picker draws 20dp arrows",
+    "issue": "https://tracker.example.com/APP-7"
+  }]
+}
+```
+
+- `kind` is `product-bug` (a defect in the app, not fixed yet),
+  `platform-gap` (the OS, screen reader, or a system control causes it), or
+  `accepted-risk` (a known defect the team chose to ship).
+- `summary` is one sentence of at most 140 characters. `issue` is optional:
+  an http(s) URL or a tracker id with no spaces.
+- The rule id must be one the screen's entry gates, and a rule in
+  `src/rules/catalog.mjs`. An invalid entry stops `aloud report --gate` and
+  `aloud baseline` without writing anything, like any other invalid baseline.
+- One `--accept` per run adds or replaces the reason for that rule id; the
+  command still merges the report dir first.
+- Re-baselining keeps each reason while its rule still fires on the screen,
+  and drops it (with a note) once the finding is gone.
+- `aloud baseline` warns about baselined rule ids with no reason. It is a
+  warning, not a failure: baselines written before accepted reasons stay
+  valid as they are.
+
+A reason explains a failure; it does not excuse it. The ratchet is
+unchanged, and the screen keeps its failing badge. The reasons for the
+errors a run still finds appear in `summary.json` (per screen, `accepted`),
+on the evidence page, and in the OpenACR draft's notes (see
+[docs/openacr.md](openacr.md)).
 
 ## Draft OpenACR
 

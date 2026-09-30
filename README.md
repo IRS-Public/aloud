@@ -115,6 +115,18 @@ The gate is a ratchet: from that baseline, per-screen error counts can only
 go down, and a rule id the baseline has never seen fails. Pass `--no-gate`
 to skip the gate instead.
 
+Record why a baselined error stands, so the report and the OpenACR draft
+explain it (it still counts as a failure):
+
+```bash
+npx aloud baseline aloud-report/android --accept home:native-interactive-unlabeled \
+  --kind product-bug --summary "The close button has no label" --issue APP-12
+```
+
+Kinds are `product-bug`, `platform-gap`, and `accepted-risk`. `--prune`
+drops screens the run did not cover. See
+[accepted findings](docs/how-it-works.md#accepted-findings).
+
 ### iOS
 
 You need macOS, a booted simulator, and `idb` (accessibility tree dumps):

@@ -21,6 +21,7 @@ import { reportWeb } from "../web/report.mjs";
 import { cliArgs } from "../cli-args.mjs";
 import { platformForReportDir } from "./platform.mjs";
 import { readTreeReport } from "./tree-report.mjs";
+import { keepAccepted } from "./accepted.mjs";
 import { migrationNote, readBaseline } from "./validation.mjs";
 
 const args = cliArgs("report.mjs", {
@@ -60,14 +61,16 @@ if (PLATFORM === "web") {
 }
 // Reject malformed baselines before emitting summaries or accepting a gate.
 // Entries naming reclassified rule ids are read in the current
-// classification (see readBaseline), with a note saying so.
+// classification (see readBaseline), with a note saying so. Without
+// --gate an existing baseline is still read, for the accepted reasons the
+// summary and the evidence page show; a missing one is fine.
 let baseline = null;
 let migratedScreens = new Set();
-if (GATE && BASELINE) {
+if (BASELINE && (GATE || existsSync(BASELINE))) {
   const loaded = readBaseline(existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")) : {}, BASELINE);
   baseline = loaded.baseline;
   migratedScreens = new Set(loaded.migrated.map(({ screen }) => screen));
-  const note = migrationNote(loaded.migrated, BASELINE);
+  const note = GATE ? migrationNote(loaded.migrated, BASELINE) : "";
   if (note) console.warn(note);
 }
 
@@ -142,6 +145,15 @@ if (existsSync(requirementsPath)) {
   }
 }
 
+// Accepted reasons from the baseline, for the errors this run still found.
+// A reason for a rule id that no longer fires is stale and is not shown.
+for (const id of ids) {
+  const gate = screens[id].gate;
+  if (!gate || !baseline?.[id]?.accepted) continue;
+  const { kept } = keepAccepted(baseline[id].accepted, gate.ruleIds);
+  if (kept.length) screens[id].accepted = kept;
+}
+
 const summary = {
   generated: new Date().toISOString(),
   screens: Object.fromEntries(
@@ -153,6 +165,7 @@ const summary = {
           errors: s.gate?.errors ?? null,
           warns: s.violations ? s.violations.filter((v) => v.severity === "warn").length : null,
           ruleIds: s.gate?.ruleIds ?? [],
+          ...(s.accepted ? { accepted: s.accepted } : {}),
           ...(s.uncheckedCriteria ? { uncheckedCriteria: s.uncheckedCriteria } : {}),
           utterances: s.transcript?.length ?? null,
           ...(s.atfSummary ? { androidAtf: s.atfSummary } : {}),

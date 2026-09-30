@@ -61,7 +61,16 @@ the output a draft you can trust, rather than a report you cannot:
   automation skips. In findings terms, a clean criterion is `met`, a known
   failure is `failing` with `failingShare: "some"` (the audit sees only the
   screens it was given, so it never claims `does-not-support`), and missing
-  or stale checks are `incomplete`. Every other criterion is `not-evaluated`
+  or stale checks are `incomplete`. A failure the baseline accepts (see
+  [accepted findings](how-it-works.md#accepted-findings)) is still a
+  failure: a `product-bug` or `accepted-risk` reason leaves the criterion
+  `failing` (`partially-supports`), and the reason is listed as one of the
+  finding's `issues`, so the notes explain it ("Known issues: ..."). Screens
+  that accept the same rule for the same reason share one issue. Only when
+  every failure on a criterion is accepted as a `platform-gap` is the
+  finding `platform-limitation` (`not-evaluated`, for a person to judge),
+  with a note saying so. An accepted failure never reads as `supports`.
+  Every other criterion is `not-evaluated`
   with a "needs human review" note. A few `not-evaluated` rows carry related evidence in
   their notes (for example, the transcript coverage on 302.1, or the
   duplicate-label warnings on 2.4.6), still marked as needing human review.
@@ -87,7 +96,10 @@ the output a draft you can trust, rather than a report you cannot:
 
 Notes over 3000 characters are cut, and the cut is marked "(truncated; see
 evidence)". The failing screens are listed last in a note, so only that
-list is ever cut, never the coverage caveat.
+list is ever cut, never the coverage caveat. Accepted reasons come before
+the coverage caveat, so when a draft has any, the cap grows by the length
+of the longest list of them (`aloudMaxNoteLength` in
+`src/acr/from-aloud.mjs`); they are never cut either.
 
 A filtered run describes only the screens supplied to the emitter. Within
 that input, a mix of completed and missing tree checks cannot produce a

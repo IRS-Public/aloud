@@ -20,6 +20,12 @@
 //   - 302.1 and the criteria only warnings reach are "untested", with
 //     their related evidence (transcript coverage, warnings) in the notes.
 //   - Web evidence is report-only: every web row is "untested".
+//   - A failure the baseline accepts (src/report/accepted.mjs) is still a
+//     failure: its reason becomes one of the finding's issues, so the
+//     draft's notes explain it. Only when every failure on a criterion is
+//     an accepted platform gap is the finding "platform-limitation"
+//     (not-evaluated, for a person to review) instead of "failing".
+//     Nothing accepted ever reads as "met".
 // Native evidence is reported on the catalog's "software" component and
 // web evidence on "web", as the drafts always have been.
 //
@@ -35,6 +41,7 @@ import {
   rulesForCriterion,
   splitReclassified,
 } from "../rules/catalog.mjs";
+import { isIssueUrl, keepAccepted, validateAccepted } from "../report/accepted.mjs";
 import { DRAFT_AUTHOR, buildAcr } from "./build.mjs";
 import { DEFAULT_CATALOG_ID, checkCatalog, checkCatalogId, hasNoComponents, indexCatalog, loadCatalog } from "./catalog.mjs";
 
@@ -47,6 +54,17 @@ export const CATALOG_ID = DEFAULT_CATALOG_ID;
 // screens are listed after it. The screen list comes last, so when a note
 // is capped only that list is cut, and the cut is marked.
 export const ALOUD_MAX_NOTE_LENGTH = 3000;
+
+// The builder states a finding's issues (aloud's accepted reasons) before
+// its notes, so a long list of them could push the coverage caveat out of
+// a capped note. The cap for a findings document therefore grows by the
+// longest issues statement it holds (an upper bound on the builder's
+// "Known issues: ..." text), and only the screen list is ever cut.
+export function aloudMaxNoteLength(findings) {
+  const issuesLength = (issues) =>
+    issues.reduce((n, i) => n + i.id.length + i.summary.length + (i.kind?.length ?? 0) + (i.url?.length ?? 0) + 8, 16);
+  return ALOUD_MAX_NOTE_LENGTH + Math.max(0, ...findings.findings.map((f) => (f.issues ? issuesLength(f.issues) : 0)));
+}
 
 const DEFAULT_AUTHOR_NAME = "Automated draft — aloud openacr";
 const HOW_IT_WORKS = "https://github.com/IRS-Public/aloud/blob/main/docs/how-it-works.md";
@@ -218,6 +236,14 @@ function validateScreens(screens, platform = "input") {
     if (s.errors > 0 && (s.ruleIds.length === 0 || s.ruleIds.length > s.errors)) {
       invalid("error count and ruleIds disagree");
     }
+    // Accepted reasons name the screen's own rule ids, as written.
+    if (s.accepted !== undefined) {
+      try {
+        validateAccepted(s.accepted, s.ruleIds, "accepted");
+      } catch (error) {
+        invalid(error.message);
+      }
+    }
 
     // Transcript counts and where they came from.
     if (s.utterances != null && !isCount(s.utterances)) {
@@ -297,15 +323,18 @@ function validateRuleIds(screens, platform) {
 // current classification: those ids leave the error list, and the criteria
 // they used to count toward become unchecked on that screen, so the draft
 // neither fails a criterion on findings that no longer mean failure nor
-// passes it on evidence that never checked the current rule. Returns new
-// screen objects; the input is not modified.
+// passes it on evidence that never checked the current rule. An accepted
+// reason for a reclassified id leaves with it. Returns new screen objects;
+// the input is not modified.
 function migrateScreens(screens) {
   return Object.fromEntries(Object.entries(screens).map(([id, s]) => {
     if (s.errors === null) return [id, s];
     const { errors, ruleIds, unchecked } = splitReclassified(s);
     if (unchecked.length === 0) return [id, s];
     const uncheckedCriteria = [...new Set([...(s.uncheckedCriteria ?? []), ...unchecked])];
-    return [id, { ...s, errors, ruleIds, uncheckedCriteria }];
+    const { accepted: written, ...rest } = s;
+    const { kept } = keepAccepted(written, ruleIds);
+    return [id, { ...rest, errors, ruleIds, uncheckedCriteria, ...(kept.length ? { accepted: kept } : {}) }];
   }));
 }
 
@@ -331,7 +360,7 @@ function validateWebSummary(web) {
 }
 
 // ── inputs ──
-// Baselines are a flat map { screenId: { errors, ruleIds } };
+// Baselines are a flat map { screenId: { errors, ruleIds, accepted? } };
 // report.mjs's summary.json wraps the same shape as
 // { generated, screens: {...} }. Normalize both. The screens come back as
 // written: aloudFindings checks their rule ids against the platform they
@@ -428,16 +457,51 @@ function webNote(web) {
 // ── findings ──
 
 // For one criterion, list the screens whose baseline error rule ids
-// intersect the criterion's rules, per platform.
+// intersect the criterion's rules, per platform. Each failure also lists
+// the accepted reasons the screen gives for those rule ids, when it gives
+// any (the field is absent otherwise, as it always was).
 export function findFailures(criterionRules, audits) {
   const failures = [];
   for (const { platform, screens } of audits) {
     for (const [id, s] of Object.entries(screens)) {
       const hit = (s.ruleIds ?? []).filter((r) => criterionRules.includes(r));
-      if (hit.length) failures.push({ platform, screen: id, ruleIds: hit });
+      if (!hit.length) continue;
+      const accepted = (s.accepted ?? []).filter((entry) => hit.includes(entry.ruleId));
+      failures.push({ platform, screen: id, ruleIds: hit, ...(accepted.length ? { accepted } : {}) });
     }
   }
   return failures;
+}
+
+// The findings issues for a criterion's accepted failures. Screens that
+// accept the same rule for the same reason share one issue, so a reason
+// repeated across many screens is stated once. A tracker URL becomes the
+// issue's link; a bare tracker id is named in the summary.
+function acceptedIssues(failures) {
+  const groups = new Map();
+  for (const { platform, screen, accepted = [] } of failures) {
+    for (const entry of accepted) {
+      const key = JSON.stringify([entry.ruleId, entry.kind, entry.summary, entry.issue ?? null]);
+      if (!groups.has(key)) groups.set(key, { entry, screens: [] });
+      groups.get(key).screens.push(`${platform} ${screen}`);
+    }
+  }
+  return [...groups.values()].map(({ entry, screens }) => {
+    const tracked = entry.issue !== undefined && !isIssueUrl(entry.issue) ? ` (tracked as ${entry.issue})` : "";
+    return {
+      id: `${entry.ruleId} on ${screens.join(", ")}`,
+      kind: entry.kind,
+      summary: `Accepted in the baseline: ${entry.summary.replace(/\.$/, "")}${tracked}`,
+      ...(entry.issue !== undefined && isIssueUrl(entry.issue) ? { url: entry.issue } : {}),
+    };
+  });
+}
+
+// True when every rule id failing on every screen is accepted as a
+// platform gap: the failure comes from the platform, not the app.
+function onlyPlatformGaps(failures) {
+  return failures.every(({ ruleIds, accepted = [] }) =>
+    ruleIds.every((ruleId) => accepted.some((entry) => entry.ruleId === ruleId && entry.kind === "platform-gap")));
 }
 
 // The finding for a criterion aloud's error rules map to.
@@ -463,8 +527,10 @@ function automatedFinding(num, audits) {
     status = "incomplete";
     result = "No completed tree checks for this criterion";
   } else if (failures.length > 0) {
-    // A known failure stands even when other screens are incomplete.
-    status = "failing";
+    // A known failure stands even when other screens are incomplete. An
+    // accepted product bug or risk is still a failure; only a failure
+    // wholly caused by the platform is left for a person to judge.
+    status = onlyPlatformGaps(failures) ? "platform-limitation" : "failing";
     result = `The automated tree checks found violations on ${failures.length} of ${checked}`;
   } else {
     // A platform with no rules for this criterion is part of the same
@@ -473,7 +539,14 @@ function automatedFinding(num, audits) {
     result = `The automated tree checks found no violations on ${checked}`;
   }
 
-  const notes = [result, `Automated checks cover part of this criterion only: ${auto.covers}`];
+  const notes = [result];
+  if (status === "platform-limitation") {
+    notes.push(
+      "Every violation found is accepted in the baseline as a platform gap, caused by the platform " +
+        "rather than the app; a person must judge whether the criterion is met",
+    );
+  }
+  notes.push(`Automated checks cover part of this criterion only: ${auto.covers}`);
   if (auto.extra) notes.push(auto.extra);
   if (noTree.length) {
     notes.push(`Missing tree checks on ${screenCoverage(noTree)}; those screens remain unevaluated.`);
@@ -500,12 +573,14 @@ function automatedFinding(num, audits) {
     const detail = failures.map((f) => `${f.platform} ${f.screen}: ${f.ruleIds.join(", ")}`).join("; ");
     notes.push(`Screens with violations: ${detail}`);
   }
+  const issues = acceptedIssues(failures);
 
   return {
     criterion: num,
     component: "software",
     status,
     ...(status === "failing" ? { failingShare: "some" } : {}),
+    ...(issues.length ? { issues } : {}),
     notes,
   };
 }
@@ -692,6 +767,6 @@ export function buildAloudAcr({ date, catalog, ...inputs }) {
   return buildAcr(findings, {
     date,
     ...(catalog ? { catalog } : {}),
-    maxNoteLength: ALOUD_MAX_NOTE_LENGTH,
+    maxNoteLength: aloudMaxNoteLength(findings),
   });
 }

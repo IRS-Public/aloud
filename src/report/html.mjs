@@ -7,6 +7,8 @@
 // order, visible focus, 4.5:1 contrast in light and dark, reduced motion
 // respected, and zero external requests (works from file://).
 
+import { ACCEPTED_KIND_LABELS, isIssueUrl } from "./accepted.mjs";
+
 const esc = (s) =>
   String(s)
     .replace(/&/g, "&amp;")
@@ -71,6 +73,30 @@ function findingsHtml(s) {
     })
     .join("\n");
   return unchecked + (items ? `<ul class="findings">${items}</ul>` : `<p class="none">No findings on this screen.</p>`);
+}
+
+// Accepted reasons from the baseline for this screen's errors (see
+// src/report/accepted.mjs). They explain a failure; they do not excuse it,
+// so the screen keeps its failing badge and the errors still count.
+function acceptedHtml(s) {
+  if (!s.accepted?.length) return "";
+  const items = s.accepted
+    .map((entry) => {
+      const issue = entry.issue === undefined
+        ? ""
+        : isIssueUrl(entry.issue)
+          ? `<p class="finding-detail">Tracked in <a href="${esc(entry.issue)}">${esc(entry.issue)}</a></p>`
+          : `<p class="finding-detail">Tracked as <code>${esc(entry.issue)}</code></p>`;
+      return `<li class="finding error">
+        <p class="finding-head"><span class="sev sev-error">${esc(ACCEPTED_KIND_LABELS[entry.kind] ?? entry.kind)}</span> <code class="rule">${esc(entry.ruleId)}</code></p>
+        <p class="finding-detail">${esc(entry.summary)}</p>
+        ${issue}
+      </li>`;
+    })
+    .join("\n");
+  return `<h3>Accepted in the baseline (${s.accepted.length})</h3>
+    <p>These errors are known and accepted for now, for the reasons below. They still count as errors in the gate and as failures in the OpenACR draft.</p>
+    <ul class="findings">${items}</ul>`;
 }
 
 function transcriptHtml(s, id, audioEntries, includeAudioNote) {
@@ -426,6 +452,7 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
         ${transcriptHtml(s, id, audioManifest?.[id], id === firstAudioId)}
         <h3>${s.atfSummary ? "Tree findings" : "Findings"} (${s.violations?.length ?? 0})</h3>
         ${findingsHtml(s)}
+        ${acceptedHtml(s)}
         ${appleAuditHtml(s, id)}
         ${androidAtfHtml(s, id)}
       </div>
