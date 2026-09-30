@@ -10,6 +10,7 @@ import { renderWebReport, reportWeb } from "../src/web/report.mjs";
 import { nvdaCommand } from "../src/web/nvda.mjs";
 import { buildAcr, normalizeAudit } from "../src/report/openacr.mjs";
 import { captureWeb } from "../src/web/run.mjs";
+import { formatProvenance, validateProvenance } from "../src/provenance.mjs";
 
 function fixture() {
   const screen = { id: "home", url: "https://example.test/", expectedUrl: "https://example.test/", steps: [] };
@@ -103,6 +104,16 @@ test("persisted web evidence checks inventory, receipts, cleanup, and refuses ga
     assert.ok(html.includes("&lt;script&gt;"));
     assert.ok(!html.includes("<script>alert"));
     assert.throws(() => reportWeb(dir, { gate: true }), /report-only/);
+    // Provenance is optional (older runs have none), validated when present,
+    // and carried into the summary the OpenACR draft reads.
+    assert.equal(Object.hasOwn(webSummary(evidence), "provenance"), false);
+    run.provenance = formatProvenance({ aloud: { version: "0.1.0" }, runtime: { platform: "linux", arch: "x64", osRelease: "6.1", node: "v22.12.0" }, tools: { playwright: "1.63.0" } });
+    write();
+    assert.deepEqual(webSummary(readWebReport(dir)).provenance, run.provenance);
+    assert.match(renderWebReport(readWebReport(dir)), /Evidence from an unknown commit/);
+    run.provenance = { ...run.provenance, commit: "short" }; write();
+    assert.throws(() => readWebReport(dir), /web-run\.json provenance\.commit/);
+    delete run.provenance;
     run.cleanupComplete = false; write(); assert.throws(() => readWebReport(dir), /did not complete/);
     run.cleanupComplete = true; run.screens.push({ ...run.screens[0], id: "missing" }); write(); assert.throws(() => readWebReport(dir), /missing or unexpected/);
     run.screens.pop(); run.receipts.home.capture = "changed"; write(); assert.throws(() => readWebReport(dir), /receipt mismatch/);
@@ -140,7 +151,11 @@ test("actual capture lifecycle retains failed pairing and cleanup instead of pro
         axe: { default: class { async analyze() { return mode === "scan-timeout" ? new Promise(() => {}) : capture.axe; } } },
       } }), mode === "cleanup" ? /cleanup failed/ : mode === "scan-timeout" ? /axe scan timed out/ : /page changed/);
       assert.equal(browserClosed, true);
-      assert.equal(JSON.parse(readFileSync(join(dir, "web", "web-run.json"))).status, "failed");
+      const persisted = JSON.parse(readFileSync(join(dir, "web", "web-run.json")));
+      assert.equal(persisted.status, "failed");
+      // Even a failed run says where it came from, browser version included.
+      assert.doesNotThrow(() => validateProvenance(persisted.provenance));
+      assert.equal(persisted.provenance.tools.chromium, "fixture");
       assert.throws(() => readWebReport(join(dir, "web")), /did not complete/);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   }

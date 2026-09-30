@@ -6,7 +6,7 @@
 //   {
 //     product: { name, version?, description? },
 //     author?: { name, email? }, vendor?: { name, email? },
-//     provenance?: { commit?, runUrl?, date?, tools?: [{ name, version?, url? }] },
+//     provenance?: { commit?, workingTreeDirty?, runUrl?, date?, tools?: [{ name, version?, url? }] },
 //     catalog?: "2.5-edition-wcag-2.2-508-en",
 //     components: ["web"],
 //     findings: [{

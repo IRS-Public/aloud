@@ -6,6 +6,13 @@
 //
 //   node src/report/report.mjs --dir <report-dir>                       # summarize only
 //   node src/report/report.mjs --dir <report-dir> --baseline <f> --gate # summarize + ratchet
+//   … --allow-mixed   combine per-screen evidence from different runs
+//
+// Every per-screen file records where it came from (src/provenance.mjs).
+// The summary states that provenance, and refuses to combine files from
+// different runs (another commit, a dirty tree, another aloud, machine,
+// or CI run, or files written before provenance next to newer ones)
+// unless --allow-mixed is passed; the summary then lists every source.
 //
 // With no flags, the report dir and baseline come from the resolved
 // config (env ALOUD_CONFIG): <out>/android and baseline.android, or the
@@ -22,16 +29,19 @@ import { cliArgs } from "../cli-args.mjs";
 import { platformForReportDir } from "./platform.mjs";
 import { readTreeReport } from "./tree-report.mjs";
 import { keepAccepted } from "./accepted.mjs";
-import { migrationNote, readBaseline } from "./validation.mjs";
+import { migrationNote, readBaseline, readEvidenceProvenance } from "./validation.mjs";
+import { combineProvenance } from "../provenance.mjs";
 
 const args = cliArgs("report.mjs", {
   dir: { type: "string" },
   out: { type: "string" },
   baseline: { type: "string" },
   gate: { type: "boolean" },
+  "allow-mixed": { type: "boolean" },
 });
 const opt = args.opt;
 const GATE = args.flag("gate");
+const ALLOW_MIXED = args.flag("allow-mixed");
 
 // Resolved config (written by bin/aloud.mjs) fills in whatever the flags
 // do not. There are no repo-relative defaults: this tool audits someone
@@ -90,15 +100,20 @@ if (BASELINE && (GATE || existsSync(BASELINE))) {
 
 const read = (f) => JSON.parse(readFileSync(join(OUT, f), "utf8"));
 const screens = {};
+// Each evidence file's provenance, for the summary (see combineProvenance).
+const sources = [];
 for (const f of readdirSync(OUT).sort()) {
   if (f.endsWith(".tree.json")) {
     // ATF reports are recomputed from their native evidence; older
     // ordinary reports come back with any criteria they cannot speak to
     // marked unchecked (see tree-report.mjs).
-    const r = readTreeReport(read(f), f, { isIos });
+    const raw = read(f);
+    sources.push({ file: f, provenance: readEvidenceProvenance(raw, f) });
+    const r = readTreeReport(raw, f, { isIos });
     screens[r.screen] = { ...screens[r.screen], ...r };
   } else if (f.endsWith(".transcript.json")) {
     const r = read(f);
+    sources.push({ file: f, provenance: readEvidenceProvenance(r, f) });
     if (r.source === "voiceover" || r.voiceOver !== undefined) {
       if (r.source !== "voiceover" || !r.voiceOver || r.voiceOver.screen !== r.screen) {
         throw new Error(`invalid real VoiceOver evidence in ${f}`);
@@ -136,6 +151,17 @@ if (ids.length === 0) {
   process.exit(1);
 }
 
+// One report describes one run. Refuse files from different runs before
+// writing anything, unless the caller explicitly allows the mix.
+let provenance;
+try {
+  provenance = combineProvenance(sources, { allowMixed: ALLOW_MIXED, what: `report dir ${OUT}` });
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
+if (provenance?.mixed) console.warn(`warning: --allow-mixed: ${OUT} combines evidence from ${provenance.mixed.length} different runs`);
+
 const requirementsPath = join(OUT, "capture-requirements.json");
 if (existsSync(requirementsPath)) {
   const requirements = JSON.parse(readFileSync(requirementsPath, "utf8"));
@@ -170,6 +196,7 @@ for (const id of ids) {
 
 const summary = {
   generated: new Date().toISOString(),
+  ...(provenance ? { provenance } : {}),
   screens: Object.fromEntries(
     ids.map((id) => {
       const s = screens[id];
@@ -224,7 +251,7 @@ if (existsSync(audioManifestPath)) {
 
 writeFileSync(
   join(OUT, "index.html"),
-  renderReportHtml({ screens, ids, generated: summary.generated, shots, audioManifest }),
+  renderReportHtml({ screens, ids, generated: summary.generated, shots, audioManifest, provenance }),
 );
 console.log(`summary: ${ids.length} screens → ${join(OUT, "summary.json")}`);
 

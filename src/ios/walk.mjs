@@ -18,6 +18,7 @@ import { loadNavigator } from "../nav/index.mjs";
 import { computeTranscript, normalizeElements, runIosChecks, validateIosCapture } from "./tree.mjs";
 import { createAppleAuditor } from "./apple-audit.mjs";
 import { createVoiceOverCapturer } from "./voiceover-capture.mjs";
+import { collectProvenance } from "../provenance.mjs";
 
 const { opt } = cliArgs("ios/walk.mjs", {
   nav: { type: "string" },
@@ -84,6 +85,13 @@ async function walk() {
   mkdirSync(SHOTS_DIR, { recursive: true });
   mkdirSync(TREES_DIR, { recursive: true });
   const udid = bootedUdid();
+  // Where this run's evidence came from, stamped on every file it writes
+  // (see src/provenance.mjs). The report root holds aloud's own output, so
+  // it is excluded from the app's dirty check.
+  const provenance = collectProvenance({
+    exclude: [OUT, ...(cfg.out ? [cfg.out] : [])],
+    probes: { xcode: { command: ["xcodebuild", "-version"], lines: 2 } },
+  });
   const appleAuditor = cfg.ios?.appleAudit
     ? createAppleAuditor({ out: OUT, udid, bundleId: BUNDLE_ID }) : null;
   const voiceOverCapturer = cfg.ios?.voiceOver === "real"
@@ -177,6 +185,7 @@ async function walk() {
               errors: errors.length,
               ruleIds: [...new Set(errors.map((v) => v.ruleId))].sort(),
             },
+            provenance,
           },
           null,
           2,
@@ -186,6 +195,7 @@ async function walk() {
         join(OUT, `${screen.id}.transcript.json`),
         JSON.stringify({ screen: screen.id, source: voiceOver ? "voiceover" : "computed-voiceover", transcript,
           ...(voiceOver ? { voiceOver } : {}),
+          provenance,
         }, null, 2),
       );
       console.log(

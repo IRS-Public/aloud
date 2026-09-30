@@ -45,6 +45,9 @@ import { createAtfCapturer } from "./atf-capture.mjs";
 import { atfTreeNodes, validateAtfEvidence } from "./atf-evidence.mjs";
 import { dedupeConsecutive, segmentTranscript } from "./transcript.mjs";
 import { parseUiDump, runChecks, validateUiCapture } from "./ui-tree.mjs";
+import { ATF_VERSION } from "./atf-evidence.mjs";
+import { TALKBACK_COMMIT } from "./talkback-companion/patch.mjs";
+import { collectProvenance } from "../provenance.mjs";
 
 const { opt } = cliArgs("android/walk.mjs", {
   config: { type: "string" },
@@ -101,6 +104,18 @@ async function walk() {
 
   mkdirSync(OUT, { recursive: true });
   if (PASS === "tree") mkdirSync(SHOTS_DIR, { recursive: true });
+  // Where this pass's evidence came from, stamped on every file it writes
+  // (see src/provenance.mjs). The report root is excluded from the app's
+  // dirty check: it holds aloud's own output, and the tree pass must not
+  // see the transcript pass's files as a change to the app.
+  const provenance = collectProvenance({
+    exclude: [OUT, ...(cfg.out ? [cfg.out] : [])],
+    probes: { adb: ["adb", "version"] },
+    tools: {
+      ...(PASS === "transcript" && cfg.android?.talkBack === "focus" ? { talkback: TALKBACK_COMMIT } : {}),
+      ...(PASS === "tree" && cfg.android?.atf ? { "accessibility-test-framework": ATF_VERSION } : {}),
+    },
+  });
   waitForDevice();
   if (NAV_MODE === "bridge") reverseMetro(PORT);
   // Cold start every walk for deterministic runs — except current-screen
@@ -171,7 +186,7 @@ async function walk() {
       if (captureFocus) {
         const talkBackFocus = await captureFocus(screen.id);
         writeFileSync(join(OUT, `${screen.id}.transcript.json`), JSON.stringify({
-          screen: screen.id, source: "talkback-focus", transcript: focusTranscript(talkBackFocus), talkBackFocus,
+          screen: screen.id, source: "talkback-focus", transcript: focusTranscript(talkBackFocus), talkBackFocus, provenance,
         }, null, 2));
       } else await sleep(TALKBACK_SETTLE_MS);
       logMarker(`screen-end:${screen.id}`);
@@ -204,6 +219,7 @@ async function walk() {
               errors: errors.length,
               ruleIds: [...new Set(errors.map((v) => v.ruleId))].sort(),
             },
+            provenance,
           },
           null,
           2,
@@ -226,7 +242,7 @@ async function walk() {
       const transcript = dedupeConsecutive(screens[id] ?? []);
       writeFileSync(
         join(OUT, `${id}.transcript.json`),
-        JSON.stringify({ screen: id, source: "talkback", transcript }, null, 2),
+        JSON.stringify({ screen: id, source: "talkback", transcript, provenance }, null, 2),
       );
       if (transcript.length === 0) {
         console.warn(`  ⚠ ${id}: no utterances captured — is TalkBack on with verbose logging?`);

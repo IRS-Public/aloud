@@ -8,6 +8,7 @@
 // respected, and zero external requests (works from file://).
 
 import { ACCEPTED_KIND_LABELS, isIssueUrl } from "./accepted.mjs";
+import { describeProvenance } from "../provenance.mjs";
 
 const esc = (s) =>
   String(s)
@@ -381,8 +382,9 @@ const AUDIO_JS = `
  * @param {string} p.generated               ISO timestamp
  * @param {Set<string>} p.shots              ids that have shots/<id>.png
  * @param {Record<string, Array<{i:number,file:string,text?:string}>>|null} p.audioManifest
+ * @param {object} [p.provenance]            summary provenance (src/provenance.mjs)
  */
-export function renderReportHtml({ screens, ids, generated, shots, audioManifest }) {
+export function renderReportHtml({ screens, ids, generated, shots, audioManifest, provenance }) {
   const order = displayOrder(ids, screens);
   const hasComputed = order.some((id) => screens[id].source === "computed-voiceover");
   const hasVoiceOver = order.some((id) => screens[id].source === "voiceover");
@@ -476,6 +478,7 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
     <p class="eyebrow">aloud · Section 508 evidence</p>
     <h1>${esc(legLabel)}</h1>
     <p class="meta">${order.length} screen${order.length === 1 ? "" : "s"} · generated ${esc(generated)}</p>
+    ${provenance ? `<p class="meta">${esc(describeProvenance(provenance))}</p>` : ""}
     <dl class="stats">
       <div><dt>Screens</dt><dd>${order.length}</dd></div>
       <div><dt>${hasAppleAudit || hasVoiceOver || hasAtf ? "Tree pass" : "Pass"}</dt><dd class="is-pass">${passCount}</dd></div>

@@ -21,7 +21,7 @@ export { AUTOMATED_CRITERIA, CATALOG_ID, RULES, findFailures, normalizeAudit };
 
 // Build the draft OpenACR object from aloud's audit inputs:
 //   { catalog?, android?, ios?, web?, date, productVersion, appName,
-//     appDescription?, authorName?, authorEmail? }
+//     appDescription?, authorName?, authorEmail?, allowMixed? }
 // catalog is an OpenACR catalog object (default: the bundled CATALOG_ID
 // catalog); it must match CATALOG_ID's chapters and criteria. Throws on
 // missing or malformed evidence, and never returns an invalid report.

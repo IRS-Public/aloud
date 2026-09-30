@@ -115,6 +115,10 @@ echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
   [docs/talkback.md](talkback.md).
 - **idb from the pinned tarball.** The brew formula breaks on runner
   image updates. See [docs/ios.md](ios.md).
+- **One run per report dir.** Evidence records its commit and CI run,
+  and `aloud report` refuses a dir that mixes runs (for example a cached
+  or restored report dir from an earlier commit). Start each job with a
+  fresh report dir; `--allow-mixed` exists for deliberate combinations.
 - **Keep the gate advisory at first.** Both templates run
   `npx aloud report --dir ... --gate` with `continue-on-error: true`.
   While the baselines burn in, you want the evidence without red builds.

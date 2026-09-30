@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 import { dedupeConsecutive, segmentTranscript } from "../android/transcript.mjs";
 import { parseUiDump, runChecks } from "../android/ui-tree.mjs";
 import { cliArgs } from "../cli-args.mjs";
+import { collectProvenance } from "../provenance.mjs";
 import { reconstructSpeech } from "./speak.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -108,6 +109,8 @@ if (
 }
 
 // ── write the per-screen artifacts in the walker's exact shapes ──
+// The sample ships inside aloud, so the "app" commit is aloud's own.
+const provenance = collectProvenance({ cwd: HERE, exclude: [OUT] });
 writeFileSync(
   join(OUT, `${SCREEN_ID}.tree.json`),
   JSON.stringify(
@@ -116,6 +119,7 @@ writeFileSync(
       title: `${SCREEN_TITLE} (${APP_NAME} sample)`,
       violations,
       gate: { errors: errors.length, ruleIds },
+      provenance,
     },
     null,
     2,
@@ -123,7 +127,7 @@ writeFileSync(
 );
 writeFileSync(
   join(OUT, `${SCREEN_ID}.transcript.json`),
-  JSON.stringify({ screen: SCREEN_ID, source: "talkback", transcript }, null, 2),
+  JSON.stringify({ screen: SCREEN_ID, source: "talkback", transcript, provenance }, null, 2),
 );
 copyFileSync(join(FIXTURES, `${SCREEN_ID}.png`), join(OUT, "shots", `${SCREEN_ID}.png`));
 

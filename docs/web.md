@@ -115,7 +115,10 @@ part of this milestone.
 ## Evidence and re-aggregation
 
 The run writes `web-run.json`, per-state `*.web.json`, screenshots, a summary,
-and a self-contained HTML page. Before each final checkpoint it records a
+and a self-contained HTML page. `web-run.json` records the run's provenance
+(commit, dirty state, machine, CI run, and the Playwright, axe-core,
+Chromium, and NVDA versions; see [how-it-works](how-it-works.md)), even for
+a failed run, and the summary and HTML page state it. Before each final checkpoint it records a
 Playwright ARIA snapshot; after axe and screenshot capture it checks that the
 URL and ARIA snapshot still match. This detects exposed structural changes,
 not every visual or layout change. Axe may examine content outside the

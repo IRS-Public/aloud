@@ -31,6 +31,8 @@ src/ios/walk.mjs                  iOS walker, one pass: `idb` dumps the
         v
 src/report/report.mjs             summary.json + index.html evidence page +
                                   ratchet gate against the baseline
+src/provenance.mjs                where each evidence file came from (commit,
+                                  machine, CI run, tools); see below
 src/acr/                          draft OpenACR: audit results -> findings
                                   -> shared builder (see docs/openacr.md)
 ```
@@ -60,6 +62,21 @@ Reports land under the report root (`--out`, default `aloud-report`):
 `aloud-report/android/` and `aloud-report/ios/`. Each dir holds per-screen
 `*.tree.json` and `*.transcript.json` files, `shots/` screenshots,
 `summary.json`, and `index.html`.
+
+Every evidence file records where it came from under `provenance`
+(`src/provenance.mjs`): the audited app's git commit and whether its
+working tree had uncommitted changes (the report dir itself does not
+count), aloud's version and commit, the OS, architecture, and Node.js
+version, the GitHub Actions run URL when there is one, and tool versions
+(the TalkBack build, the Accessibility Test Framework, `adb`, Xcode).
+Anything that cannot be read, such as a directory that is not a git
+checkout, is `null`, never "clean". `summary.json` states the run's
+provenance, and the evidence page shows it. A report dir must hold one
+run: `aloud report` refuses to combine files from another commit, a
+dirty tree, another aloud, machine, or CI run, or files written before
+provenance next to newer ones. Re-run into a fresh report dir, or pass
+`--allow-mixed`; the summary then lists every source and the files it
+covers. Report dirs written before provenance still aggregate unchanged.
 
 A missing accessibility capture fails the walk before it writes that screen's
 tree report or screenshot. Android requires a complete XML hierarchy with

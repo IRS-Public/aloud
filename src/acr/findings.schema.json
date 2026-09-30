@@ -29,6 +29,10 @@
       "additionalProperties": false,
       "properties": {
         "commit": { "$ref": "#/definitions/text" },
+        "workingTreeDirty": {
+          "description": "True when the commit had uncommitted changes as the evidence was produced.",
+          "type": "boolean"
+        },
         "runUrl": { "$ref": "#/definitions/url" },
         "date": { "$ref": "#/definitions/date" },
         "tools": {

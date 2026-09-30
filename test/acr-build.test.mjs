@@ -170,6 +170,17 @@ describe("buildAcr on a harness-shaped component", () => {
     assert.match(acr.notes, /needs a human review/);
     assert.doesNotMatch(acr.notes, /placeholder contact/);
     assert.match(acr.evaluation_methods_used, /Tools: Playwright 1\.63\.0, aloud 0\.1\.0\./);
+    // The tools are stated with the rest of the provenance in the notes too.
+    assert.match(acr.notes, /dated 2026-09-30\. Tools: Playwright 1\.63\.0, aloud 0\.1\.0\./);
+  });
+
+  it("says when the evidence's commit had uncommitted changes", () => {
+    const dirty = build({ ...button(), provenance: { ...button().provenance, workingTreeDirty: true } });
+    assert.match(dirty.notes, /commit 0123abc plus uncommitted changes, run /);
+    const clean = build({ ...button(), provenance: { ...button().provenance, workingTreeDirty: false } });
+    assert.match(clean.notes, /commit 0123abc, run /);
+    assert.throws(() => build({ ...button(), provenance: { ...button().provenance, workingTreeDirty: "yes" } }),
+      /provenance\.workingTreeDirty/);
   });
 
   it("round-trips through YAML unchanged", () => {
@@ -433,7 +444,7 @@ describe("buildAcr input checks", () => {
 describe("producer notes and methods", () => {
   it("states report-level notes after the builder's own sentences", () => {
     const acr = build({ ...button(), notes: ["Tested in Chromium and WebKit", "Runs nightly."] });
-    assert.match(acr.notes, /dated 2026-09-30\. Tested in Chromium and WebKit\. Runs nightly\. Component rows by level/);
+    assert.match(acr.notes, /dated 2026-09-30\. Tools: Playwright 1\.63\.0, aloud 0\.1\.0\. Tested in Chromium and WebKit\. Runs nightly\. Component rows by level/);
   });
 
   it("opens the evaluation methods with the producer's account and keeps the policy sentence", () => {

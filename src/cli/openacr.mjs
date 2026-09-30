@@ -17,6 +17,8 @@
 //                           catalog YAML; it must have the same chapters and
 //                           criteria (only labels and components may differ)
 //     --out <file>          output path (config openacr.out, default acr-draft.yaml)
+//     --allow-mixed         combine inputs whose provenance names different code
+//                           (refused otherwise; see src/provenance.mjs)
 //   Inputs default to the baselines named in the config.
 //
 //   aloud acr       any findings document -> draft OpenACR
@@ -110,6 +112,7 @@ export function openacr(values, cfg) {
     appDescription: cfg?.openacr?.description,
     authorName: cfg?.openacr?.author?.name,
     authorEmail: cfg?.openacr?.author?.email,
+    allowMixed: values["allow-mixed"] === true,
   });
   const out = values.out ?? cfg?.openacr?.out ?? "acr-draft.yaml";
   writeFileSync(out, toYaml(acr));

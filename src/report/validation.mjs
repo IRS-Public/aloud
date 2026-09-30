@@ -1,6 +1,7 @@
 import { validateScreenId } from "../screen-id.mjs";
 import { RECLASSIFIED, RULES, splitReclassified } from "../rules/catalog.mjs";
 import { keepAccepted, validateAccepted } from "./accepted.mjs";
+import { validateProvenance, validateSummaryProvenance } from "../provenance.mjs";
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isRuleId = (value) => typeof value === "string" && value.trim().length > 0;
@@ -138,4 +139,21 @@ export function beforeReclassification(violations) {
       const { was } = RECLASSIFIED[v.ruleId];
       return { ...v, wcag: was.criteria[0], criteria: [...was.criteria], severity: was.severity };
     });
+}
+
+// The provenance a persisted evidence file (a per-screen tree or
+// transcript report) records, validated, or undefined for a file written
+// before evidence carried provenance. Such files keep working; report.mjs
+// decides whether they may be combined with newer ones.
+export function readEvidenceProvenance(report, file) {
+  if (!isRecord(report) || report.provenance === undefined) return undefined;
+  return validateProvenance(report.provenance, `${file} provenance`);
+}
+
+// The provenance a summary.json records (src/provenance.mjs: one record,
+// or the mixed form --allow-mixed writes), validated, or undefined for a
+// summary written before summaries carried provenance.
+export function readSummaryProvenance(summary, field = "summary") {
+  if (!isRecord(summary) || summary.provenance === undefined) return undefined;
+  return validateSummaryProvenance(summary.provenance, `${field} provenance`);
 }

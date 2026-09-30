@@ -10,6 +10,7 @@ import { webDependency } from "./dependencies.mjs";
 import { hash, validateWebCapture } from "./evidence.mjs";
 import { startNvda, nvdaCommand, stopNvda } from "./nvda.mjs";
 import { reportWeb } from "./report.mjs";
+import { collectProvenance, formatTools } from "../provenance.mjs";
 
 const json = (path, value) => {
   writeFileSync(`${path}.tmp`, `${JSON.stringify(value, null, 2)}\n`);
@@ -42,7 +43,13 @@ export async function captureWeb(cfg, { flow = [], screenId = "current", depende
     status: "running", cleanupComplete: false, reportOnly: true, screens, receipts: {},
     environment: { os: process.platform, osVersion: release(), browser: "chromium", playwright: WEB_VERSIONS.playwright,
       axeAdapter: WEB_VERSIONS["@axe-core/playwright"], screenReader: web.screenReader, headless: web.screenReader === "none" && !web.headed,
-      locale: web.locale, viewport: web.viewport } };
+      locale: web.locale, viewport: web.viewport },
+    // Where the evidence came from (src/provenance.mjs). The report root
+    // holds aloud's own output, so it does not count as an app change.
+    provenance: collectProvenance({ exclude: [cfg.out], tools: {
+      playwright: WEB_VERSIONS.playwright, "@axe-core/playwright": WEB_VERSIONS["@axe-core/playwright"],
+      ...(web.screenReader === "nvda" ? { "@guidepup/guidepup": WEB_VERSIONS["@guidepup/guidepup"] } : {}),
+    } }) };
   const saveRun = () => json(join(out, "web-run.json"), run);
   saveRun();
   let browser, reader, context, failure, interrupted = false;
@@ -139,6 +146,9 @@ export async function captureWeb(cfg, { flow = [], screenId = "current", depende
     process.removeListener("SIGINT", abort); process.removeListener("SIGTERM", abort);
     run.cleanupComplete = cleanupErrors.length === 0;
     if (cleanupErrors.length) failure = new Error(`${failure?.message ?? "capture completed"}; cleanup failed: ${cleanupErrors.join("; ")}`);
+    // Versions learned during the run join the tools it started with.
+    run.provenance.tools = formatTools({ ...run.provenance.tools, chromium: run.environment.browserVersion,
+      "axe-core": run.environment.axe, nvda: run.environment.screenReaderVersion });
     run.status = failure ? "failed" : "completed";
     if (failure) run.error = failure.message;
     saveRun();

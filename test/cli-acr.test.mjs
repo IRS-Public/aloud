@@ -16,6 +16,7 @@ import { after, before, describe, it } from "node:test";
 import { dump, load } from "js-yaml";
 
 import { validateAcr } from "../src/acr/index.mjs";
+import { formatProvenance } from "../src/provenance.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = join(HERE, "../bin/aloud.mjs");
@@ -204,6 +205,45 @@ describe("aloud openacr", () => {
     );
     assert.doesNotMatch(result.stderr, /findings/);
     assert.equal(existsSync(out), false);
+  });
+
+  it("refuses summaries from different commits unless --allow-mixed", () => {
+    const configPath = join(dir, "mixed.config.json");
+    writeFileSync(configPath, JSON.stringify({ app: { name: "Fixture App", version: "1.0.0" } }));
+    const summary = (name, commit) => {
+      const path = join(dir, `${name}-summary.json`);
+      const provenance = formatProvenance({
+        app: { commit, workingTreeDirty: false },
+        aloud: { version: "0.1.0" },
+        runtime: { platform: "darwin", arch: "arm64", osRelease: "25.6.0", node: "v22.12.0" },
+      });
+      writeFileSync(path, JSON.stringify({
+        generated: "2026-09-30T00:00:00.000Z",
+        provenance,
+        screens: { home: { errors: 0, ruleIds: [], utterances: 2 } },
+      }));
+      return path;
+    };
+    const args = [
+      "openacr",
+      "--config", configPath,
+      "--android", summary("android", "a".repeat(40)),
+      "--ios", summary("ios", "b".repeat(40)),
+      "--date", "2026-09-30",
+    ];
+    const refusedOut = join(dir, "mixed-refused.yaml");
+    const refused = aloud(...args, "--out", refusedOut);
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stderr, /aloud openacr: the audit inputs come from different code/);
+    assert.equal(existsSync(refusedOut), false);
+
+    const allowedOut = join(dir, "mixed-allowed.yaml");
+    const allowed = aloud(...args, "--allow-mixed", "--out", allowedOut);
+    assert.equal(allowed.status, 0, allowed.stderr);
+    const acr = readAcr(allowedOut);
+    assert.deepEqual(validateAcr(acr), { valid: true, problems: [] });
+    assert.match(acr.notes, /combined with --allow-mixed/);
+    assert.match(acr.notes, /Android evidence provenance: commit aaaaaaaaaaaa/);
   });
 
   it("exits non-zero with a clear message when there is no audit input", () => {

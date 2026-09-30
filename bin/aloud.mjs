@@ -45,6 +45,7 @@ const OPTIONS = {
     dir: { type: "string" },
     baseline: { type: "string" },
     gate: { type: "boolean" },
+    "allow-mixed": { type: "boolean" },
   },
   baseline: {
     ...GLOBAL_OPTIONS,
@@ -65,6 +66,7 @@ const OPTIONS = {
     date: { type: "string" },
     catalog: { type: "string" },
     version: { type: "string" },
+    "allow-mixed": { type: "boolean" },
   },
   // acr reads no config: any evidence source can run it. --out names the
   // output YAML file.
@@ -91,12 +93,14 @@ Commands:
   talkback     Manage TalkBack on the device: status | install <apk> | enable | disable |
                configure | get [--foss|--build]
   tts          Build or install the optional silent recording TTS engine
-  report       Re-aggregate an existing report dir (--dir, --baseline, --gate)
+  report       Re-aggregate an existing report dir (--dir, --baseline, --gate) [--allow-mixed:
+               combine per-screen evidence from different runs]
   baseline     Accept current counts into a baseline: aloud baseline <report-dir> [--baseline <file>]
                [--prune] [--accept <screen>:<ruleId> --kind <kind> --summary "..." [--issue <ref>]]
   openacr      Emit a draft OpenACR (--android/--ios baselines or --report/--report-ios/--report-web dirs)
                [--date YYYY-MM-DD] [--version <v>] [--catalog <file>: same chapters and criteria
-               as the bundled 2.5-edition-wcag-2.2-508-en catalog]
+               as the bundled 2.5-edition-wcag-2.2-508-en catalog] [--allow-mixed: combine inputs
+               from different commits]
   acr          Build a draft OpenACR from any findings JSON: aloud acr --findings <file.json>
                [--out acr-draft.yaml] [--policy <file.json>] [--catalog <file>] [--date YYYY-MM-DD]
 
@@ -297,6 +301,7 @@ function runReport(argv) {
   if (platform === "web") {
     const args = [join(ALOUD_HOME, "src", "report", "report.mjs"), "--out", dir];
     if (values.gate) args.push("--gate");
+    if (values["allow-mixed"]) args.push("--allow-mixed");
     return run(process.execPath, args, resolvedPath);
   }
   const isIos = platform === "ios";
@@ -307,6 +312,7 @@ function runReport(argv) {
       : cfg.baseline.android;
   const args = [join(ALOUD_HOME, "src", "report", "report.mjs"), "--out", dir, "--baseline", baseline];
   if (values.gate) args.push("--gate");
+  if (values["allow-mixed"]) args.push("--allow-mixed");
   run(process.execPath, args, resolvedPath);
 }
 

@@ -186,14 +186,20 @@ function policyChanges(policy) {
   return changes;
 }
 
+// Where the evidence came from, for the report notes: the commit (and
+// whether it had uncommitted changes), the run, the date, and the tools.
 function provenanceNote(provenance) {
   if (!provenance) return "";
   const sources = [];
-  if (provenance.commit) sources.push(`commit ${provenance.commit}`);
+  if (provenance.commit) {
+    sources.push(`commit ${provenance.commit}${provenance.workingTreeDirty ? " plus uncommitted changes" : ""}`);
+  }
   if (provenance.runUrl) sources.push(`run ${provenance.runUrl}`);
   const dated = provenance.date ? `dated ${provenance.date}` : "";
-  if (sources.length) return ` The evidence comes from ${[...sources, dated].filter(Boolean).join(", ")}.`;
-  return dated ? ` The evidence is ${dated}.` : "";
+  let note = "";
+  if (sources.length) note = ` The evidence comes from ${[...sources, dated].filter(Boolean).join(", ")}.`;
+  else if (dated) note = ` The evidence is ${dated}.`;
+  return note + toolsNote(provenance.tools);
 }
 
 function toolsNote(tools) {

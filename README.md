@@ -197,6 +197,10 @@ For web evidence, configure `app.name` and `app.version`, then run
 `npx aloud openacr --report-web aloud-report/web`. This can be combined with
 the mobile report inputs; web criteria remain unevaluated.
 
+Every evidence file records the commit, machine, CI run, and tool versions
+it came from, and the draft's notes state them. Reports and drafts refuse
+to combine evidence from different commits unless you pass `--allow-mixed`.
+
 This emits `acr-draft.yaml`, a machine-readable accessibility conformance
 report in the GSA [OpenACR](https://github.com/GSA/openacr) format. It is a
 draft on purpose: only criteria the automated rules cover get a conformance

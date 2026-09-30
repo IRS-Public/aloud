@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readWebReport, webSummary } from "./evidence.mjs";
+import { describeProvenance } from "../provenance.mjs";
 
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const phrases = (lines) => lines.length ? `<ol>${lines.map((line) => `<li><q>${esc(line)}</q></li>`).join("")}</ol>` : "<p>No command output captured.</p>";
@@ -24,6 +25,7 @@ export function renderWebReport({ run, screens }) {
   <header><p>aloud · Web</p><h1>Experimental web evidence</h1>
   <p>${esc(env.browser)} ${esc(env.browserVersion)} · ${esc(env.os)} ${esc(env.osVersion)} · ${esc(env.locale)} · ${env.viewport.width} × ${env.viewport.height}</p>
   <p>axe-core ${esc(env.axe)} · Playwright ${esc(env.playwright)} · ${esc(run.generated)}</p>
+  ${run.provenance ? `<p>${esc(describeProvenance(run.provenance))}</p>` : ""}
   <p class="note"><strong>Report-only.</strong> These checks cover named page states and scripted actions. Completing a scenario does not establish full page traversal or accessibility conformance. Skipped checks and results requiring review are not passes.</p>
   <p>${env.screenReader === "none" ? "No screen reader was run. ARIA snapshots describe page structure; no speech was computed or captured." : `NVDA ${esc(env.screenReaderVersion)} · Guidepup ${esc(env.guidepup)}. Guidepup formats and groups captured command output. This is not an audio recording or proof of complete speech delivery. Delayed announcements outside command capture windows may be absent.`}</p>
   <nav aria-label="Captured states"><ul>${Object.values(screens).map((s) => `<li><a href="#${esc(s.screen)}">${esc(s.title)}</a></li>`).join("")}</ul></nav></header>

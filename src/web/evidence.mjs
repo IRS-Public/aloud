@@ -3,6 +3,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { validateScreenId } from "../screen-id.mjs";
 import { validateStep, webUrl } from "./config.mjs";
+import { validateProvenance } from "../provenance.mjs";
 
 export const hash = (value) => createHash("sha256").update(value).digest("hex");
 const object = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -62,6 +63,8 @@ export function readWebReport(dir) {
     [env.os, env.osVersion, env.browserVersion, env.playwright, env.axe, env.locale].every(text) &&
     Number.isInteger(env.viewport?.width) && Number.isInteger(env.viewport?.height), "environment");
   if (env.screenReader === "nvda") require(env.os === "win32" && text(env.screenReaderVersion) && text(env.guidepup), "NVDA provenance");
+  // Runs recorded before web-run.json carried provenance have none.
+  if (run.provenance !== undefined) validateProvenance(run.provenance, "invalid web evidence: web-run.json provenance");
   require(Array.isArray(run.screens) && run.screens.length > 0 && object(run.receipts), "expected screen inventory");
   const ids = run.screens.map((s) => validateScreenId(s.id));
   require(new Set(ids.map((id) => id.toLowerCase())).size === ids.length, "duplicate screen inventory");
@@ -80,6 +83,7 @@ export function readWebReport(dir) {
 
 export function webSummary({ run, screens }) {
   return { schemaVersion: 1, platform: "web", generated: run.generated, environment: run.environment, reportOnly: true,
+    ...(run.provenance ? { provenance: run.provenance } : {}),
     screens: Object.fromEntries(Object.entries(screens).map(([id, screen]) => [id, {
       errors: null, ruleIds: [], utterances: screen.speechSource === "none" ? null : screen.navigationSpeech.length + screen.steps.reduce((n, s) => n + s.speech.length, 0),
       web: { reportOnly: true, coverage: screen.coverage, speechSource: screen.speechSource,

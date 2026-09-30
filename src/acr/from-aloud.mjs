@@ -26,6 +26,12 @@
 //     included: the checks ran and found the violation, so the product
 //     partially supports the criterion whatever the cause. Nothing
 //     accepted ever reads as "met" or as unevaluated.
+//   - Where the evidence came from (src/provenance.mjs) becomes the
+//     findings' provenance and the draft's notes. Inputs from different
+//     code (another app commit, uncommitted changes, another aloud) are
+//     refused unless allowMixed is set, and then the notes say so.
+//     Baselines, and summaries written before provenance, record none;
+//     the notes say that too.
 // Native evidence is reported on the catalog's "software" component and
 // web evidence on "web", as the drafts always have been.
 //
@@ -42,6 +48,14 @@ import {
   splitReclassified,
 } from "../rules/catalog.mjs";
 import { isIssueUrl, keepAccepted, validateAccepted } from "../report/accepted.mjs";
+import { readSummaryProvenance } from "../report/validation.mjs";
+import {
+  codeIdentity,
+  describeCode,
+  describeProvenance,
+  isMixedProvenance,
+  validateProvenance,
+} from "../provenance.mjs";
 import { DRAFT_AUTHOR, buildAcr } from "./build.mjs";
 import { DEFAULT_CATALOG_ID, checkCatalog, checkCatalogId, hasNoComponents, indexCatalog, loadCatalog } from "./catalog.mjs";
 
@@ -357,14 +371,17 @@ function validateWebSummary(web) {
     Object.values(web.screens).every(screenOk) &&
     isRecord(web.environment);
   if (!valid) throw new Error("invalid report-only web summary");
+  if (web.provenance !== undefined) validateProvenance(web.provenance, "invalid report-only web summary: provenance");
 }
 
 // ── inputs ──
 // Baselines are a flat map { screenId: { errors, ruleIds, accepted? } };
 // report.mjs's summary.json wraps the same shape as
-// { generated, screens: {...} }. Normalize both. The screens come back as
-// written: aloudFindings checks their rule ids against the platform they
-// are filed under before reading them in the current classification.
+// { generated, provenance?, screens: {...} }. Normalize both. The screens
+// come back as written: aloudFindings checks their rule ids against the
+// platform they are filed under before reading them in the current
+// classification. A summary's provenance comes back validated; baselines
+// and older summaries have none.
 export function normalizeAudit(data) {
   if (!isRecord(data)) throw new Error("invalid audit: expected a baseline or report object");
   if (data.platform === "web") throw new Error("web evidence requires --report-web so raw captures can be verified");
@@ -375,7 +392,114 @@ export function normalizeAudit(data) {
   if (audit.generated !== null && typeof audit.generated !== "string") {
     throw new Error("invalid audit: generated must be a date string or null");
   }
+  if (Object.hasOwn(data, "screens")) {
+    let provenance;
+    try {
+      provenance = readSummaryProvenance(data, "report summary");
+    } catch (error) {
+      throw new Error(`invalid audit: ${error.message}`);
+    }
+    if (provenance) audit.provenance = provenance;
+  }
   return audit;
+}
+
+// ── provenance ──
+
+// Each input's provenance, labeled by platform. A summary written with
+// --allow-mixed holds several records; one without provenance holds none.
+function provenanceSources({ android, ios, web }) {
+  return [["Android", android], ["iOS", ios], ["Web", web]]
+    .filter(([, input]) => input != null)
+    .map(([label, input]) => {
+      const value = input.provenance;
+      const records = !value ? [] : isMixedProvenance(value)
+        ? value.mixed.map((group) => group.provenance).filter(Boolean)
+        : [value];
+      return { label, value, records, mixed: isMixedProvenance(value) };
+    });
+}
+
+// Refuse inputs from different code unless allowMixed: a draft describes
+// one version of the product. Machines, runtimes, and CI runs may differ
+// (Android and iOS evidence often come from different runners); the code
+// may not. A summary that already combines different runs needs
+// allowMixed too.
+function checkSameCode(sources, allowMixed) {
+  if (allowMixed) return;
+  for (const source of sources) {
+    if (source.mixed) {
+      throw new Error(
+        `the ${source.label} report summary combines evidence from different runs (it was written with --allow-mixed); ` +
+          "pass --allow-mixed to build a draft from it anyway",
+      );
+    }
+  }
+  const byCode = new Map();
+  for (const { label, records } of sources) {
+    for (const record of records) {
+      const key = JSON.stringify(codeIdentity(record));
+      if (!byCode.has(key)) byCode.set(key, { record, labels: [] });
+      byCode.get(key).labels.push(label);
+    }
+  }
+  if (byCode.size > 1) {
+    const detail = [...byCode.values()].map(({ record, labels }) => `${labels.join(" and ")}: ${describeCode(record)}`).join("; ");
+    throw new Error(
+      `the audit inputs come from different code, so they cannot describe one version of the product (${detail}); ` +
+        "re-run the audits on one commit, or pass --allow-mixed to combine them anyway",
+    );
+  }
+}
+
+// The findings' provenance (src/acr/findings.schema.json): the commit when
+// every recorded input names the same one, the run when they share one,
+// and every tool, aloud and Node.js included. Undefined when no input
+// recorded provenance.
+function findingsProvenance(sources) {
+  const records = sources.flatMap((source) => source.records);
+  if (records.length === 0) return undefined;
+  const provenance = {};
+  const codes = new Set(records.map((record) => JSON.stringify(codeIdentity(record))));
+  if (codes.size === 1 && records[0].commit) {
+    provenance.commit = records[0].commit;
+    if (records[0].workingTreeDirty !== null) provenance.workingTreeDirty = records[0].workingTreeDirty;
+  }
+  const runUrls = new Set(records.map((record) => record.github?.runUrl ?? null));
+  const [runUrl] = runUrls;
+  if (runUrls.size === 1 && runUrl) provenance.runUrl = runUrl;
+  const tools = [];
+  const add = (name, version) => {
+    if (!tools.some((tool) => tool.name === name && tool.version === version)) tools.push({ name, version });
+  };
+  for (const record of records) {
+    add("aloud", `${record.aloud.version}${record.aloud.commit ? ` (${record.aloud.commit.slice(0, 12)})` : ""}`);
+  }
+  for (const record of records) add("Node.js", record.node);
+  const named = records.flatMap((record) => Object.entries(record.tools));
+  named.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  for (const [name, version] of named) add(name, version);
+  provenance.tools = tools;
+  return provenance;
+}
+
+// One report note per input saying where its evidence came from, then a
+// note when different code was combined.
+function provenanceNotes(sources, allowMixed) {
+  const notes = sources.map(({ label, value, mixed }) => {
+    if (!value) {
+      return `${label} evidence records no provenance (a baseline, or a report written before aloud recorded provenance).`;
+    }
+    return `${label} evidence provenance: ${mixed ? describeProvenance(value) : describeProvenance(value).replace(/^Evidence from /, "")}`;
+  });
+  const codes = new Set(sources.flatMap((s) => s.records).map((record) => JSON.stringify(codeIdentity(record))));
+  if (allowMixed && (codes.size > 1 || sources.some((s) => s.mixed))) {
+    notes.push(
+      "The inputs were combined with --allow-mixed although they come from different runs or code; " +
+        "the draft does not describe a single version of the product.",
+    );
+  }
+  return notes;
 }
 
 // ── coverage text ──
@@ -619,11 +743,12 @@ function nativeCoverageNotes(audits, android, ios) {
 }
 
 // Report-level notes, stated in the report notes after the builder's own.
-function reportNotes({ audits, android, ios, web }) {
+function reportNotes({ audits, android, ios, web, sources, allowMixed }) {
   const notes = [`The findings come from aloud's automated 508 audit (${HOW_IT_WORKS}).`];
   if (audits.length) notes.push(...nativeCoverageNotes(audits, android, ios));
   if (web) notes.push(webNote(web));
   if (audits.length) notes.push(transcriptCoverage(audits), transcriptMethods(audits));
+  notes.push(...provenanceNotes(sources, allowMixed));
   return notes;
 }
 
@@ -659,8 +784,11 @@ function evaluationMethods({ audits, android, ios, web }) {
 //   catalog           the catalog object the draft will be built against
 //                     (default: the bundled CATALOG_ID catalog); used to
 //                     list the criteria that have a web component
+//   allowMixed        combine inputs whose provenance names different code
+//                     (default: refuse)
 //
-// Throws on missing or malformed evidence.
+// Throws on missing or malformed evidence, and on inputs from different
+// code unless allowMixed.
 export function aloudFindings({
   android,
   ios,
@@ -671,6 +799,7 @@ export function aloudFindings({
   authorName,
   authorEmail,
   catalog,
+  allowMixed = false,
 }) {
   if (!appName) {
     throw new Error("buildAcr needs an app name (config app.name)");
@@ -678,6 +807,9 @@ export function aloudFindings({
   const audits = readAudits({ android, ios });
   if (audits.length === 0 && !web) throw new Error("no audit input: provide at least one platform audit");
   if (web) validateWebSummary(web);
+  const sources = provenanceSources({ android, ios, web });
+  checkSameCode(sources, allowMixed);
+  const provenance = findingsProvenance(sources);
 
   const index = indexCatalog(catalog ?? loadCatalog({ id: CATALOG_ID }));
   const findings = [];
@@ -718,10 +850,11 @@ export function aloudFindings({
     schemaVersion: 1,
     product,
     author,
+    ...(provenance ? { provenance } : {}),
     catalog: CATALOG_ID,
     components: [...(audits.length ? ["software"] : []), ...(web ? ["web"] : [])],
     findings,
-    notes: reportNotes({ audits, android, ios, web }),
+    notes: reportNotes({ audits, android, ios, web, sources, allowMixed }),
     evaluationMethods: evaluationMethods({ audits, android, ios, web }),
   };
 }
