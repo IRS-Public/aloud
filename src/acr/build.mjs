@@ -3,7 +3,8 @@
 // emitted, for every declared component it applies to. A criterion with a
 // finding gets the level the policy (src/acr/levels.mjs) gives its status;
 // one without a finding is "not-evaluated" with a note that it needs human
-// review. Nothing is omitted and nothing is supported without evidence.
+// review. Nothing is omitted, and a passing finding must name the evidence,
+// covers text, or notes it rests on (see src/acr/findings.mjs).
 //
 //   import { buildAcr, toYaml } from "@irs-public/aloud/src/acr/index.mjs";
 //   writeFileSync("acr-draft.yaml", toYaml(buildAcr(findings, { date: "2026-09-30" })));
@@ -215,6 +216,15 @@ function toolsNote(tools) {
   return ` Tools: ${names.join(", ")}.`;
 }
 
+// Say whether any row rests on a person's review. The sentence naming
+// human-reviewed findings appears only when there are some, so a draft
+// built from automated evidence alone never implies a human judgment.
+function humanReviewNote(findings) {
+  return findings.some((finding) => finding.status === "human-reviewed")
+    ? " Findings marked human-reviewed rest on a person's review; there is no other human evaluation yet."
+    : " No finding rests on a person's review; there is no human evaluation yet.";
+}
+
 const contact = (person) => ({
   name: person?.name ?? DRAFT_AUTHOR.name,
   email: person?.email ?? DRAFT_AUTHOR.email,
@@ -323,7 +333,7 @@ export function buildAcr(findings, options = {}) {
     `${methodsIntro} ` +
       policySentence +
       toolsNote(input.provenance?.tools) +
-      " Findings marked human-reviewed rest on a person's review; there is no other human evaluation yet.";
+      humanReviewNote(input.findings);
 
   const product = { name: input.product.name };
   if (input.product.version) product.version = input.product.version;

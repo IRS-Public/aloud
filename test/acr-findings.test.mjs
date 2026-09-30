@@ -15,7 +15,7 @@ import { STATUSES } from "../src/acr/levels.mjs";
 const base = () => ({
   product: { name: "USWDS Button", version: "3.13.0" },
   components: ["web"],
-  findings: [{ criterion: "2.1.1", component: "web", status: "met" }],
+  findings: [{ criterion: "2.1.1", component: "web", status: "met", covers: "keyboard checks" }],
 });
 
 // Build a document, apply a change, and return the problems it raises.
@@ -90,7 +90,7 @@ describe("valid findings", () => {
       ...base(),
       components: ["web", "software"],
       findings: [
-        { criterion: "1.1.1", component: "web", status: "met" },
+        { criterion: "1.1.1", component: "web", status: "met", covers: "keyboard checks" },
         { criterion: "1.1.1", component: "software", status: "failing" },
       ],
     });
@@ -104,7 +104,7 @@ describe("valid findings", () => {
       () => validateFindings({
         ...base(),
         catalog: "2.5-edition-wcag-2.0-508-en",
-        findings: [{ criterion: "2.5.8", component: "web", status: "met" }],
+        findings: [{ criterion: "2.5.8", component: "web", status: "met", covers: "keyboard checks" }],
       }, { catalog }),
       /"2\.5\.8" is not a criterion/,
     );
@@ -182,7 +182,7 @@ describe("rejected findings", () => {
   });
 
   it("reject a product component on a Section 508 chapter criterion", () => {
-    assertProblem((f) => { f.findings[0] = { criterion: "502.2.1", component: "web", status: "met" }; },
+    assertProblem((f) => { f.findings[0] = { criterion: "502.2.1", component: "web", status: "met", covers: "keyboard checks" }; },
       /criterion 502\.2\.1 has no product components in the catalog; omit component/);
   });
 
@@ -191,7 +191,7 @@ describe("rejected findings", () => {
       /findings\[1\]: duplicate of findings\[0\] \(criterion 2\.1\.1, component web\)/);
     // An omitted component and "none" are the same component.
     assertProblem((f) => {
-      f.findings = [{ criterion: "302.1", status: "untested" }, { criterion: "302.1", component: "none", status: "met" }];
+      f.findings = [{ criterion: "302.1", status: "untested" }, { criterion: "302.1", component: "none", status: "met", covers: "keyboard checks" }];
     }, /findings\[1\]: duplicate of findings\[0\] \(criterion 302\.1, component none\)/);
   });
 
@@ -235,6 +235,20 @@ describe("rejected findings", () => {
     assert.equal(out.findings[0].issues.length, 1);
   });
 
+  it("reject a passing finding that names nothing it rests on", () => {
+    for (const status of ["met", "human-reviewed"]) {
+      assertProblem((f) => { f.findings[0] = { criterion: "1.4.3", component: "web", status }; },
+        new RegExp(`findings\\[0\\]: a "${status}" finding must say what it rests on`));
+    }
+    // Any one of evidence, covers, or notes is enough.
+    for (const grounds of [{ evidence: [{ id: "contrast" }] }, { covers: "text contrast" }, { notes: ["Checked by hand."] }]) {
+      const out = validateFindings({ ...base(), findings: [{ criterion: "1.4.3", component: "web", status: "met", ...grounds }] });
+      assert.equal(out.findings[0].status, "met");
+    }
+    // Statuses that support nothing need no grounds.
+    validateFindings({ ...base(), findings: [{ criterion: "1.4.3", component: "web", status: "untested" }] });
+  });
+
   it("reject an unknown catalog", () => {
     assertProblem((f) => { f.catalog = "2.9-edition"; }, /catalog: unknown catalog "2\.9-edition"/);
     // This bundled catalog lists 4.1.1 in two chapters, so it cannot be indexed.
@@ -245,8 +259,8 @@ describe("rejected findings", () => {
 
   it("list every problem at once", () => {
     const problems = problemsFor((f) => {
-      f.findings.push({ criterion: "9.9.9", component: "web", status: "met" });
-      f.findings.push({ criterion: "1.1.1", component: "software", status: "met" });
+      f.findings.push({ criterion: "9.9.9", component: "web", status: "met", covers: "keyboard checks" });
+      f.findings.push({ criterion: "1.1.1", component: "software", status: "met", covers: "keyboard checks" });
     });
     assert.equal(problems.length, 2);
   });

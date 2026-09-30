@@ -65,7 +65,8 @@ build drafts through one findings contract and one level policy.
   (`src/acr/findings.schema.json`, `validateFindings`), a status
   vocabulary and conservative level policy (`src/acr/levels.mjs`; only
   passing evidence reaches "supports", and no override can make a failure
-  or unproven evidence read as a pass), and `buildAcr`/`validateAcr`, which
+  or unproven evidence read as a pass, and a passing finding must name the
+  evidence, covers text, or notes it rests on), and `buildAcr`/`validateAcr`, which
   emit every catalog criterion for every component and check the result
   against the `@openacr/openacr` schema and catalog.
 - **`aloud acr --findings <file.json>`** builds a draft from any findings

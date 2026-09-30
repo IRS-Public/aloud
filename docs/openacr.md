@@ -128,10 +128,13 @@ mobile app is `software`, as in aloud's own drafts.
 | `component` | for WCAG criteria | One of the declared `components`. Section 508 chapter provisions (302.x, 5xx, 6xx) have no product component in the catalog: omit it or write `none`. |
 | `status` | yes | What the evidence shows; see [the status vocabulary](#the-status-vocabulary). |
 | `failingShare` | no | `"some"` (default) or `"all"`: how much of the functionality a `failing` or `known-defect` finding affects. |
-| `covers` | no | What the evidence checks, in plain words, never more than it proves. The note reads "The evidence covers ...". |
-| `evidence` | no | `[{ id, url?, environments? }]`: the checks, tests, or artifacts behind the finding. `environments` names where each ran, such as `["chromium", "webkit"]`. |
+| `covers` | no* | What the evidence checks, in plain words, never more than it proves. The note reads "The evidence covers ...". |
+| `evidence` | no* | `[{ id, url?, environments? }]`: the checks, tests, or artifacts behind the finding. `environments` names where each ran, such as `["chromium", "webkit"]`. |
 | `issues` | for `known-defect` | `[{ id, summary, kind?, url? }]`: known defects or limitations that affect the criterion. `kind` is free text, such as `product-bug` or `platform-gap`. |
-| `notes` | no | Further sentences for the row's notes, such as a scope statement or which tests did not run. |
+| `notes` | no* | Further sentences for the row's notes, such as a scope statement or which tests did not run. |
+
+\* A `met` or `human-reviewed` finding needs at least one of `evidence`,
+`covers`, or `notes`.
 
 ### What the contract rejects
 
@@ -145,6 +148,8 @@ It rejects, listing every problem at once:
 - two findings for the same criterion and component;
 - `failingShare` on a status that is not a failure;
 - a `known-defect` finding with no `issues`;
+- a passing finding (`met`, `human-reviewed`) with no `evidence`,
+  `covers`, or `notes`, since a pass must say what it rests on;
 - `issues` on a passing or out-of-scope finding (`met`, `human-reviewed`,
   `not-triggered`, `page-level`), since the catalog defines "supports" as
   met without known defects; use `known-defect` or `failing` instead;
@@ -475,7 +480,9 @@ These hold for every draft, whatever the evidence source or policy:
   and what a Section 508 office must still do.
 - **Evaluation methods**: the findings' `evaluationMethods` (or a generic
   sentence), the policy sentence, the tools, and a statement that
-  `human-reviewed` findings are the only human evaluation so far.
+  `human-reviewed` findings are the only human evaluation so far, or,
+  when no finding is `human-reviewed`, that there is no human evaluation
+  yet.
 - **Chapters**: every catalog chapter. The hardware chapter is disabled
   with a note ("... is not a hardware product"); `disabledChapters`
   changes which are disabled, and a finding in a disabled chapter throws.

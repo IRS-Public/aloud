@@ -156,6 +156,15 @@ function catalogProblems(input, index, catalogId) {
           'use "known-defect" (or "failing") when an issue affects the criterion',
       );
     }
+    // A pass must say what it rests on. Without evidence, covers text, or
+    // a note, a typo'd or hand-written status would become "supports" with
+    // nothing behind it.
+    if (kind === "passing" && !finding.evidence?.length && !finding.covers && !finding.notes?.length) {
+      problems.push(
+        `${at}: a "${finding.status}" finding must say what it rests on: ` +
+          "give evidence, covers, or notes",
+      );
+    }
     for (const field of ["evidence", "issues"]) {
       const ids = (finding[field] ?? []).map((item) => item.id);
       const repeated = ids.filter((id, j) => ids.indexOf(id) !== j);

@@ -201,11 +201,11 @@ describe("Section 508 chapter provisions", () => {
     components: ["software"],
     findings: [
       { criterion: "302.1", status: "partly-tested", covers: "screen reader speech captured on 12 screens" },
-      { criterion: "302.3", component: "none", status: "met" },
+      { criterion: "302.3", component: "none", status: "met", covers: "keyboard checks" },
       { criterion: "502.2.1", status: "untested" },
       { criterion: "502.3.1", status: "failing", evidence: [{ id: "object-info" }] },
       { criterion: "602.3", status: "not-triggered" },
-      { criterion: "1.1.1", component: "software", status: "met" },
+      { criterion: "1.1.1", component: "software", status: "met", covers: "keyboard checks" },
     ],
   };
   const acr = build(findings, { date: "2026-09-30" });
@@ -244,7 +244,7 @@ describe("Section 508 chapter provisions", () => {
 
   it("refuses findings in a disabled chapter", () => {
     assert.throws(
-      () => build({ ...findings, findings: [{ criterion: "402.2.1", status: "met" }] }, { date: "2026-09-30" }),
+      () => build({ ...findings, findings: [{ criterion: "402.2.1", status: "met", covers: "keyboard checks" }] }, { date: "2026-09-30" }),
       /402\.2\.1 is in the hardware chapter, which this report disables/,
     );
   });
@@ -273,7 +273,7 @@ describe("multiple components", () => {
     product: { name: "Example" },
     components: ["web", "software"],
     findings: [
-      { criterion: "1.1.1", component: "web", status: "met" },
+      { criterion: "1.1.1", component: "web", status: "met", covers: "keyboard checks" },
       { criterion: "1.1.1", component: "software", status: "failing" },
       { criterion: "2.4.2", component: "software", status: "not-triggered" },
     ],
@@ -320,7 +320,7 @@ describe("multiple components", () => {
     const custom = structuredClone(catalog);
     custom.chapters[0].criteria[0].components = ["authoring-tool"];
     const built = build({ product: { name: "Example" }, components: ["web"],
-      findings: [{ criterion: "2.1.1", component: "web", status: "met" }] }, { date: "2026-09-30", catalog: custom });
+      findings: [{ criterion: "2.1.1", component: "web", status: "met", covers: "keyboard checks" }] }, { date: "2026-09-30", catalog: custom });
     assert.deepEqual(row(built, "1.1.1"), {
       chapter: "success_criteria_level_a", num: "1.1.1", name: "authoring-tool", level: "not-evaluated",
       notes: "Not evaluated: the catalog applies this criterion only to authoring-tool, which this report " +
@@ -454,6 +454,12 @@ describe("producer notes and methods", () => {
     const acr = build({ ...button(), evaluationMethods: "Playwright drives each component story" });
     assert.match(acr.evaluation_methods_used, /^Playwright drives each component story\. aloud's level policy/);
     assert.match(acr.evaluation_methods_used, /Tools: Playwright/);
+    // No finding here is human-reviewed, so the methods never imply one.
+    assert.match(acr.evaluation_methods_used, /No finding rests on a person's review; there is no human evaluation yet\.$/);
+    assert.doesNotMatch(acr.evaluation_methods_used, /Findings marked human-reviewed/);
+    const reviewed = button();
+    reviewed.findings[0] = { ...reviewed.findings[0], status: "human-reviewed" };
+    assert.match(build(reviewed).evaluation_methods_used, /Findings marked human-reviewed rest on a person's review/);
     // options.evaluationMethods still replaces the whole section.
     const replaced = build({ ...button(), evaluationMethods: "ignored" }, { evaluationMethods: "Only this." });
     assert.equal(replaced.evaluation_methods_used, "Only this.");
