@@ -44,9 +44,14 @@ scrolling. See [the protocol](talkback-focus.md).
 existing report dir. `aloud baseline` accepts current counts. `aloud
 openacr` emits the draft conformance report.
 
-The scripts under `src/` can also be run directly with `node`. They parse
-flags as strictly as the `aloud` command: an unknown flag, a flag missing its
-value, or a flag given twice stops the script instead of being ignored.
+The scripts under `src/` can also be run directly with `node`. The walkers
+(`src/android/walk.mjs`, `src/ios/walk.mjs`), `src/report/report.mjs`,
+`src/report/baseline.mjs`, `src/report/openacr.mjs`, `src/demo/demo.mjs`, and
+`src/web/run.mjs` parse flags as strictly as the `aloud` command: an unknown
+flag, a flag missing its value, or a flag given twice stops the script instead
+of being ignored. The low-level helpers (`src/android/talkback.mjs`,
+`atf-capture.mjs`, `tts-capture.mjs`) still read their arguments loosely, so
+check flag spelling when calling them by hand.
 
 Reports land under the report root (`--out`, default `aloud-report`):
 `aloud-report/android/` and `aloud-report/ios/`. Each dir holds per-screen
