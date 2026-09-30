@@ -14,11 +14,12 @@
 //
 // With no args, the report dir and baseline come from the resolved
 // config (env ALOUD_CONFIG): <out>/android and baseline.android, or the
-// iOS pair when the report dir ends in "ios".
+// iOS pair when the report dir is named "ios" or ends in "-ios" (see
+// platform.mjs).
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { isWebReport } from "../web/evidence.mjs";
+import { platformForReportDir } from "./platform.mjs";
 import { validateBaseline, validateTreeReport } from "./validation.mjs";
 
 const args = process.argv.slice(2);
@@ -41,11 +42,12 @@ if (!reportDir) {
   console.error("usage: aloud baseline <report-dir> [--baseline <file>]");
   process.exit(1);
 }
-if (isWebReport(reportDir)) {
+const platform = platformForReportDir(reportDir);
+if (platform === "web") {
   console.error("Experimental web evidence is report-only; baselines are not enabled");
   process.exit(1);
 }
-const isIos = /ios\/?$/.test(reportDir);
+const isIos = platform === "ios";
 const baselinePath = opt("baseline", isIos ? cfg?.baseline?.ios : cfg?.baseline?.android);
 if (!baselinePath) {
   console.error("no baseline path: pass --baseline <file> or set ALOUD_CONFIG");

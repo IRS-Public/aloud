@@ -198,7 +198,10 @@ config) records per screen `{ errors, ruleIds }`. The gate is a ratchet:
 - A screen not in the baseline fails until you accept it.
 
 `aloud baseline <report-dir>` is the only sanctioned way to change the
-baseline. Run it to accept an initial baseline or after a fix lowers the
+baseline. Without `--baseline`, a report dir named `ios` or ending in `-ios`
+(for example `aloud-report/ios` or `shop-ios`) uses the iOS baseline, and any
+other dir uses the Android one; `aloud report` picks its baseline the same
+way. Run it to accept an initial baseline or after a fix lowers the
 counts, and commit the result with the change that earned it. The gate
 summary is computed once, in the walker, and embedded in each report as
 `.gate`. The report and baseline tools validate that summary against the

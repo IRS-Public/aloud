@@ -9,7 +9,7 @@
 //
 // With no flags, the report dir and baseline come from the resolved
 // config (env ALOUD_CONFIG): <out>/android and baseline.android, or the
-// iOS pair when the dir ends in "ios".
+// iOS pair when the dir is named "ios" or ends in "-ios" (see platform.mjs).
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -20,8 +20,8 @@ import { atfSummary, atfFindings, atfTreeNodes, validateAtfEvidence } from "../a
 import { runChecks as androidTreeChecks } from "../android/ui-tree.mjs";
 import { isDeepStrictEqual } from "node:util";
 import { validateVoiceOverCapture } from "../ios/voiceover-capture.mjs";
-import { isWebReport } from "../web/evidence.mjs";
 import { reportWeb } from "../web/report.mjs";
+import { platformForReportDir } from "./platform.mjs";
 import { validateBaseline, validateTreeReport } from "./validation.mjs";
 
 const args = process.argv.slice(2);
@@ -43,7 +43,8 @@ if (!OUT) {
   console.error("no report dir: pass --dir <dir> or set ALOUD_CONFIG");
   process.exit(1);
 }
-const isIos = /ios\/?$/.test(OUT);
+const PLATFORM = platformForReportDir(OUT);
+const isIos = PLATFORM === "ios";
 const BASELINE = opt("baseline", isIos ? cfg?.baseline?.ios : cfg?.baseline?.android);
 
 if (!existsSync(OUT)) {
@@ -51,7 +52,7 @@ if (!existsSync(OUT)) {
   process.exit(1);
 }
 
-if (isWebReport(OUT)) {
+if (PLATFORM === "web") {
   try { reportWeb(OUT, { gate: GATE }); }
   catch (error) { console.error(error.message); process.exit(1); }
   process.exit(0);

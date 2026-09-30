@@ -7,11 +7,11 @@
 
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { loadConfig, validateForLeg } from "../src/config.mjs";
-import { isWebReport } from "../src/web/evidence.mjs";
+import { platformForReportDir } from "../src/report/platform.mjs";
 
 const ALOUD_HOME = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -263,12 +263,13 @@ function runReport(argv) {
   if (values.help) return console.log(USAGE);
   const { cfg, resolvedPath } = resolveAndWriteConfig(values);
   const dir = values.dir ? resolve(values.dir) : join(cfg.out, "android");
-  if (isWebReport(dir)) {
+  const platform = platformForReportDir(dir);
+  if (platform === "web") {
     const args = [join(ALOUD_HOME, "src", "report", "report.mjs"), "--out", dir];
     if (values.gate) args.push("--gate");
     return run(process.execPath, args, resolvedPath);
   }
-  const isIos = basename(dir) === "ios" || basename(dir).endsWith("-ios");
+  const isIos = platform === "ios";
   const baseline = values.baseline
     ? resolve(values.baseline)
     : isIos
@@ -285,9 +286,10 @@ function runBaseline(argv) {
   const reportDir = positionals[0];
   if (!reportDir) fail("Usage: aloud baseline <report-dir> [--baseline <file>]");
   const dir = resolve(reportDir);
-  if (isWebReport(dir)) fail("Experimental web evidence is report-only; baselines are not enabled");
+  const platform = platformForReportDir(dir);
+  if (platform === "web") fail("Experimental web evidence is report-only; baselines are not enabled");
   const { cfg, resolvedPath } = resolveAndWriteConfig(values);
-  const isIos = basename(dir) === "ios" || basename(dir).endsWith("-ios");
+  const isIos = platform === "ios";
   const baseline = values.baseline
     ? resolve(values.baseline)
     : isIos
