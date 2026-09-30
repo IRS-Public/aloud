@@ -72,6 +72,14 @@ describe("evidence page renderer", () => {
     assert.ok(html.includes("A &quot;quoted&quot; &lt;title&gt;"));
   });
 
+  it("lists every criterion a finding bears on, falling back to wcag for older reports", () => {
+    const screens = base();
+    screens.failing.violations[0].criteria = ["4.1.2", "1.3.1"];
+    const html = render(screens);
+    assert.ok(html.includes('<span class="wcag">WCAG 4.1.2, 1.3.1</span>'));
+    assert.ok(html.includes('<span class="wcag">WCAG 2.5.8</span>'));
+  });
+
   it("labels computed VoiceOver honestly", () => {
     const screens = base();
     screens.failing.source = "computed-voiceover";

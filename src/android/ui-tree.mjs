@@ -140,7 +140,9 @@ const describe = (n) =>
 
 // ── rules ──
 // Rule ids are stable strings (they live in the user's committed baseline,
-// like axe rule ids do in a web ratchet gate). Mapped WCAG SC per rule.
+// like axe rule ids do in a web ratchet gate). Each rule's severity and
+// WCAG criteria live in src/rules/catalog.mjs; the comments here explain
+// why a rule fires, the catalog decides what it counts toward.
 
 export function runChecks(nodes, { densityDpi, appPackage }) {
   if (!appPackage) {
@@ -150,9 +152,9 @@ export function runChecks(nodes, { densityDpi, appPackage }) {
   const app = nodes.filter((n) => n.package === appPackage);
   // severity "error" counts toward the ratchet gate; "warn" is report-only
   // (duplicate labels are genuinely ambiguous but list-heavy screens repeat
-  // labels legitimately — a warn keeps the signal without gating on it).
-  // Nodes from the ATF companion keep their native id on each finding.
-  const { violations, add } = createFindings(describe, (node) =>
+  // labels legitimately — the catalog marks that rule warn to keep the
+  // signal without gating on it). Nodes from the ATF companion keep their native id on each finding.
+  const { violations, add } = createFindings("Android", describe, (node) =>
     node.nativeId !== undefined ? { nativeId: node.nativeId, source: "accessibility-node-info" } : {});
 
   for (const n of app) {
@@ -177,13 +179,12 @@ export function runChecks(nodes, { densityDpi, appPackage }) {
     ) {
       add(
         "native-interactive-unlabeled",
-        "4.1.2",
         n,
         "clickable element with no text or content-desc in its subtree",
       );
     }
 
-    // 4.1.2 — image-only controls need an explicit label; text can't save
+    // 4.1.2 / 1.1.1 — image-only controls need an explicit label; text can't save
     // them because there is none to inherit.
     if (
       /Image(Button|View)$/.test(n.class || "") &&
@@ -191,7 +192,7 @@ export function runChecks(nodes, { densityDpi, appPackage }) {
       !speakableSelf(n) &&
       !n.children.length
     ) {
-      add("native-image-button-unlabeled", "4.1.2", n, "image control without content-desc");
+      add("native-image-button-unlabeled", n, "image control without content-desc");
     }
 
     // Target size — 48x48dp is the Android platform minimum (ATF's
@@ -212,7 +213,6 @@ export function runChecks(nodes, { densityDpi, appPackage }) {
       if (w < 48 || h < 48) {
         add(
           "native-touch-target-small",
-          "2.5.8",
           n,
           `touch target ${Math.round(w)}x${Math.round(h)}dp (minimum 48x48dp)`,
         );
@@ -229,14 +229,13 @@ export function runChecks(nodes, { densityDpi, appPackage }) {
     ) {
       add(
         "native-edittext-unlabeled",
-        "4.1.2",
         n,
         "editable field with no label, hint, or content-desc",
       );
     }
   }
 
-  // 4.1.2 — two interactive elements announcing identically are
+  // 4.1.2 / 2.4.6 — two interactive elements announcing identically are
   // indistinguishable to a screen-reader user (ATF DuplicateSpeakableText).
   // The first repeat of a label names the node it duplicates.
   const tappable = app.filter((n) => truthy(n.clickable) && truthy(n.enabled) && hasArea(n.bounds));
@@ -245,7 +244,7 @@ export function runChecks(nodes, { densityDpi, appPackage }) {
     const detail = occurrence === 1
       ? `same announcement as ${describe(first)}: "${announcement}"`
       : `same announcement: "${announcement}"`;
-    add("native-duplicate-speakable", "4.1.2", element, detail, "warn");
+    add("native-duplicate-speakable", element, detail);
   }
 
   return violations;

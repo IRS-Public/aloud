@@ -88,12 +88,17 @@ describe("runChecks", () => {
 
   it("flags an unlabeled image button", () => {
     const v = check(node({ ...base, class: "android.widget.ImageButton" }));
-    assert.ok(v.map((x) => x.ruleId).includes("native-image-button-unlabeled"));
+    const hit = v.find((x) => x.ruleId === "native-image-button-unlabeled");
+    assert.ok(hit);
+    assert.equal(hit.wcag, "4.1.2");
+    assert.deepEqual(hit.criteria, ["4.1.2", "1.1.1"]);
   });
 
   it("flags an unlabeled empty EditText", () => {
     const v = check(node({ ...base, class: "android.widget.EditText", clickable: "false" }));
-    assert.ok(v.map((x) => x.ruleId).includes("native-edittext-unlabeled"));
+    const hit = v.find((x) => x.ruleId === "native-edittext-unlabeled");
+    assert.ok(hit);
+    assert.deepEqual(hit.criteria, ["4.1.2", "1.3.1"]);
   });
 
   it("warns (not errors) on duplicate speakable labels", () => {

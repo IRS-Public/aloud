@@ -132,15 +132,17 @@ Requires a `google_apis` (userdebug) emulator image; see
 ### Android rules
 
 `uiautomator dump` exposes a high-confidence subset of the accessibility
-tree. The rules live in `src/android/ui-tree.mjs`:
+tree. The rules live in `src/android/ui-tree.mjs`. Each rule's severity and
+WCAG criteria come from the rule catalog, `src/rules/catalog.mjs`, which the
+OpenACR draft also reads (primary criterion first):
 
 | Rule id | WCAG | Severity |
 | --- | --- | --- |
 | `native-interactive-unlabeled` | 4.1.2 | error |
-| `native-image-button-unlabeled` | 4.1.2 | error |
-| `native-edittext-unlabeled` | 4.1.2 | error |
+| `native-image-button-unlabeled` | 4.1.2, 1.1.1 | error |
+| `native-edittext-unlabeled` | 4.1.2, 1.3.1 | error |
 | `native-touch-target-small` (48dp platform bar) | 2.5.8 | error |
-| `native-duplicate-speakable` | 4.1.2 | warn (report-only) |
+| `native-duplicate-speakable` | 4.1.2, 2.4.6 | warn (report-only) |
 
 Errors count toward the gate; warns appear in the report only. The dump
 format omits `stateDescription`, `roleDescription`, hints, and `paneTitle`.
@@ -156,16 +158,17 @@ One pass. `src/ios/run.sh` boots a simulator if none is booted, installs
 the app, and per screen dumps the accessibility tree with
 `idb ui describe-all`. From each dump aloud computes the VoiceOver
 utterance for each element (label, value, trait, hint, in VoiceOver's
-order) and runs the iOS rules (`src/ios/tree.mjs`):
+order) and runs the iOS rules (`src/ios/tree.mjs`), with severity and
+criteria from the same catalog:
 
 | Rule id | WCAG | Severity |
 | --- | --- | --- |
 | `ios-interactive-unlabeled` | 4.1.2 | error |
-| `ios-image-unlabeled` | 4.1.2 | error |
+| `ios-image-unlabeled` | 1.1.1 | error |
 | `ios-touch-target-small` (44pt Apple bar) | 2.5.8 | error |
 | `ios-toggle-raw-value` (non-switch control speaking "1"/"0") | 4.1.2 | warn (report-only) |
 | `ios-list-row-not-interactive` (static row among interactive siblings) | 4.1.2 | warn (report-only) |
-| `ios-duplicate-speakable` | 4.1.2 | warn (report-only) |
+| `ios-duplicate-speakable` | 4.1.2, 2.4.6 | warn (report-only) |
 
 Errors count toward the gate; warns appear in the report only. Switch-family
 roles (`Switch`, `Toggle`, and `CheckBox`, which is how a UISwitch reaches

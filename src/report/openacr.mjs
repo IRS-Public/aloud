@@ -31,88 +31,52 @@ import { cliArgs } from "../cli-args.mjs";
 import { validateVoiceOverCoverage } from "../ios/voiceover-capture.mjs";
 import { validateAtfSummary } from "../android/atf-evidence.mjs";
 import { readWebReport, webSummary } from "../web/evidence.mjs";
+import { CRITERIA, RULES as RULE_CATALOG, rulesForCriterion } from "../rules/catalog.mjs";
 
 // The catalog names the edition the draft is built against. WCAG 2.2 is
 // required: the touch-target rules map to 2.5.8, which exists only there.
 export const CATALOG_ID = "2.5-edition-wcag-2.2-508-en";
 
 // ── audit rule → WCAG evidence ──
-// Every rule id the audit can emit (src/android/ui-tree.mjs /
-// src/ios/tree.mjs), with the platform it runs on. Warn-only rules never
-// appear in baseline ruleIds (the walkers gate errors only) but are
-// described in notes.
-export const RULES = {
-  "native-interactive-unlabeled": {
-    platform: "Android",
-    what: "interactive element with no speakable text",
-  },
-  "native-image-button-unlabeled": {
-    platform: "Android",
-    what: "image control without a content description",
-  },
-  "native-edittext-unlabeled": {
-    platform: "Android",
-    what: "text field with no label, hint, or content description",
-  },
-  "native-touch-target-small": {
-    platform: "Android",
-    what: "touch target under 48x48dp",
-  },
-  "ios-interactive-unlabeled": {
-    platform: "iOS",
-    what: "interactive element with no label or value",
-  },
-  "ios-image-unlabeled": {
-    platform: "iOS",
-    what: "image element without an accessibility label",
-  },
-  "ios-touch-target-small": {
-    platform: "iOS",
-    what: "touch target under 44x44pt",
-  },
-};
+// Derived from the rule catalog (src/rules/catalog.mjs), the one source of
+// truth the rule engines also read. RULES lists the rules that can appear
+// in baseline ruleIds: errors only, since the walkers gate errors and
+// warn-only rules never reach a baseline.
+export const RULES = Object.freeze(Object.fromEntries(
+  Object.entries(RULE_CATALOG).filter(([, rule]) => rule.severity === "error"),
+));
 
-// Criteria the audit gives partial evidence for. "covers" states, in the
-// adherence notes, exactly what the automation checks — never more.
-export const AUTOMATED_CRITERIA = {
-  "1.1.1": {
-    rules: ["native-image-button-unlabeled", "ios-image-unlabeled"],
-    covers: "image controls and image elements must carry a text label",
-  },
-  "1.3.1": {
-    rules: ["native-edittext-unlabeled"],
-    covers: "text fields must expose a label a screen reader can announce (Android check only)",
-  },
-  "2.5.8": {
-    rules: ["native-touch-target-small", "ios-touch-target-small"],
-    covers:
-      "touch targets must meet the platform minimum (48x48dp on Android, 44x44pt on iOS; both exceed the 24 CSS px minimum of this criterion)",
-  },
-  "4.1.2": {
-    rules: [
-      "native-interactive-unlabeled",
-      "native-image-button-unlabeled",
-      "native-edittext-unlabeled",
-      "ios-interactive-unlabeled",
-      "ios-image-unlabeled",
-    ],
-    covers: "interactive elements, image controls, and text fields must expose an accessible name",
-    extra:
-      "Three report-only warnings add related evidence: elements that announce identical labels (native-duplicate-speakable, ios-duplicate-speakable), " +
-      "iOS controls announcing a raw \"1\"/\"0\" where a switch state should speak on/off (ios-toggle-raw-value), " +
-      "and iOS list rows with no interactive trait among interactive siblings (ios-list-row-not-interactive); warnings do not gate.",
-  },
-};
+// Criteria the audit gives partial evidence for: every criterion at least
+// one error rule maps to. "covers" states, in the adherence notes, exactly
+// what the automation checks — never more. "extra" names report-only
+// warnings that add related evidence.
+export const AUTOMATED_CRITERIA = Object.freeze(Object.fromEntries(
+  Object.entries(CRITERIA)
+    .map(([num, entry]) => [num, entry, rulesForCriterion(num, "error")])
+    .filter(([, , rules]) => rules.length > 0)
+    .map(([num, entry, rules]) => [num, Object.freeze({
+      rules: Object.freeze(rules),
+      covers: entry.covers,
+      ...(entry.warnings ? { extra: entry.warnings } : {}),
+    })]),
+));
 
-// Criteria the audit cannot decide but has related evidence for. The
-// 302.1 note names the transcript coverage, so it is built per run in
-// buildAcr from the actual screen counts.
+// Criteria only report-only warnings reach stay not-evaluated; their notes
+// point at the related evidence. 2.5.5 is not a criterion any rule maps to:
+// the target-size rules hold platform bars, and whether they settle 2.5.5
+// depends on its exceptions, so its note is written here. The 302.1 note
+// names the transcript coverage, so it is built per run in buildAcr from
+// the actual screen counts.
 const SPECIAL_NOTES = {
   "2.5.5":
     "Not evaluated; needs human review. Related evidence: where tree checks completed, the automated target-size rules check platform bars (48x48dp Android, 44x44pt iOS). Review the findings and criterion exceptions before drawing a conformance conclusion.",
-  "2.4.6":
-    "Not evaluated; needs human review. Related evidence: the audit flags interactive elements that announce identical labels (native-duplicate-speakable, ios-duplicate-speakable) as warnings; warnings do not gate.",
 };
+for (const [num, entry] of Object.entries(CRITERIA)) {
+  if (AUTOMATED_CRITERIA[num]) continue;
+  SPECIAL_NOTES[num] =
+    `Not evaluated; needs human review. Related evidence: the audit flags ${entry.covers} ` +
+    `(${rulesForCriterion(num, "warn").join(", ")}) as warnings; warnings do not gate.`;
+}
 
 // Coverage strings such as "12 Android screens and 12 iOS screens" are
 // always computed from the audits actually read, never hardcoded, so
@@ -338,10 +302,16 @@ export function buildAcr({
     validateScreens(screens, platform);
     for (const [id, s] of Object.entries(screens)) {
       for (const r of s.ruleIds) {
+        if (RULE_CATALOG[r]?.severity === "warn") {
+          throw new Error(
+            `invalid audit rule id "${r}" (${platform} ${id}): this rule is a report-only warning; ` +
+              "baselines and gates count errors only",
+          );
+        }
         if (!RULES[r]) {
           throw new Error(
-            `unknown audit rule id "${r}" (${platform} ${id}): add it to RULES and ` +
-              "map it in AUTOMATED_CRITERIA in src/report/openacr.mjs",
+            `unknown audit rule id "${r}" (${platform} ${id}): add it, with its criteria, ` +
+              "to src/rules/catalog.mjs",
           );
         }
         if (RULES[r].platform !== platform) {
@@ -443,8 +413,8 @@ export function buildAcr({
     evaluation_methods_used:
       (audits.length ? "Automated accessibility-tree checks use device or simulator dumps " +
       (atfScreens.length ? "(AccessibilityNodeInfo in Android ATF mode, uiautomator in standard Android mode, idb on iOS). " : "(uiautomator on Android, idb on iOS). ") +
-      `${treeNotes}${missingNotes}${appleNotes}${atfNotes} ${transcriptNotes} ${transcriptMethods} Rules and WCAG ` +
-      "mapping: src/android/ui-tree.mjs and src/ios/tree.mjs. " : "") + webNotes +
+      `${treeNotes}${missingNotes}${appleNotes}${atfNotes} ${transcriptNotes} ${transcriptMethods} Rules: ` +
+      "src/android/ui-tree.mjs and src/ios/tree.mjs; WCAG mapping: src/rules/catalog.mjs. " : "") + webNotes +
       "No human evaluation yet.",
     catalog: CATALOG_ID,
     chapters,

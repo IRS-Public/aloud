@@ -34,7 +34,7 @@ The emitter is `src/report/openacr.mjs`. Three properties make the output
 a draft you can trust, rather than a report you cannot:
 
 - **Only automated evidence gets a conformance level.** Criteria the
-  audit rules map to (1.1.1, 1.3.1, 2.5.8, 4.1.2) get `supports` only
+  audit's error rules map to (1.1.1, 1.3.1, 2.5.8, 4.1.2) get `supports` only
   when applicable tree checks completed without mapped failures on every
   supplied screen for those platforms. Known failures produce
   `partially-supports`, with the failing screens and rule ids in the notes.
@@ -42,11 +42,19 @@ a draft you can trust, rather than a report you cannot:
   known failure. Notes state that automation covers part of the criterion
   only. Every other criterion is `not-evaluated` with a "needs human
   review" note. A few `not-evaluated` rows carry related evidence in
-  their notes (for example, the transcript coverage on 302.1), still
-  marked as needing human review.
+  their notes (for example, the transcript coverage on 302.1, or the
+  duplicate-label warnings on 2.4.6), still marked as needing human review.
+- **One mapping, shared with the rules.** Each rule's severity and criteria
+  live in the rule catalog, `src/rules/catalog.mjs`, with a plain statement
+  of what the automation checks per criterion. The Android and iOS rule
+  engines and this emitter all read it, so a finding and the draft cannot
+  disagree about what a rule counts toward. A test checks that every
+  emitted rule is catalogued and every criterion exists in the OpenACR
+  catalog.
 - **Invalid evidence throws.** Empty audits, malformed screen data,
-  inconsistent error counts and rule ids, unknown rules, and rules filed
-  under the wrong platform stop generation. A missing optional baseline
+  inconsistent error counts and rule ids, unknown rules, report-only
+  warnings filed as baseline errors, and rules filed under the wrong
+  platform stop generation. A missing optional baseline
   file is allowed; an unreadable or malformed existing baseline is an
   error.
 - **Nothing is a silent pass.** Every adherence entry has a level and a

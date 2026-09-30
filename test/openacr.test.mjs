@@ -162,7 +162,53 @@ describe("rule mapping", () => {
 
   it("rejects a baseline rule id the emitter does not know", () => {
     const bad = normalizeAudit({ home: { errors: 1, ruleIds: ["native-new-rule"] } });
-    assert.throws(() => build({ android: bad }), /native-new-rule/);
+    assert.throws(() => build({ android: bad }), /native-new-rule.*src\/rules\/catalog\.mjs/);
+  });
+
+  it("rejects a report-only warning filed as a gating baseline error", () => {
+    const bad = normalizeAudit({ home: { errors: 1, ruleIds: ["native-duplicate-speakable"] } });
+    assert.throws(() => build({ android: bad }), /native-duplicate-speakable.*report-only warning/);
+  });
+
+  it("derives the criterion mapping from the rule catalog", () => {
+    // A deliberate snapshot: changing what a rule counts toward changes
+    // conformance levels, so it should change this test too.
+    const mapping = Object.fromEntries(
+      Object.entries(AUTOMATED_CRITERIA).map(([num, { rules }]) => [num, [...rules].sort()]),
+    );
+    assert.deepEqual(mapping, {
+      "1.1.1": ["ios-image-unlabeled", "native-image-button-unlabeled"],
+      "1.3.1": ["native-edittext-unlabeled"],
+      "2.5.8": ["ios-touch-target-small", "native-touch-target-small"],
+      "4.1.2": [
+        "ios-interactive-unlabeled",
+        "native-edittext-unlabeled",
+        "native-image-button-unlabeled",
+        "native-interactive-unlabeled",
+      ],
+    });
+    assert.deepEqual(Object.keys(RULES).sort(), [
+      "ios-image-unlabeled",
+      "ios-interactive-unlabeled",
+      "ios-touch-target-small",
+      "native-edittext-unlabeled",
+      "native-image-button-unlabeled",
+      "native-interactive-unlabeled",
+      "native-touch-target-small",
+    ]);
+  });
+
+  it("counts an unlabeled iOS image against 1.1.1, not 4.1.2", () => {
+    const acr = build({ android: null, ios: normalizeAudit({ home: { errors: 1, ruleIds: ["ios-image-unlabeled"] } }) });
+    assert.equal(findCriterion(acr, "1.1.1").level, "partially-supports");
+    assert.match(findCriterion(acr, "1.1.1").notes, /iOS home: ios-image-unlabeled/);
+    assert.equal(findCriterion(acr, "4.1.2").level, "supports");
+  });
+
+  it("points warning-only criteria at their related evidence without a level", () => {
+    const adherence = findCriterion(build(), "2.4.6");
+    assert.equal(adherence.level, "not-evaluated");
+    assert.match(adherence.notes, /\(native-duplicate-speakable, ios-duplicate-speakable\) as warnings/);
   });
 });
 

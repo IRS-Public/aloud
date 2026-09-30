@@ -46,6 +46,8 @@ function statusOf(s) {
     : { key: "pass", label: s.atfSummary ? "Tree pass" : "Pass" };
 }
 
+// Findings list every criterion the rule gives evidence toward; tree
+// reports written before findings carried `criteria` show their `wcag`.
 function findingsHtml(s) {
   if (!s.gate) return `<p class="none">No tree check in this run.</p>`;
   const items = (s.violations ?? [])
@@ -53,7 +55,7 @@ function findingsHtml(s) {
       const sev = v.severity === "error" ? "error" : "warn";
       const sevLabel = sev === "error" ? "Error" : "Warning";
       return `<li class="finding ${sev}">
-        <p class="finding-head"><span class="sev sev-${sev}">${sevLabel}</span> <code class="rule">${esc(v.ruleId)}</code> <span class="wcag">WCAG ${esc(v.wcag)}</span></p>
+        <p class="finding-head"><span class="sev sev-${sev}">${sevLabel}</span> <code class="rule">${esc(v.ruleId)}</code> <span class="wcag">WCAG ${esc((v.criteria ?? [v.wcag]).join(", "))}</span></p>
         <p class="finding-detail">${esc(v.detail)}</p>
         ${v.element ? `<code class="el">${esc(v.element)}</code>` : ""}
       </li>`;

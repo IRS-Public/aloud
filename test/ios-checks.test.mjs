@@ -109,12 +109,13 @@ describe("runIosChecks", () => {
     );
   });
 
-  it("flags an unlabeled image", () => {
-    assert.ok(
-      check([el({ type: "Image", AXLabel: null })])
-        .map((v) => v.ruleId)
-        .includes("ios-image-unlabeled"),
-    );
+  it("flags an unlabeled image as a text-alternative gap (1.1.1)", () => {
+    const hit = check([el({ type: "Image", AXLabel: null })]).find((v) => v.ruleId === "ios-image-unlabeled");
+    assert.ok(hit);
+    // Image-role elements are not controls, so the finding points at
+    // 1.1.1 only (it was once tagged 4.1.2, which covers UI components).
+    assert.equal(hit.wcag, "1.1.1");
+    assert.deepEqual(hit.criteria, ["1.1.1"]);
   });
 
   it("flags a sub-44pt target with pt math", () => {

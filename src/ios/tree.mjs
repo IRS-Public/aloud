@@ -6,7 +6,8 @@
 // Same scope note as the Android rules: this is the high-confidence subset
 // the dump can prove. Apple's own audit (performAccessibilityAudit) and the
 // Xcode 27 real-VoiceOver API layer on later — rule ids here are stable and
-// live in the user's iOS baseline file (see `aloud baseline`).
+// live in the user's iOS baseline file (see `aloud baseline`). Severity and
+// WCAG criteria per rule live in src/rules/catalog.mjs.
 
 import { createFindings, hasArea, repeatedAnnouncements } from "../rules/shared.mjs";
 import { INTERACTIVE_ROLES, composeUtterance, isFocusable } from "./voiceover.mjs";
@@ -113,7 +114,7 @@ export function computeTranscript(elements) {
 }
 
 export function runIosChecks(elements) {
-  const { violations, add } = createFindings(describe);
+  const { violations, add } = createFindings("iOS", describe);
 
   for (const el of elements) {
     if (!hasArea(el.frame)) continue;
@@ -122,12 +123,14 @@ export function runIosChecks(elements) {
     // 4.1.2 Name, Role, Value — an unlabeled control announces as just
     // "button": nothing tells the user what it does.
     if (interactive && el.enabled && !el.label && !el.value) {
-      add("ios-interactive-unlabeled", "4.1.2", el, "interactive element with no label or value");
+      add("ios-interactive-unlabeled", el, "interactive element with no label or value");
     }
 
-    // 4.1.2 — an image element VoiceOver can reach but cannot describe.
+    // 1.1.1 Non-text Content — an image element VoiceOver can reach but
+    // cannot describe. Image-role elements are not controls (an image
+    // button dumps as Button), so this is a text-alternative gap.
     if (el.role === "Image" && !el.label && !el.value) {
-      add("ios-image-unlabeled", "4.1.2", el, "image element without an accessibility label");
+      add("ios-image-unlabeled", el, "image element without an accessibility label");
     }
 
     // Target size — 44x44pt is the Apple platform minimum (HIG; Apple's
@@ -139,7 +142,6 @@ export function runIosChecks(elements) {
     if (interactive && el.enabled && !SWITCH_ROLES.has(el.role) && (el.frame.w < 44 || el.frame.h < 44)) {
       add(
         "ios-touch-target-small",
-        "2.5.8",
         el,
         `touch target ${Math.round(el.frame.w)}x${Math.round(el.frame.h)}pt (minimum 44x44pt)`,
       );
@@ -157,10 +159,8 @@ export function runIosChecks(elements) {
     if (interactive && !VALUE_BEARING_ROLES.has(el.role) && (el.value === "1" || el.value === "0")) {
       add(
         "ios-toggle-raw-value",
-        "4.1.2",
         el,
         `control announces raw value "${el.value}" — a switch state should speak on/off`,
-        "warn",
       );
     }
   }
@@ -207,20 +207,18 @@ export function runIosChecks(elements) {
       if (el.label.length > 90) continue;
       add(
         "ios-list-row-not-interactive",
-        "4.1.2",
         el,
         `row "${el.label}" sits in a list where ${interactiveRows.length} sibling rows announce as interactive, but this one has no interactive trait`,
-        "warn",
       );
     }
   }
 
-  // 4.1.2 — two controls that announce identically are indistinguishable.
+  // 4.1.2 / 2.4.6 — two controls that announce identically are indistinguishable.
   // Warn-only, like the Android rule: lists legitimately repeat labels.
   const controls = elements.filter((el) => INTERACTIVE_ROLES.has(el.role) && el.enabled && hasArea(el.frame));
   const utteranceOf = (el) => composeUtterance(el).toLowerCase();
   for (const { element, announcement } of repeatedAnnouncements(controls, utteranceOf)) {
-    add("ios-duplicate-speakable", "4.1.2", element, `same announcement: "${announcement}"`, "warn");
+    add("ios-duplicate-speakable", element, `same announcement: "${announcement}"`);
   }
 
   return violations;
