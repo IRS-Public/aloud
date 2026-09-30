@@ -17,7 +17,7 @@ function tempDir(t) {
 
 describe("report dir platform", () => {
   it("treats only a dir named ios or ending in -ios as iOS", () => {
-    for (const dir of ["ios", "ios/", "ios//", "out/ios", "/abs/out/ios/", "my-ios", "out/shop-ios/"]) {
+    for (const dir of ["ios", "ios/", "ios//", "ios/.", "out/ios/.", "out/ios/./", "out/ios", "/abs/out/ios/", "my-ios", "out/shop-ios/", "out/ios/android/.."]) {
       assert.equal(isIosReportDir(dir), true, dir);
       assert.equal(platformForReportDir(dir), "ios", dir);
     }
@@ -25,6 +25,17 @@ describe("report dir platform", () => {
       assert.equal(isIosReportDir(dir), false, dir);
       assert.equal(platformForReportDir(dir), "android", dir);
     }
+  });
+
+  it("resolves . and .. against the working dir, as the aloud command does", (t) => {
+    const root = tempDir(t);
+    const ios = join(root, "ios");
+    mkdirSync(join(ios, "screens"), { recursive: true });
+    const probe = `import { platformForReportDir as p } from ${JSON.stringify(join(ROOT, "src/report/platform.mjs"))};
+console.log([p("."), p("./"), p("screens/.."), p("..")].join(","));`;
+    const run = spawnSync(process.execPath, ["--input-type=module", "-e", probe], { cwd: ios, encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stdout.trim(), "ios,ios,ios,android");
   });
 
   it("detects web evidence from dir contents, whatever the name", (t) => {
@@ -67,5 +78,28 @@ describe("report dir platform", () => {
     const baseline = spawnSync(process.execPath, [join(ROOT, "src/report/baseline.mjs"), out], { cwd: root, encoding: "utf8", env });
     assert.equal(baseline.status, 0, baseline.stderr);
     assert.match(baseline.stdout + baseline.stderr, /baseline-android\.json/);
+  });
+
+  it("report and baseline pick the iOS baseline for --dir . inside an ios dir", (t) => {
+    const root = tempDir(t);
+    const out = join(root, "ios");
+    mkdirSync(out);
+    const gate = { errors: 0, ruleIds: [] };
+    writeFileSync(join(out, "home.tree.json"), JSON.stringify({ screen: "home", violations: [], gate }));
+    const androidBaseline = join(root, "baseline-android.json");
+    const iosBaseline = join(root, "baseline-ios.json");
+    writeFileSync(iosBaseline, JSON.stringify({ home: gate }));
+    const config = join(root, "config.resolved.json");
+    writeFileSync(config, JSON.stringify({ out: root, baseline: { android: androidBaseline, ios: iosBaseline } }));
+    const env = { ...process.env, ALOUD_CONFIG: config };
+
+    // The Android baseline does not exist, so gating "." as Android would
+    // fail on the unaccepted "home" screen.
+    const report = spawnSync(process.execPath, [join(ROOT, "src/report/report.mjs"), "--dir", ".", "--gate"], { cwd: out, encoding: "utf8", env });
+    assert.equal(report.status, 0, report.stderr);
+
+    const baseline = spawnSync(process.execPath, [join(ROOT, "src/report/baseline.mjs"), "."], { cwd: out, encoding: "utf8", env });
+    assert.equal(baseline.status, 0, baseline.stderr);
+    assert.match(baseline.stdout + baseline.stderr, /baseline-ios\.json/);
   });
 });

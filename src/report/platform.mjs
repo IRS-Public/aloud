@@ -8,10 +8,12 @@
 //            writes <out>/ios; "my-app-ios" is the documented variant)
 //   android  everything else (the Android leg writes <out>/android)
 //
-// Only the last path segment counts, so "radios" or "ios-archive/android"
-// are not iOS, and a trailing slash ("out/ios/") does not change the answer.
+// Only the last segment of the resolved path counts, so "radios" or
+// "ios-archive/android" are not iOS, and a trailing slash ("out/ios/"), a
+// trailing "." ("out/ios/."), or "." run from inside the ios dir all give the
+// same answer bin/aloud.mjs gets after it resolves the dir.
 
-import { basename } from "node:path";
+import { basename, resolve } from "node:path";
 import { isWebReport } from "../web/evidence.mjs";
 
 // Name-only check (no filesystem access), for callers that already know the
@@ -20,8 +22,9 @@ export function isIosReportDir(dir) {
   if (typeof dir !== "string" || dir.trim() === "") {
     throw new Error(`report dir must be a non-empty path, got ${JSON.stringify(dir)}`);
   }
-  // basename() already ignores trailing "/"; strip "\" too for Windows paths.
-  const name = basename(dir.replace(/[\\/]+$/, ""));
+  // Resolve first so "." and "out/ios/." name the real dir. Strip trailing
+  // "\" too, for Windows paths passed on a POSIX host.
+  const name = basename(resolve(dir.replace(/[\\/]+$/, "") || "/"));
   return name === "ios" || name.endsWith("-ios");
 }
 
