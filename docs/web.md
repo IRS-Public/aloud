@@ -191,6 +191,13 @@ command logs: formatted by Guidepup, not audio, and silent windows prove
 nothing. A timed-out command is never retried, and no further reader is
 started in that process.
 
+The driver is also a library: `@irs-public/aloud/web/voiceover` exports
+`startVoiceOver`, `voiceOverCommand`, `voiceOverListen`, and
+`stopVoiceOver`, with the same guards, alongside the NVDA driver at
+`@irs-public/aloud/web/nvda`. The USWDS accessibility harness already
+imports the NVDA driver and its dependency pins from a pinned aloud
+checkout; see [the harness integration guide](harness-integration.md).
+
 ## Evidence and re-aggregation
 
 The run writes `web-run.json`, per-state `*.web.json`, screenshots, a summary,

@@ -1,0 +1,595 @@
+{
+  "generatedAt": "2026-09-30T18:00:00.000Z",
+  "run": {
+    "commit": "487be0597395ee6fae3486f18278d3ee5f59fe1c",
+    "workingTreeDirty": false,
+    "knownBugsEnabled": false,
+    "finishedAt": "2026-09-30T17:44:23.668Z",
+    "environments": [
+      "chromium",
+      "firefox",
+      "webkit"
+    ],
+    "unhandledErrors": 0,
+    "crashedFiles": 0
+  },
+  "evidence": [],
+  "declaredEnvironments": [
+    "chromium",
+    "firefox",
+    "webkit"
+  ],
+  "components": [
+    {
+      "component": "date-picker",
+      "hasTests": true,
+      "section508": "failing",
+      "criteria": [
+        {
+          "criterion": "1.1.1",
+          "name": "Non-text Content",
+          "summary": null,
+          "profile": "section508",
+          "scope": "component",
+          "coverage": "full",
+          "status": "met",
+          "checks": [
+            {
+              "id": "DP-K02",
+              "title": "Check DP-K02",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "passing",
+              "passed": 3,
+              "failed": 0,
+              "skipped": 0,
+              "environments": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "passedIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "reviewedCopy": false,
+              "declaredIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "missingIn": [],
+              "skippedIn": [],
+              "blockedIn": [],
+              "issues": [],
+              "failures": []
+            },
+            {
+              "id": "DP-K04",
+              "title": "Check DP-K04",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "passing",
+              "passed": 3,
+              "failed": 0,
+              "skipped": 0,
+              "environments": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "passedIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "reviewedCopy": false,
+              "declaredIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "missingIn": [],
+              "skippedIn": [],
+              "blockedIn": [],
+              "issues": [],
+              "failures": []
+            }
+          ],
+          "reason": "The icon-only calendar toggle has an accessible name.",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "3.3.2",
+          "name": "Labels or Instructions",
+          "summary": null,
+          "profile": "section508",
+          "scope": "component",
+          "coverage": "full",
+          "status": "human-reviewed",
+          "checks": [
+            {
+              "id": "DP-C01",
+              "title": "Check DP-C01",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "passing",
+              "passed": 3,
+              "failed": 0,
+              "skipped": 0,
+              "environments": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "passedIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "reviewedCopy": true,
+              "declaredIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "missingIn": [],
+              "skippedIn": [],
+              "blockedIn": [],
+              "issues": [],
+              "failures": []
+            }
+          ],
+          "reason": "The label and hint keep the approved wording.",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "1.4.10",
+          "name": "Reflow",
+          "summary": null,
+          "profile": "additional-wcag21",
+          "scope": "component",
+          "coverage": "partial",
+          "status": "partly-tested",
+          "checks": [
+            {
+              "id": "DP-R01",
+              "title": "Check DP-R01",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "passing",
+              "passed": 3,
+              "failed": 0,
+              "skipped": 0,
+              "environments": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "passedIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "reviewedCopy": false,
+              "declaredIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "missingIn": [],
+              "skippedIn": [],
+              "blockedIn": [],
+              "issues": [],
+              "failures": []
+            }
+          ],
+          "reason": "No check covers 400% zoom in a short window yet.",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "2.1.1",
+          "name": "Keyboard",
+          "summary": null,
+          "profile": "section508",
+          "scope": "component",
+          "coverage": "full",
+          "status": "not-met",
+          "checks": [
+            {
+              "id": "DP-K01",
+              "title": "Check DP-K01",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "passing",
+              "passed": 3,
+              "failed": 0,
+              "skipped": 0,
+              "environments": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "passedIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "reviewedCopy": false,
+              "declaredIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "missingIn": [],
+              "skippedIn": [],
+              "blockedIn": [],
+              "issues": [],
+              "failures": []
+            },
+            {
+              "id": "DP-K03",
+              "title": "Check DP-K03",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "failing",
+              "passed": 1,
+              "failed": 1,
+              "skipped": 0,
+              "environments": [
+                "chromium"
+              ],
+              "passedIn": [
+                "chromium"
+              ],
+              "reviewedCopy": false,
+              "declaredIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "missingIn": [],
+              "skippedIn": [],
+              "blockedIn": [],
+              "issues": [],
+              "failures": [
+                "firefox: opens with Enter"
+              ]
+            }
+          ],
+          "reason": "Every control works from the keyboard.",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "2.1.2",
+          "name": "No Keyboard Trap",
+          "summary": null,
+          "profile": "section508",
+          "scope": "component",
+          "coverage": "full",
+          "status": "not-met",
+          "checks": [
+            {
+              "id": "DP-K05",
+              "title": "Check DP-K05",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "failing",
+              "passed": 0,
+              "failed": 3,
+              "skipped": 0,
+              "environments": [],
+              "passedIn": [],
+              "reviewedCopy": false,
+              "declaredIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "missingIn": [],
+              "skippedIn": [],
+              "blockedIn": [],
+              "issues": [],
+              "failures": [
+                "chromium: Escape closes",
+                "firefox: Escape closes",
+                "webkit: Escape closes"
+              ]
+            }
+          ],
+          "reason": "",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "4.1.2",
+          "name": "Name, Role, Value",
+          "summary": null,
+          "profile": "section508",
+          "scope": "component",
+          "coverage": "full",
+          "status": "not-met-known-issue",
+          "checks": [
+            {
+              "id": "DP-S03",
+              "title": "Check DP-S03",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "known-issue",
+              "passed": 0,
+              "failed": 0,
+              "skipped": 3,
+              "environments": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "passedIn": [],
+              "reviewedCopy": false,
+              "declaredIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "missingIn": [],
+              "skippedIn": [],
+              "blockedIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "issues": [
+                "DP-EXPANDED-STATE"
+              ],
+              "failures": []
+            }
+          ],
+          "reason": "",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "1.4.11",
+          "name": "Non-text Contrast",
+          "summary": null,
+          "profile": "additional-wcag21",
+          "scope": "component",
+          "coverage": "full",
+          "status": "platform-limitation",
+          "checks": [
+            {
+              "id": "DP-FC01",
+              "title": "Check DP-FC01",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "platform-gap",
+              "passed": 2,
+              "failed": 0,
+              "skipped": 1,
+              "environments": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "passedIn": [
+                "chromium",
+                "firefox"
+              ],
+              "reviewedCopy": false,
+              "declaredIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "missingIn": [],
+              "skippedIn": [],
+              "blockedIn": [
+                "webkit"
+              ],
+              "issues": [
+                "WEBKIT-FORCED-COLORS"
+              ],
+              "failures": []
+            }
+          ],
+          "reason": "",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "1.3.1",
+          "name": "Info and Relationships",
+          "summary": null,
+          "profile": "section508",
+          "scope": "component",
+          "coverage": "full",
+          "status": "incomplete",
+          "checks": [
+            {
+              "id": "DP-S01",
+              "title": "Check DP-S01",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "partial",
+              "passed": 1,
+              "failed": 0,
+              "skipped": 0,
+              "environments": [
+                "webkit"
+              ],
+              "passedIn": [
+                "webkit"
+              ],
+              "reviewedCopy": false,
+              "declaredIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "missingIn": [
+                "chromium",
+                "firefox"
+              ],
+              "skippedIn": [],
+              "blockedIn": [],
+              "issues": [],
+              "failures": []
+            }
+          ],
+          "reason": "",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "2.4.11",
+          "name": "Focus Not Obscured (Minimum)",
+          "summary": null,
+          "profile": "additional-wcag22",
+          "scope": "component",
+          "coverage": "full",
+          "status": "untested",
+          "checks": [],
+          "reason": "The open calendar must not cover the focused date.",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "2.2.1",
+          "name": "Timing Adjustable",
+          "summary": null,
+          "profile": "section508",
+          "scope": "unreviewed",
+          "coverage": "full",
+          "status": "unreviewed",
+          "checks": [],
+          "reason": "Nobody has checked for time limits yet.",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "1.2.2",
+          "name": "Captions (Prerecorded)",
+          "summary": null,
+          "profile": "section508",
+          "scope": "not-triggered",
+          "coverage": "full",
+          "status": "not-triggered",
+          "checks": [],
+          "reason": "The date picker has no video.",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "2.4.2",
+          "name": "Page Titled",
+          "summary": null,
+          "profile": "section508",
+          "scope": "consumer-page",
+          "coverage": "full",
+          "status": "consumer-responsibility",
+          "checks": [],
+          "reason": "Every page needs a title.",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "APG-RADIO",
+          "name": "Radio group pattern",
+          "summary": null,
+          "profile": "project",
+          "scope": "component",
+          "coverage": "full",
+          "status": "met",
+          "checks": [
+            {
+              "id": "DP-P01",
+              "title": "Check DP-P01",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "passing",
+              "passed": 3,
+              "failed": 0,
+              "skipped": 0,
+              "environments": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "passedIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "reviewedCopy": false,
+              "declaredIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "missingIn": [],
+              "skippedIn": [],
+              "blockedIn": [],
+              "issues": [],
+              "failures": []
+            }
+          ],
+          "reason": "",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        }
+      ],
+      "failedTests": [],
+      "setupErrors": [],
+      "knownIssueTests": [],
+      "unmappedIds": [],
+      "testsWithoutId": []
+    }
+  ]
+}

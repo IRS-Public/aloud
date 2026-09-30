@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "product": {
+    "name": "Example Date Picker",
+    "version": "3.13.0",
+    "description": "A date input with a calendar dialog, from an example design system."
+  },
+  "author": { "name": "Example Accessibility Team", "email": "a11y@example.gov" },
+  "vendor": { "name": "Example Agency", "email": "508@example.gov" },
+  "provenance": {
+    "commit": "0123456789abcdef0123456789abcdef01234567",
+    "workingTreeDirty": false,
+    "runUrl": "https://github.com/example/design-system/actions/runs/123456789",
+    "date": "2026-09-30",
+    "tools": [
+      { "name": "example accessibility harness", "version": "1.4.0" },
+      { "name": "Playwright", "version": "1.63.0", "url": "https://playwright.dev" }
+    ]
+  },
+  "catalog": "2.5-edition-wcag-2.2-508-en",
+  "components": ["web"],
+  "findings": [
+    {
+      "criterion": "1.1.1",
+      "component": "web",
+      "status": "met",
+      "covers": "accessible names on the icon-only calendar toggle and the month and year buttons",
+      "evidence": [
+        { "id": "DP-K02", "environments": ["chromium", "firefox", "webkit"] },
+        { "id": "DP-K04", "environments": ["chromium", "firefox", "webkit"] }
+      ]
+    },
+    {
+      "criterion": "3.3.2",
+      "component": "web",
+      "status": "human-reviewed",
+      "covers": "the label and format hint text a person approved",
+      "evidence": [{ "id": "DP-C01", "environments": ["unit"] }]
+    },
+    {
+      "criterion": "2.1.1",
+      "component": "web",
+      "status": "failing",
+      "failingShare": "some",
+      "evidence": [
+        { "id": "DP-K01", "environments": ["chromium", "firefox"] },
+        { "id": "DP-K03" }
+      ],
+      "notes": ["Failing checks: DP-K03"]
+    },
+    {
+      "criterion": "4.1.2",
+      "component": "web",
+      "status": "known-defect",
+      "failingShare": "all",
+      "issues": [
+        {
+          "id": "DP-EXPANDED-STATE",
+          "kind": "core-bug",
+          "summary": "The calendar toggle does not say whether the calendar is open.",
+          "url": "https://github.com/example/design-system/issues/42"
+        }
+      ],
+      "evidence": [{ "id": "DP-S03" }]
+    },
+    {
+      "criterion": "1.4.10",
+      "component": "web",
+      "status": "partly-tested",
+      "covers": "the field and calendar at 320 CSS pixels wide",
+      "notes": ["No check covers the calendar at 400% zoom in a short window yet."],
+      "evidence": [{ "id": "DP-R01", "environments": ["chromium-zoom"] }]
+    },
+    {
+      "criterion": "1.4.11",
+      "component": "web",
+      "status": "platform-limitation",
+      "issues": [
+        {
+          "id": "WEBKIT-FORCED-COLORS",
+          "kind": "platform-gap",
+          "summary": "Safari has no high-contrast mode, so high-contrast checks run only in Chrome and Firefox."
+        }
+      ],
+      "evidence": [{ "id": "DP-FC01", "environments": ["chromium", "firefox"] }]
+    },
+    {
+      "criterion": "1.3.1",
+      "component": "web",
+      "status": "incomplete",
+      "notes": ["Some tests did not run in: macos-voiceover"],
+      "evidence": [{ "id": "DP-S01", "environments": ["chromium", "firefox", "webkit", "windows-nvda"] }]
+    },
+    { "criterion": "2.4.11", "component": "web", "status": "untested" },
+    {
+      "criterion": "2.2.1",
+      "component": "web",
+      "status": "unreviewed",
+      "notes": ["Nobody has checked yet whether the calendar has a time limit."]
+    },
+    {
+      "criterion": "1.2.2",
+      "component": "web",
+      "status": "not-triggered",
+      "notes": ["The date picker has no video."]
+    },
+    {
+      "criterion": "2.4.2",
+      "component": "web",
+      "status": "page-level",
+      "notes": ["A component has no page title of its own."]
+    },
+    {
+      "criterion": "502.3.1",
+      "status": "untested",
+      "notes": ["Section 508 chapter provisions take no component."]
+    }
+  ],
+  "notes": [
+    "Tested in Chrome, Firefox, Safari, Chrome with NVDA on Windows, and Safari with VoiceOver on a Mac"
+  ],
+  "evaluationMethods": "An automated accessibility harness ran browser, screen reader, and high contrast tests against the component's example pages; each finding is one requirement row of its report."
+}

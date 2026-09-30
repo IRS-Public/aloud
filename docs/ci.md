@@ -72,6 +72,11 @@ listed; no draft is written and the output is not set.
 This repository's `ci.yml` runs the action from its own checkout
 (`uses: ./`) on a fixture and checks that the draft validates.
 
+For a complete workflow (convert a test report into one findings file per
+component, draft each in a matrix job, and attach every draft to a GitHub
+release), see the
+[harness integration guide](harness-integration.md#github-actions).
+
 ## Schedule triggers only fire from the default branch
 
 A `schedule:` cron in a workflow that exists only on a feature branch

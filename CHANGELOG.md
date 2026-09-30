@@ -89,6 +89,15 @@ build drafts through one findings contract and one level policy.
   passed a hosted run. `dependencies.mjs` gains `axeCoreSource`.
 - One shared report-platform helper and shared rule-engine helpers, so
   every entry point agrees on android, ios, or web.
+- **Documentation for the findings engine.** [docs/openacr.md](docs/openacr.md)
+  covers the findings contract field by field, the status vocabulary, the
+  default policy and its rationale, overrides, the never-a-silent-pass
+  guarantees, and a checklist for finishing a draft.
+  [docs/harness-integration.md](docs/harness-integration.md) maps the USWDS
+  accessibility harness's report onto findings, with a tested adapter
+  (`examples/harness-to-findings.example.mjs`) and a release workflow.
+  `examples/findings.example.json` uses every field and status; tests keep
+  the examples, the docs' tables, and every relative link in step.
 
 ### Packaging
 

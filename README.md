@@ -23,6 +23,28 @@ web checks run without a screen reader by default.
   unvalidated Safari + VoiceOver adapter for disposable GitHub-hosted macOS
   runners. Web evidence is report-only. [Setup and validation status](docs/web.md).
 
+Around the capture:
+
+- **One rule catalog.** Every tree rule's platform, severity, WCAG criteria,
+  and a plain statement of what it checks live in `src/rules/catalog.mjs`
+  (`@irs-public/aloud/rules`). The rule engines and the OpenACR draft both
+  read it, so they cannot disagree.
+- **WCAG 2.5.8 at its real minimum.** Target size fails under 24dp/24pt,
+  with the spacing exception; Android's 48dp and Apple's 44pt guidelines
+  are warnings, not failures.
+- **Baselines with reasons.** A ratchet gate: per-screen error counts can
+  only go down. Each accepted error can record why it stands (a product
+  bug, a platform gap, or an accepted risk) and the reason carries into
+  the report and the draft.
+- **Provenance.** Every evidence file records the commit, machine, CI run,
+  and tool versions it came from; reports refuse to combine evidence from
+  different runs unless told to (`--allow-mixed`).
+- **OpenACR from any findings.** One engine turns a findings document from
+  any source (aloud's audits, the [USWDS accessibility harness](docs/harness-integration.md),
+  a manual review) into a draft OpenACR that lists every criterion and
+  never shows a silent pass: `aloud acr`, a library, and a
+  [GitHub Action](docs/ci.md#draft-an-openacr-with-the-github-action).
+
 Both mobile audit legs have passed real CI runs on the IRS mobile app project
 it was built for. Browser validation covers Chromium fixtures and the public
 TodoMVC React app, including repeated NVDA runs on Windows.
@@ -67,6 +89,35 @@ button is under Android's 48dp touch-target guideline. That is a warning,
 not a failure, because the button meets WCAG 2.5.8's 24dp minimum. If
 your machine has a text-to-speech voice, the report also reconstructs
 the transcript as playable audio, labeled as a reconstruction.
+
+## Draft an ACR from findings
+
+Any tool that can say, per criterion, what its evidence shows can get a
+draft OpenACR. Write a findings document (see
+[`examples/findings.example.json`](examples/findings.example.json)), then:
+
+```bash
+npx aloud acr --findings examples/findings.example.json --out acr-draft.yaml
+```
+
+The draft lists every criterion in the WCAG 2.2 / Section 508 catalog.
+Findings set levels through a conservative policy: only passing evidence
+can reach `supports`, a failure is `partially-supports` or
+`does-not-support`, and anything unproven, or not covered by a finding,
+is `not-evaluated` for a person to review. Unknown criteria, statuses, or
+fields fail the command with every problem listed, and nothing is
+written. In code:
+
+```js
+import { buildAcr, toYaml } from "@irs-public/aloud";
+const yaml = toYaml(buildAcr(findings));
+```
+
+The contract, the status vocabulary, the policy and how to override it,
+and the checklist for finishing a draft are in
+[docs/openacr.md](docs/openacr.md). The
+[harness integration guide](docs/harness-integration.md) shows a complete
+adapter from the USWDS accessibility harness's report.
 
 ## Quickstart
 
@@ -209,18 +260,9 @@ to combine evidence from different commits unless you pass `--allow-mixed`.
 This emits `acr-draft.yaml`, a machine-readable accessibility conformance
 report in the GSA [OpenACR](https://github.com/GSA/openacr) format. It is a
 draft on purpose: only criteria the automated rules cover get a conformance
-level, and every note says so. See [docs/openacr.md](docs/openacr.md).
-Other evidence sources can build the same kind of draft from a findings
-document (`src/acr/findings.schema.json`), from the command line or with
-the `src/acr` library:
-
-```bash
-npx aloud acr --findings findings.json --out acr-draft.yaml
-```
-
-It checks the findings first and exits non-zero, listing every problem,
-on an unknown criterion, component, or status or on an unsafe `--policy`.
-See [docs/openacr.md](docs/openacr.md#build-a-draft-from-findings).
+level, and every note says so. It is built by the same engine as
+[`aloud acr`](#draft-an-acr-from-findings). See
+[docs/openacr.md](docs/openacr.md#aloud-openacr-alouds-own-audits).
 
 In code, the same engine is the package's main entry:
 `import { buildAcr, toYaml } from "@irs-public/aloud"`. The package also
@@ -262,7 +304,10 @@ the `aloud acr` action in this repository, pinned to a commit:
 ```
 
 It adds a count of the draft's conformance levels to the job summary. See
-[docs/ci.md](docs/ci.md#draft-an-openacr-with-the-github-action).
+[docs/ci.md](docs/ci.md#draft-an-openacr-with-the-github-action), and the
+[harness integration guide](docs/harness-integration.md#github-actions)
+for a workflow that drafts one ACR per component and attaches them to a
+release.
 
 The repository's [browser acceptance workflow](.github/workflows/web.yml)
 runs Chromium fixtures on relevant pull requests. Manual dispatch adds the
@@ -347,6 +392,16 @@ Working today, proven in CI:
 - Experimental Chromium checks and keyboard/focus scenarios, with opt-in NVDA
   command capture validated on Windows and the external TodoMVC React app.
 - Mobile ratchet gate, HTML evidence pages, and draft OpenACR emitter.
+
+New in 0.2.0 (unreleased; see the [changelog](CHANGELOG.md)):
+
+- The shared findings -> OpenACR engine (`aloud acr`, the library, and the
+  GitHub Action), with a conservative level policy and a
+  [harness adapter](docs/harness-integration.md).
+- One rule catalog, WCAG 2.5.8 at its 24-unit minimum, accepted baseline
+  reasons, and provenance on every evidence file.
+- An experimental Safari + VoiceOver web driver, awaiting its first hosted
+  run.
 
 Roadmap, in implementation order:
 

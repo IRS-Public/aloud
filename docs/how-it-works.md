@@ -342,8 +342,17 @@ on the evidence page, and in the OpenACR draft's notes (see
 ## Draft OpenACR
 
 `aloud openacr` converts the audit results into a draft machine-readable
-conformance report in the GSA OpenACR format. What the draft claims, and
-what a human must still do, is in [docs/openacr.md](openacr.md).
+conformance report in the GSA OpenACR format. It does so in two steps:
+`src/acr/from-aloud.mjs` turns the audit results into a findings document,
+one status per criterion and component, and the shared builder
+(`src/acr/build.mjs`) turns findings into the draft through a conservative
+level policy. `aloud acr` runs only the second step, on findings from any
+source, so aloud's drafts and another tool's drafts follow the same rules:
+every catalog row is listed, only passing evidence reaches `supports`, and
+anything unproven is `not-evaluated`. What the draft claims, and what a
+human must still do, is in [docs/openacr.md](openacr.md);
+[docs/harness-integration.md](harness-integration.md) shows another tool's
+report feeding the same builder.
 
 ## Running in CI
 
