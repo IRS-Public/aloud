@@ -141,6 +141,29 @@ test("persisted report revalidates native checks, overlaps, raw hashes, and expe
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("persisted ATF reports written before findings carried criteria still revalidate", () => {
+  const dir = mkdtempSync(join(tmpdir(), "aloud-atf-legacy-")), e = fixture(), t = tree(e);
+  const report = () => execFileSync(process.execPath, ["src/report/report.mjs", "--dir", dir], { env: { ...process.env, ALOUD_CONFIG: "" }, stdio: "pipe" });
+  const write = () => writeFileSync(join(dir, `${e.screen}.tree.json`), JSON.stringify(t));
+  const current = t.violations;
+  try {
+    // The shape an older aloud wrote: the same findings, no `criteria` key.
+    t.violations = current.map(({ criteria, ...v }) => v);
+    assert.ok(t.violations.length > 0);
+    write(); writeFileSync(join(dir, "capture-requirements.json"), JSON.stringify({ schemaVersion: 1, androidAtf: true, atfScreens: [e.screen] }));
+    report();
+    const html = readFileSync(join(dir, "index.html"), "utf8");
+    assert.match(html, /WCAG 4\.1\.2, 1\.1\.1/, "recomputed findings carry their catalog criteria");
+    // Mixing old and new finding shapes is not a legacy report: fail closed.
+    t.violations = current.map((v, i) => i === 0 ? v : (({ criteria, ...rest }) => rest)(v));
+    write(); assert.throws(report, /differ from native evidence/);
+    // Legacy findings still have to match the evidence in every other field.
+    t.violations = current.map(({ criteria, ...v }) => v);
+    t.violations[0] = { ...t.violations[0], detail: "edited" };
+    write(); assert.throws(report, /differ from native evidence/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("ATF summaries preserve skipped checks and cannot add OpenACR conformance coverage", () => {
   const s = atfSummary(fixture()); validateAtfSummary(s);
   const base = { catalog, appName: "Fixture", productVersion: "1", date: "2026-09-15", android: { screens: {

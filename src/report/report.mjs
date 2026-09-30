@@ -76,7 +76,17 @@ for (const f of readdirSync(OUT).sort()) {
       const violations = androidTreeChecks(atfTreeNodes(native), { densityDpi: native.densityDpi, appPackage: native.target });
       const errors = violations.filter((v) => v.severity === "error");
       const gate = { errors: errors.length, ruleIds: [...new Set(errors.map((v) => v.ruleId))].sort() };
-      if (!isDeepStrictEqual(violations, r.violations) || !isDeepStrictEqual(gate, r.gate)) throw new Error(`Android ATF tree findings differ from native evidence in ${f}`);
+      // Tree reports written before findings carried `criteria` lack that
+      // key on every finding. Compare those without it (the catalog derives
+      // it from the rule id), then carry the recomputed findings forward.
+      // A report that has `criteria` on some findings but not others is
+      // compared as-is and fails.
+      const legacy = r.violations.every((v) => !Object.hasOwn(v, "criteria"));
+      const expected = legacy ? violations.map(({ criteria, ...v }) => v) : violations;
+      if (!isDeepStrictEqual(expected, r.violations) || !isDeepStrictEqual(gate, r.gate)) {
+        throw new Error(`Android ATF tree findings differ from native evidence in ${f}`);
+      }
+      r.violations = violations;
       r.atfSummary = atfSummary(r.androidAtf);
       r.atfFindings = atfFindings(native, r.violations);
       r.atfNodes = native.nodes;
