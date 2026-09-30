@@ -189,6 +189,9 @@ This emits `acr-draft.yaml`, a machine-readable accessibility conformance
 report in the GSA [OpenACR](https://github.com/GSA/openacr) format. It is a
 draft on purpose: only criteria the automated rules cover get a conformance
 level, and every note says so. See [docs/openacr.md](docs/openacr.md).
+Other evidence sources can build the same kind of draft from a findings
+document with the `src/acr` library; see
+[docs/openacr.md](docs/openacr.md#build-a-draft-from-findings-library).
 
 For mobile apps, aloud audits whatever screen is currently open
 (`--nav current-screen`, the default). Give it a screens manifest

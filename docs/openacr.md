@@ -86,6 +86,75 @@ need that evidence in the draft.
 The author block defaults to "Automated draft" with a placeholder email
 (set `openacr.author` in the config).
 
+## Build a draft from findings (library)
+
+`src/acr/` is a reusable OpenACR builder for any evidence source, such as
+the USWDS accessibility harness or a manual review. The source writes a
+findings document: one finding per criterion and component, saying what
+its evidence shows. `aloud openacr` does not use it yet; the emitter above
+is unchanged.
+
+```js
+import { writeFileSync } from "node:fs";
+import { buildAcr, toYaml } from "@irs-public/aloud/src/acr/index.mjs";
+
+const acr = buildAcr({
+  product: { name: "USWDS Button", version: "3.13.0" },
+  provenance: { commit: "0123abc", date: "2026-09-30" },
+  components: ["web"],
+  findings: [
+    { criterion: "2.1.1", component: "web", status: "met",
+      covers: "activation with Enter and Space",
+      evidence: [{ id: "button-keyboard", environments: ["chromium", "webkit"] }] },
+    { criterion: "4.1.2", component: "web", status: "known-defect",
+      issues: [{ id: "uswds#6011", summary: "Disabled state is not announced" }] },
+    { criterion: "502.2.1", status: "untested" },
+  ],
+});
+writeFileSync("acr-draft.yaml", toYaml(acr));
+```
+
+The contract is `src/acr/findings.schema.json`. `validateFindings` checks
+the shape, then checks every criterion and component against the catalog
+(`catalog`, default `2.5-edition-wcag-2.2-508-en`). It rejects unknown
+criteria, statuses, components, and fields; duplicate criterion and
+component pairs; malformed evidence; `failingShare` on a status that is
+not a failure; and a `known-defect` with no issue. It lists every problem
+at once. Components are the catalog's: `web`, `electronic-docs`,
+`software`, `authoring-tool`. Section 508 chapter provisions (302.1,
+502.2.1, 602.3, ...) have no product component in the catalog, so their
+findings omit `component` (or use `none`).
+
+Each status maps to a level through the policy in `src/acr/levels.mjs`:
+
+| Status | Level | Meaning |
+|---|---|---|
+| `met` | `supports` | Every automated test passed. |
+| `human-reviewed` | `supports` | A person reviewed it; the note says so. |
+| `failing`, `known-defect` | `partially-supports`, or `does-not-support` with `failingShare: "all"` | A test failed, or a known defect blocks it. |
+| `partly-tested`, `platform-limitation`, `incomplete`, `untested`, `unreviewed` | `not-evaluated` | The evidence proves nothing yet. |
+| `not-triggered` | `not-applicable` | Triaged: the component has no such feature. |
+| `page-level` | `not-applicable` | The site team is responsible on their own pages. |
+
+Pass `policy` to override a status, for example
+`buildAcr(findings, { policy: { "page-level": "not-evaluated" } })`.
+Overrides may choose only OpenACR levels. Only `met` and `human-reviewed`
+may map to `supports`. A failure may never map to `supports` or
+`not-applicable`. The report notes list any override.
+
+The builder emits every catalog criterion for every declared component.
+A criterion with no finding is `not-evaluated` with a "needs human review"
+note. The hardware chapter is disabled with a note, as in `aloud
+openacr`; `disabledChapters` changes that. Notes combine the policy's
+meaning, `covers`, issues, the finding's notes, and evidence ids and
+links. A note over `maxNoteLength` (default 1500) is cut at a word and
+ends with "(truncated; see evidence)". The title ends in "(draft)". The
+report date comes from `options.date` or `provenance.date`; one is
+required. Without an author email, the draft uses a placeholder and says
+it must be replaced. `buildAcr` checks its own output with `validateAcr`,
+which runs the `@openacr/openacr` schema and catalog validators and checks
+that no criterion is missing.
+
 ## How to finish it into a real ACR
 
 The draft is the starting point for a human review, not a publishable
