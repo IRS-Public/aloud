@@ -101,6 +101,15 @@ describe("aloud acr", () => {
     assert.equal(existsSync(summary), false);
   });
 
+  it("writes no draft when the --step-summary file cannot be opened", () => {
+    const out = join(dir, "no-summary-dir.yaml");
+    const summary = join(dir, "missing-dir", "step-summary.md");
+    const result = aloud("acr", "--findings", fixture("valid.json"), "--out", out, "--step-summary", summary);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /^aloud acr: .*ENOENT/m);
+    assert.equal(existsSync(out), false);
+  });
+
   it("defaults the output to acr-draft.yaml in the working directory", () => {
     const result = aloud("acr", "--findings", fixture("valid.json"));
     assert.equal(result.status, 0, result.stderr);

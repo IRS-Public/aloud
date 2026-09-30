@@ -31,7 +31,7 @@
 //     --step-summary <file> append a Markdown count of the levels to <file>
 //                           (the GitHub Action passes $GITHUB_STEP_SUMMARY)
 
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { buildAcr, toYaml } from "../acr/build.mjs";
 import { loadCatalog } from "../acr/catalog.mjs";
@@ -138,9 +138,30 @@ export function acr(values) {
     ...(values.catalog ? { catalogPath: values.catalog } : {}),
   });
   const out = values.out ?? "acr-draft.yaml";
-  writeFileSync(out, toYaml(draft));
+  const yaml = toYaml(draft);
+  if (!values["step-summary"]) {
+    writeFileSync(out, yaml);
+    return { out, date: draft.report_date };
+  }
+
   // The summary is appended, never overwritten: a job summary file
-  // collects every step's output.
-  if (values["step-summary"]) appendFileSync(values["step-summary"], summaryMarkdown(draft, { file: out }));
+  // collects every step's output. Build it and open the file before the
+  // draft is written, so a summary path that cannot be written fails with
+  // no draft left behind.
+  const markdown = summaryMarkdown(draft, { file: out });
+  const summaryFd = openSync(values["step-summary"], "a");
+  try {
+    writeFileSync(out, yaml);
+    try {
+      writeSync(summaryFd, markdown);
+    } catch (error) {
+      // The draft was written but the run failed: remove it, so a failed
+      // run never leaves a draft for a later step to pick up.
+      rmSync(out, { force: true });
+      throw error;
+    }
+  } finally {
+    closeSync(summaryFd);
+  }
   return { out, date: draft.report_date };
 }

@@ -155,9 +155,11 @@ below. `--catalog` is a catalog YAML file, the same as `catalogPath`.
 calendar date. `--step-summary` appends a Markdown table of how many rows
 the draft puts at each conformance level to a file, such as
 `$GITHUB_STEP_SUMMARY`. `aloud acr` reads no
-aloud config. On a missing or malformed file, invalid findings, or an
-unsafe policy, it prints every problem, writes nothing, and exits
-non-zero. In GitHub Actions, the `aloud acr` action runs this command; see
+aloud config. On a missing or malformed file, invalid findings, an
+unsafe policy, or a `--step-summary` file that cannot be written, it
+prints every problem, writes nothing, and exits non-zero. The summary
+says every row needs human review, supports rows included, since a
+supports level can rest on automated checks alone. In GitHub Actions, the `aloud acr` action runs this command; see
 [ci.md](ci.md#draft-an-openacr-with-the-github-action).
 
 As a library:

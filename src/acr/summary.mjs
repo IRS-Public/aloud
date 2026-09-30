@@ -38,8 +38,8 @@ export function levelCounts(acr) {
 }
 
 // A Markdown section: a heading naming the product, the level table, and
-// one sentence saying the draft needs review. file is the path shown for
-// the YAML, when given.
+// a note saying every row, supports included, needs human review. file is
+// the path shown for the YAML, when given.
 export function summaryMarkdown(acr, { file } = {}) {
   const { levels, rows, disabledChapters } = levelCounts(acr);
   const product = [acr.product?.name, acr.product?.version].filter(Boolean).join(" ");
@@ -53,7 +53,9 @@ export function summaryMarkdown(acr, { file } = {}) {
   lines.push(`| **Total** | **${rows}** |`, "");
   const disabled = disabledChapters === 1 ? "1 chapter is" : `${disabledChapters} chapters are`;
   lines.push(
-    `This is a draft for human review, not a conformance claim: every not-evaluated row still needs testing` +
+    "This is a draft for human review, not a conformance claim. Every row needs review before it is " +
+      "published, including supports rows, which may rest on automated checks alone; " +
+      "not-evaluated rows still need testing" +
       (disabledChapters ? `, and ${disabled} disabled.` : "."),
     "",
   );

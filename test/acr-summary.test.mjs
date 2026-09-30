@@ -78,7 +78,9 @@ describe("summaryMarkdown", () => {
         "| not-evaluated | 2 |",
         "| **Total** | **3** |",
         "",
-        "This is a draft for human review, not a conformance claim: every not-evaluated row still needs testing.",
+        "This is a draft for human review, not a conformance claim. Every row needs review before it is " +
+          "published, including supports rows, which may rest on automated checks alone; " +
+          "not-evaluated rows still need testing.",
         "",
       ].join("\n"),
     );

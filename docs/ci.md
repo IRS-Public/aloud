@@ -64,7 +64,8 @@ The action sets up Node.js 24 with `actions/setup-node` pinned by commit
 dependencies with `npm ci --omit=dev --ignore-scripts` in the action's own
 directory, and runs `bin/aloud.mjs acr`. It never touches the caller's
 `node_modules`. It appends a table of how many rows the draft puts at each
-conformance level to the job summary (`--step-summary`). Invalid findings,
+conformance level to the job summary (`--step-summary`), with a note that
+every row, supports included, still needs human review. Invalid findings,
 an unsafe policy, or a missing file fail the step with every problem
 listed; no draft is written and the output is not set.
 
