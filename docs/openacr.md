@@ -398,7 +398,8 @@ screens, or environments it was given cannot show a failure affects all
 of the product. Set `"all"` when the evidence shows the whole
 functionality fails. aloud's own audits always use `"some"`; the
 [harness adapter](harness-integration.md#how-failingshare-is-derived) uses
-`"all"` only when no check for the criterion passed anywhere.
+`"all"` only when every check for the criterion failed and none passed
+anywhere.
 
 ### Overriding the policy
 

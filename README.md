@@ -110,7 +110,9 @@ written. In code:
 
 ```js
 import { buildAcr, toYaml } from "@irs-public/aloud";
-const yaml = toYaml(buildAcr(findings));
+// The report date comes from findings.provenance.date or options.date; the
+// library throws without one (the CLI falls back to today).
+const yaml = toYaml(buildAcr(findings, { date: "2026-09-30" }));
 ```
 
 The contract, the status vocabulary, the policy and how to override it,

@@ -268,7 +268,8 @@
               "failed": 1,
               "skipped": 0,
               "environments": [
-                "chromium"
+                "chromium",
+                "firefox"
               ],
               "passedIn": [
                 "chromium"
@@ -279,7 +280,9 @@
                 "firefox",
                 "webkit"
               ],
-              "missingIn": [],
+              "missingIn": [
+                "webkit"
+              ],
               "skippedIn": [],
               "blockedIn": [],
               "issues": [],
@@ -314,7 +317,11 @@
               "passed": 0,
               "failed": 3,
               "skipped": 0,
-              "environments": [],
+              "environments": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
               "passedIn": [],
               "reviewedCopy": false,
               "declaredIn": [

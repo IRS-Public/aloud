@@ -139,7 +139,7 @@ describe("the USWDS harness adapter example", () => {
     }
   });
 
-  it("derives failingShare from whether any check passed anywhere", () => {
+  it("derives failingShare from whether every check failed and none passed anywhere", () => {
     assert.equal(byCriterion.get("2.1.1").failingShare, "some");
     assert.equal(byCriterion.get("2.1.2").failingShare, "all");
     assert.equal(byCriterion.get("4.1.2").failingShare, "all");
@@ -148,17 +148,56 @@ describe("the USWDS harness adapter example", () => {
     }
   });
 
+  it("does not count a check that never ran as a failure", () => {
+    const copy = structuredClone(report);
+    const row = copy.components[0].criteria.find((r) => r.criterion === "4.1.2");
+    row.checks.push({
+      ...structuredClone(row.checks[0]),
+      id: "DP-S09",
+      status: "no-evidence",
+      environments: [],
+      passedIn: [],
+      issues: [],
+    });
+    const [{ findings: changed }] = harnessToFindings(copy);
+    const finding = changed.findings.find((f) => f.criterion === "4.1.2");
+    assert.equal(finding.failingShare, "some");
+    assert.deepEqual(finding.evidence[1], { id: "DP-S09" });
+  });
+
+  it("maps human-reviewed rows to partly-tested, saying only the wording was reviewed", () => {
+    const finding = byCriterion.get("3.3.2");
+    assert.equal(finding.status, "partly-tested");
+    assert.match(finding.notes.at(-1), /keep wording a person approved; whether it is clear.*is not tested/);
+  });
+
+  it("labels a scope statement so the draft never states it as a result", () => {
+    assert.equal(byCriterion.get("1.1.1").notes[0], "Scope of the checks, not a result: The icon-only calendar toggle has an accessible name.");
+    // Triage reasons for rows no check can fail stay as written.
+    assert.deepEqual(byCriterion.get("1.2.2").notes, ["The date picker has no video."]);
+    assert.deepEqual(byCriterion.get("2.4.2").notes, ["Every page needs a title."]);
+  });
+
   it("carries issues, notes, evidence, and provenance", () => {
     assert.deepEqual(byCriterion.get("4.1.2").issues, [
       { id: "DP-EXPANDED-STATE", kind: "core-bug", summary: "The calendar toggle does not say whether it is open." },
     ]);
     // An issue the registry does not know still names itself.
     assert.match(byCriterion.get("1.4.11").issues[0].summary, /Known issue WEBKIT-FORCED-COLORS/);
-    assert.deepEqual(byCriterion.get("2.1.1").notes, ["Every control works from the keyboard.", "Failing checks: DP-K03"]);
+    assert.deepEqual(byCriterion.get("2.1.1").notes, [
+      "Scope of the checks, not a result: Every control works from the keyboard.",
+      "Failing checks: DP-K03 (passed only in chromium)",
+      "Some tests did not run in: webkit",
+    ]);
+    assert.deepEqual(byCriterion.get("2.1.2").notes, ["Failing checks: DP-K05 (passed nowhere)"]);
     assert.deepEqual(byCriterion.get("1.3.1").notes, ["Some tests did not run in: chromium, firefox"]);
+    // Evidence environments are where each check's tests ran, pass or fail.
     assert.deepEqual(byCriterion.get("2.1.1").evidence, [
       { id: "DP-K01", environments: ["chromium", "firefox", "webkit"] },
-      { id: "DP-K03", environments: ["chromium"] },
+      { id: "DP-K03", environments: ["chromium", "firefox"] },
+    ]);
+    assert.deepEqual(byCriterion.get("2.1.2").evidence, [
+      { id: "DP-K05", environments: ["chromium", "firefox", "webkit"] },
     ]);
     assert.equal(byCriterion.get("2.4.11").evidence, undefined);
     assert.deepEqual(findings.provenance, {
@@ -177,13 +216,14 @@ describe("the USWDS harness adapter example", () => {
         .flatMap((chapter) => chapter.criteria ?? [])
         .find((entry) => entry.num === criterion).components[0].adherence.level;
     assert.equal(level("1.1.1"), "supports");
+    assert.equal(level("3.3.2"), "not-evaluated");
     assert.equal(level("2.1.1"), "partially-supports");
     assert.equal(level("2.1.2"), "does-not-support");
     assert.equal(level("1.4.11"), "not-evaluated");
     assert.equal(level("2.4.2"), "not-applicable");
   });
 
-  it("refuses unknown statuses and profiles and runs with unhandled errors", () => {
+  it("refuses unknown statuses and profiles, runs with unhandled errors, and known-bug runs", () => {
     const withRow = (change) => {
       const copy = structuredClone(report);
       Object.assign(copy.components[0].criteria[0], change);
@@ -194,6 +234,10 @@ describe("the USWDS harness adapter example", () => {
     assert.throws(
       () => harnessToFindings({ ...report, run: { ...report.run, unhandledErrors: 2 } }),
       /unhandled errors/,
+    );
+    assert.throws(
+      () => harnessToFindings({ ...report, run: { ...report.run, knownBugsEnabled: true } }),
+      /switched known bugs on/,
     );
     assert.throws(() => harnessToFindings({}), /not a harness report\.json/);
   });

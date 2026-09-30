@@ -15,7 +15,9 @@ import { pathToFileURL } from "node:url";
 // Harness criterion status -> findings status. Anything else throws.
 export const STATUS_MAP = Object.freeze({
   met: "met",
-  "human-reviewed": "human-reviewed",
+  // The harness's "human-reviewed" means the tests keep wording a person
+  // approved; nobody judged the whole criterion met, so a person reviews it.
+  "human-reviewed": "partly-tested",
   "partly-tested": "partly-tested",
   "not-met": "failing",
   "not-met-known-issue": "known-defect",
@@ -35,9 +37,23 @@ function inCatalog({ criterion, profile }) {
   throw new Error(`${criterion}: unknown harness profile "${profile}"`);
 }
 
-// A failure affects all of the functionality only when no check for the
-// criterion passed in any environment; otherwise it affects some of it.
-const failingShare = (checks) => (checks.every((check) => check.passedIn.length === 0) ? "all" : "some");
+// A failure affects all of the functionality only when every check for the
+// criterion failed or is switched off for a known defect, and none passed in
+// any environment. A check that never ran shows nothing either way, so it
+// keeps the share at "some".
+const failingShare = (checks) =>
+  checks.every((check) => ["failing", "known-issue"].includes(check.status) && check.passedIn.length === 0)
+    ? "all"
+    : "some";
+
+// Where a failing check passed, so the reader can tell where it failed.
+const passedWhere = ({ passedIn }) => (passedIn.length ? `passed only in ${passedIn.join(", ")}` : "passed nowhere");
+
+// The row's reason is a scope statement written as a claim ("Every control
+// works from the keyboard"), or for rows no check can fail, a triage reason.
+// A scope statement is labeled so the ACR never states it as a result.
+const TRIAGED = new Set(["not-triggered", "consumer-responsibility", "unreviewed"]);
+const reasonNote = (row) => (TRIAGED.has(row.status) ? row.reason : `Scope of the checks, not a result: ${row.reason}`);
 
 function toFinding(row, issuesByName) {
   const status = STATUS_MAP[row.status];
@@ -52,16 +68,21 @@ function toFinding(row, issuesByName) {
       return known?.kind ? { id, kind: known.kind, summary } : { id, summary };
     });
   }
-  const notes = row.reason ? [row.reason] : [];
-  const failing = row.checks.filter((check) => check.status === "failing").map((check) => check.id);
-  if (failing.length) notes.push(`Failing checks: ${failing.join(", ")}`);
+  const notes = row.reason ? [reasonNote(row)] : [];
+  if (row.status === "human-reviewed") {
+    notes.push("The tests keep wording a person approved; whether it is clear, and the rest of the criterion, is not tested");
+  }
+  const failing = row.checks.filter((check) => check.status === "failing");
+  if (failing.length) {
+    notes.push(`Failing checks: ${failing.map((check) => `${check.id} (${passedWhere(check)})`).join(", ")}`);
+  }
   const missing = [...new Set(row.checks.flatMap((check) => [...check.missingIn, ...check.skippedIn]))];
   if (missing.length) notes.push(`Some tests did not run in: ${missing.join(", ")}`);
   if (notes.length) finding.notes = notes;
-  // Each check is evidence; environments lists where it passed.
+  // Each check is evidence; environments lists where its tests ran.
   if (row.checks.length) {
     finding.evidence = row.checks.map((check) =>
-      check.passedIn.length ? { id: check.id, environments: check.passedIn } : { id: check.id });
+      check.environments.length ? { id: check.id, environments: check.environments } : { id: check.id });
   }
   return finding;
 }
@@ -70,8 +91,11 @@ function toFinding(row, issuesByName) {
 export function harnessToFindings(report, { knownIssues = [], runUrl, version } = {}) {
   if (!Array.isArray(report?.components) || !report.run) throw new Error("not a harness report.json");
   if (report.run.unhandledErrors) throw new Error("the harness run had unhandled errors; fix the run first");
+  // With known bugs switched on (RUN_KNOWN_BUGS=1), known defects and platform
+  // limitations show up as plain failures with no issue named.
+  if (report.run.knownBugsEnabled) throw new Error("the harness run switched known bugs on; draft from a regular run");
   const issuesByName = new Map(knownIssues.map((issue) => [issue.name, issue]));
-  const { commit, workingTreeDirty, finishedAt, environments, knownBugsEnabled } = report.run;
+  const { commit, workingTreeDirty, finishedAt, environments } = report.run;
   const provenance = {
     ...(commit && commit !== "unknown" ? { commit, workingTreeDirty } : {}),
     ...(runUrl ? { runUrl } : {}),
@@ -79,7 +103,6 @@ export function harnessToFindings(report, { knownIssues = [], runUrl, version } 
     tools: [{ name: "USWDS accessibility harness" }],
   };
   const notes = [`Tested in: ${environments.length ? environments.join(", ") : "no environment"}`];
-  if (knownBugsEnabled) notes.push("The run switched known defects' tests on (RUN_KNOWN_BUGS=1)");
   return report.components.map(({ component, criteria }) => ({
     component,
     findings: {
