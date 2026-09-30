@@ -286,10 +286,10 @@ if (GATE) {
       continue;
     }
     if (gate.errors > base.errors) {
-      // A migrated entry allows only the errors it proves (see
-      // readBaseline), which can be fewer than the screen really had.
+      // A migrated entry allows its old count less one per retired id
+      // (see readBaseline), which is still what the old entry allowed.
       const hint = migratedScreens.has(id)
-        ? " (the entry predates the target-size reclassification, so it allows one error per remaining rule id; " +
+        ? " (the entry predates the target-size reclassification, so it allows its old count less one per retired rule id; " +
           "if these errors are known, run `aloud baseline` to accept them)"
         : "";
       failures.push(`${id}: ${gate.errors} error(s), baseline allows ${base.errors}${hint}`);

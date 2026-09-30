@@ -18,9 +18,13 @@ build drafts through one findings contract and one level policy.
   (24pt) carry 2.5.8 and apply the spacing exception.
   `native-touch-target-small` (48dp) and `ios-touch-target-small` (44pt)
   keep their ids but become report-only warnings with no criterion,
-  labeled "Platform guideline". Old baselines still validate: accepted
-  counts for the retired ids are dropped with a note, and a new 24-unit
-  violation fails as a new rule id. Old tree reports that gated on a
+  labeled "Platform guideline". Old baselines still validate: each entry
+  that lists a retired id drops it and one error per retired id, with a
+  note (for example 5 errors across `native-interactive-unlabeled` and
+  `native-touch-target-small` becomes 4 errors for
+  `native-interactive-unlabeled`). That is what the old entry already
+  allowed the remaining rules, so an unchanged app keeps passing. A new
+  24-unit violation fails as a new rule id. Old tree reports that gated on a
   retired id leave 2.5.8 unchecked, so the gate fails that screen until it
   is re-run. The demo now fails on 1 error with 1 warning.
 - **OpenACR draft wording changed.** Drafts are built by the shared

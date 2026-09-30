@@ -216,18 +216,21 @@ export function ruleSpec(ruleId, platform) {
 // Split a gate-shaped entry ({ errors, ruleIds }, as baselines and
 // summaries store it) written before a reclassification. Reclassified ids
 // leave the error list. The old count does not say how many errors each
-// id accounted for, only that each accounted for at least one, so the
-// remaining count is the fewest the entry proves: one per kept id (zero
-// when none remain). Anything higher could let a kept rule regress
-// unnoticed. `unchecked` names the criteria the entry holds no current
-// evidence for: the old findings cannot say whether the successor rule
-// would have fired. The entry must already be valid; this never throws.
+// id accounted for, only that each accounted for at least one. So the
+// kept ids accounted for at most the old count less one per retired id,
+// and that is what the entry keeps (zero when no id remains). The gate
+// compares totals, so the old entry already allowed the kept rules that
+// many errors: an unchanged app that passed before still passes, and the
+// kept rules get no more room than they had. `unchecked` names the
+// criteria the entry holds no current evidence for: the old findings
+// cannot say whether the successor rule would have fired. The entry must
+// already be valid (at least one error per id); this never throws.
 export function splitReclassified({ errors, ruleIds }) {
   const retired = ruleIds.filter((id) => Object.hasOwn(RECLASSIFIED, id));
   if (retired.length === 0) return { errors, ruleIds, retired, unchecked: [] };
   const kept = ruleIds.filter((id) => !Object.hasOwn(RECLASSIFIED, id));
   return {
-    errors: kept.length,
+    errors: kept.length ? errors - retired.length : 0,
     ruleIds: kept,
     retired,
     unchecked: [...new Set(retired.flatMap((id) => RECLASSIFIED[id].was.criteria))],

@@ -187,11 +187,11 @@ Review those by hand. The 48dp and 44pt platform guidelines stay in the
 report as warnings.
 
 Reports and baselines written before this split still load. A baseline
-entry that accepted the old 48dp/44pt ids as errors drops those ids. The
-old count cannot say how many errors belong to the other rules, so the
-entry keeps one error per remaining rule id, the fewest it proves. If the
-screen really had more, the gate fails with a hint to re-accept it with
-`aloud baseline`. A new 24-unit violation still fails the gate. `aloud
+entry that accepted the old 48dp/44pt ids as errors drops those ids and
+one error for each of them. Each dropped id accounted for at least one
+error, so what remains is the most the other rules could have had, which
+is also what the old entry already allowed them. An unchanged app that
+passed before still passes. A new 24-unit violation still fails the gate. `aloud
 baseline` keeps old entries for screens it did not re-run exactly as
 written, and the OpenACR draft reads such an entry as leaving 2.5.8
 unchecked on that screen. An old tree report that gated on the 48dp/44pt

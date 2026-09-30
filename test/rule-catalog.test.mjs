@@ -212,15 +212,22 @@ describe("splitReclassified", () => {
     });
   });
 
-  it("keeps only the errors a mixed entry proves: one per remaining rule id", () => {
-    // 5 errors could be 1 unlabeled control and 4 small targets. Keeping
-    // 4 would let 3 new unlabeled controls pass the gate unnoticed.
+  it("keeps a mixed entry's old count less one error per retired id", () => {
+    // 5 errors across two ids: the small targets were at least 1, so the
+    // unlabeled controls were at most 4. The old entry, gated on totals,
+    // already allowed 4 unlabeled controls, so an unchanged app passes.
     assert.deepEqual(splitReclassified({ errors: 5, ruleIds: ["native-interactive-unlabeled", "native-touch-target-small"] }), {
-      errors: 1, ruleIds: ["native-interactive-unlabeled"], retired: ["native-touch-target-small"], unchecked: ["2.5.8"],
+      errors: 4, ruleIds: ["native-interactive-unlabeled"], retired: ["native-touch-target-small"], unchecked: ["2.5.8"],
     });
     assert.deepEqual(splitReclassified({
       errors: 6, ruleIds: ["ios-interactive-unlabeled", "ios-image-unlabeled", "ios-touch-target-small"],
-    }).errors, 2);
+    }).errors, 5);
+  });
+
+  it("never leaves fewer errors than kept ids", () => {
+    // A valid entry has at least one error per id, so the smallest case
+    // keeps exactly one per remaining id.
+    assert.deepEqual(splitReclassified({ errors: 2, ruleIds: ["native-interactive-unlabeled", "native-touch-target-small"] }).errors, 1);
   });
 });
 

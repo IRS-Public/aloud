@@ -25,10 +25,11 @@ export function validateGate(gate, field) {
 // Validate a baseline as written, then return it in the current rule
 // classification. Baselines written before a reclassification (see
 // RECLASSIFIED in src/rules/catalog.mjs) list ids that are now report-only
-// warnings. Those ids leave the entry, and the entry keeps only the errors
-// it proves belong to the other rules (one per kept id; see
-// splitReclassified). The ratchet so keeps holding every other rule, and
-// a screen that now trips the successor rule fails as a new rule id.
+// warnings. Those ids leave the entry, and the entry keeps the old count
+// less one per retired id: the most the other rules could have had (see
+// splitReclassified). An unchanged app so still passes, the ratchet keeps
+// holding every other rule, and a screen that now trips the successor rule
+// fails as a new rule id.
 // `migrated` lists each changed screen with its old and new allowance, for
 // a note to the user; the input is not modified.
 //
@@ -67,8 +68,8 @@ export function migrationNote(migrated, field = "baseline", advice = "Run `aloud
   return `note: ${field} lists ${ids.join(", ")} as gating error(s) on ${migrated.length} screen(s) ` +
     `(${migrated.map(({ screen }) => screen).join(", ")}); ` +
     `${ids.map((id) => RECLASSIFIED[id].change).join("; ")}. ` +
-    "The old counts do not say how many errors belong to the remaining rules, so each entry now allows " +
-    `one error per remaining rule id (${allowances}). ${advice}`;
+    "Each entry now allows its old count less one error per retired rule id, " +
+    `the most the remaining rules could have had (${allowances}). ${advice}`;
 }
 
 export function validateTreeReport(report, field = "tree report") {

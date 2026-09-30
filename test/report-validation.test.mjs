@@ -182,18 +182,27 @@ describe("evidence from before the target-size reclassification", () => {
     assert.match(result.stderr, /lists native-touch-target-small as gating error\(s\) on 1 screen\(s\) \(home\)/);
   });
 
-  it("keeps holding every other rule an old baseline accepted, at the fewest errors the entry proves", (t) => {
-    // 3 errors across two rules, one of them retired: the entry proves only
-    // one label error, so a second one fails, with a hint to re-accept.
+  it("keeps an unchanged app passing on an old mixed baseline", (t) => {
+    // 3 errors across two rules, one of them retired: the label rule had
+    // at most 2, and the old entry already allowed it 2.
     const baseline = { home: { errors: 3, ruleIds: [RULE, OLD] } };
-    const one = fixture(t, { reports: [tree()], baseline });
-    const passed = one.run("report");
-    assert.equal(passed.status, 0, passed.stdout + passed.stderr);
-    assert.match(passed.stderr, /allows one error per remaining rule id \(home 3 -> 1\)/);
     const two = fixture(t, { reports: [tree({ violations: [finding(), finding()], gate: { errors: 2, ruleIds: [RULE] } })], baseline });
-    const result = two.run("report");
+    const passed = two.run("report");
+    assert.equal(passed.status, 0, passed.stdout + passed.stderr);
+    assert.match(passed.stderr, /old count less one error per retired rule id.*\(home 3 -> 2\)/);
+  });
+
+  it("keeps holding every other rule an old baseline accepted", (t) => {
+    // More label errors than the old entry could have held fails, with a
+    // hint to re-accept.
+    const baseline = { home: { errors: 3, ruleIds: [RULE, OLD] } };
+    const three = fixture(t, {
+      reports: [tree({ violations: [finding(), finding(), finding()], gate: { errors: 3, ruleIds: [RULE] } })],
+      baseline,
+    });
+    const result = three.run("report");
     assert.equal(result.status, 1, result.stdout + result.stderr);
-    assert.match(result.stderr, /home: 2 error\(s\), baseline allows 1 \(the entry predates the target-size reclassification/);
+    assert.match(result.stderr, /home: 3 error\(s\), baseline allows 2 \(the entry predates the target-size reclassification/);
   });
 
   it("states each migrated entry's new allowance, not a fixed one per retired id", (t) => {
