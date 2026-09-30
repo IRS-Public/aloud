@@ -122,6 +122,14 @@ describe("resolvePolicy overrides", () => {
     }
   });
 
+  it("never maps an unproven status to not-applicable", () => {
+    // Nobody showed the criterion is irrelevant, so it may not read as N/A.
+    for (const status of ["partly-tested", "platform-limitation", "incomplete", "untested", "unreviewed"]) {
+      assert.throws(() => resolvePolicy({ [status]: "not-applicable" }),
+        /unproven status may not map to "not-applicable"/, status);
+    }
+  });
+
   it("never maps unproven or out-of-scope statuses to supports", () => {
     for (const status of ["partly-tested", "platform-limitation", "incomplete", "untested", "unreviewed",
       "not-triggered", "page-level"]) {

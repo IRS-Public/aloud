@@ -17,6 +17,7 @@ import {
   TRUNCATION_MARKER,
   buildAcr,
   capNote,
+  catalogPath,
   loadCatalog,
   toYaml,
   validateAcr,
@@ -288,6 +289,19 @@ describe("multiple components", () => {
     assert.equal(validateAcr(acr).valid, true);
   });
 
+  it("reports catalog problems instead of throwing", () => {
+    const unknown = validateAcr({ ...acr, catalog: "2.9-edition" });
+    assert.equal(unknown.valid, false);
+    assert.match(unknown.problems[0], /^catalog: unknown catalog "2\.9-edition"/);
+    const repeated = validateAcr({ ...acr, catalog: "2.4-edition-wcag-2.1-508-eu-en" });
+    assert.equal(repeated.valid, false);
+    assert.match(repeated.problems[0], /appears in more than one chapter/);
+    // A supplied catalog must be the one the report names.
+    const mismatch = validateAcr(acr, { catalog: loadCatalog({ id: "2.5-edition-wcag-2.1-508-en" }) });
+    assert.equal(mismatch.valid, false);
+    assert.match(mismatch.problems[0], /does not match catalog id/);
+  });
+
   it("never omits a criterion the catalog applies only to undeclared components", () => {
     const custom = structuredClone(catalog);
     custom.chapters[0].criteria[0].components = ["authoring-tool"];
@@ -313,7 +327,23 @@ describe("policy overrides", () => {
   it("can replace the policy note", () => {
     const acr = build(button(), { policy: { "page-level": { note: "The site team checks this on each page." } } });
     assert.equal(row(acr, "2.4.2").notes, "The site team checks this on each page.");
-    assert.doesNotMatch(acr.notes, /changed the default level policy/);
+    assert.match(acr.notes, /changed the default level policy: page-level: note replaced\./);
+    assert.match(acr.evaluation_methods_used, /with the caller's changes: page-level: note replaced\./);
+  });
+
+  it("describe the default policy in the methods only when it is unchanged", () => {
+    const plain = build(button());
+    assert.match(plain.evaluation_methods_used, /anything unproven stays not-evaluated\./);
+    assert.doesNotMatch(plain.notes, /changed the default level policy/);
+    const changed = build(button(), { policy: { "partly-tested": { level: "partially-supports", note: "Partly covered." } } });
+    assert.doesNotMatch(changed.evaluation_methods_used, /anything unproven stays not-evaluated/);
+    assert.match(changed.evaluation_methods_used,
+      /with the caller's changes: partly-tested -> partially-supports \(note replaced\)\./);
+    assert.match(changed.notes, /partly-tested -> partially-supports \(note replaced\)/);
+  });
+
+  it("can never turn an unproven finding into not-applicable", () => {
+    assert.throws(() => build(button(), { policy: { untested: "not-applicable" } }), /may not map to "not-applicable"/);
   });
 
   it("can never turn a failure into a pass", () => {
@@ -370,6 +400,22 @@ describe("buildAcr input checks", () => {
     assert.equal(row(wcag21, "2.5.8"), undefined, "2.5.8 is not in WCAG 2.1");
     assert.equal(validateAcr(wcag21).valid, true);
     assert.throws(() => build(button(), { catalogPath: "/nonexistent/catalog.yaml" }), /catalog file not found/);
+
+    // A catalog file states its base name as the catalog id.
+    const small = { ...button(), findings: button().findings.slice(0, 3) };
+    const fromFile = build(small, { catalogPath: catalogPath("2.5-edition-wcag-2.1-508-en") });
+    assert.equal(fromFile.catalog, "2.5-edition-wcag-2.1-508-en");
+    assert.equal(row(fromFile, "2.5.8"), undefined);
+    assert.equal(validateAcr(fromFile).valid, true, "the report validates against the catalog it names");
+
+    // A catalog object must be the catalog the findings name.
+    const wcag21Catalog = loadCatalog({ id: "2.5-edition-wcag-2.1-508-en" });
+    assert.throws(() => build(small, { catalog: wcag21Catalog }), /does not match catalog id "2\.5-edition-wcag-2\.2-508-en"/);
+    assert.equal(build({ ...small, catalog: "2.5-edition-wcag-2.1-508-en" }, { catalog: wcag21Catalog }).catalog,
+      "2.5-edition-wcag-2.1-508-en");
+    assert.throws(() => build({ ...small, catalog: "2.5-edition-wcag-2.2-en" }, { catalog: loadCatalog() }),
+      /does not match catalog id "2\.5-edition-wcag-2\.2-en"/);
+    assert.throws(() => build(small, { catalog: wcag21Catalog, catalogPath: catalogPath() }), /not both/);
   });
 
   it("builds a WCAG-only catalog, which has no hardware chapter", () => {

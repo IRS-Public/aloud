@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { DEFAULT_CATALOG_ID, loadCatalog } from "../src/acr/catalog.mjs";
+import { DEFAULT_CATALOG_ID, catalogPath, loadCatalog } from "../src/acr/catalog.mjs";
 import { FINDINGS_SCHEMA, FindingsError, validateFindings } from "../src/acr/findings.mjs";
 import { STATUSES } from "../src/acr/levels.mjs";
 
@@ -101,8 +101,34 @@ describe("valid findings", () => {
     const catalog = loadCatalog({ id: "2.5-edition-wcag-2.0-508-en" });
     // 2.5.8 is WCAG 2.2 only.
     assert.throws(
-      () => validateFindings({ ...base(), findings: [{ criterion: "2.5.8", component: "web", status: "met" }] }, { catalog }),
+      () => validateFindings({
+        ...base(),
+        catalog: "2.5-edition-wcag-2.0-508-en",
+        findings: [{ criterion: "2.5.8", component: "web", status: "met" }],
+      }, { catalog }),
       /"2\.5\.8" is not a criterion/,
+    );
+    const out = validateFindings({ ...base(), catalog: "2.5-edition-wcag-2.0-508-en" }, { catalog });
+    assert.equal(out.catalog, "2.5-edition-wcag-2.0-508-en");
+  });
+
+  it("name a catalog file by its base name", () => {
+    const out = validateFindings(base(), { catalogPath: catalogPath("2.5-edition-wcag-2.1-508-en") });
+    assert.equal(out.catalog, "2.5-edition-wcag-2.1-508-en");
+  });
+
+  it("refuse a supplied catalog that is not the catalog the findings name", () => {
+    const wcag21 = loadCatalog({ id: "2.5-edition-wcag-2.1-508-en" });
+    // Without findings.catalog the default id would be stated, but this
+    // catalog lacks the WCAG 2.2 criteria.
+    assert.throws(() => validateFindings(base(), { catalog: wcag21 }),
+      (error) => error instanceof FindingsError &&
+        /catalog: the supplied catalog does not match catalog id "2\.5-edition-wcag-2\.2-508-en"/.test(error.message));
+    assert.throws(
+      () => validateFindings({ ...base(), catalog: "2.5-edition-wcag-2.2-en" }, {
+        catalogPath: catalogPath("2.5-edition-wcag-2.2-508-en"),
+      }),
+      /does not match catalog id "2\.5-edition-wcag-2\.2-en"/,
     );
   });
 });
@@ -197,8 +223,22 @@ describe("rejected findings", () => {
       /findings\[0\]\.issues: a known-defect finding must name the known issue/);
   });
 
+  it("reject known issues on a passing or not-applicable finding", () => {
+    const issues = [{ id: "GH-1", summary: "Keyboard trap in dialog" }];
+    for (const status of ["met", "human-reviewed", "not-triggered", "page-level"]) {
+      assertProblem((f) => { f.findings[0].status = status; f.findings[0].issues = issues; },
+        new RegExp(`findings\\[0\\]\\.issues: a "${status}" finding may not list known issues`));
+    }
+    // An unproven finding may note an issue; it stays not-evaluated.
+    const out = validateFindings({ ...base(), findings: [{ ...base().findings[0], status: "partly-tested", issues }] });
+    assert.equal(out.findings[0].issues.length, 1);
+  });
+
   it("reject an unknown catalog", () => {
     assertProblem((f) => { f.catalog = "2.9-edition"; }, /catalog: unknown catalog "2\.9-edition"/);
+    // This bundled catalog lists 4.1.1 in two chapters, so it cannot be indexed.
+    assertProblem((f) => { f.catalog = "2.4-edition-wcag-2.1-508-eu-en"; },
+      /catalog: invalid OpenACR catalog: criterion 4\.1\.1 appears in more than one chapter/);
     assertProblem((f) => { f.catalog = "../../etc/passwd"; }, /catalog: "\.\.\/\.\.\/etc\/passwd" is not a catalog file name/);
   });
 

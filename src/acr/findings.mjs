@@ -24,8 +24,8 @@
 
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { DEFAULT_CATALOG_ID, checkCatalog, hasNoComponents, indexCatalog, loadCatalog } from "./catalog.mjs";
-import { isFailingStatus } from "./levels.mjs";
+import { hasNoComponents, indexCatalog, resolveCatalog } from "./catalog.mjs";
+import { STATUS_KINDS, isFailingStatus } from "./levels.mjs";
 
 export const FINDINGS_SCHEMA = JSON.parse(
   readFileSync(new URL("./findings.schema.json", import.meta.url), "utf8"),
@@ -95,8 +95,7 @@ function schemaProblems(input) {
 
 // Checks the schema cannot express: catalog membership, duplicates, and
 // fields that contradict the status.
-function catalogProblems(input, catalog, catalogId) {
-  const index = indexCatalog(catalog);
+function catalogProblems(input, index, catalogId) {
   const problems = [];
   input.components.forEach((component, i) => {
     if (!index.components.includes(component)) {
@@ -131,6 +130,15 @@ function catalogProblems(input, catalog, catalogId) {
     }
     if (finding.status === "known-defect" && !finding.issues) {
       problems.push(`${at}.issues: a known-defect finding must name the known issue`);
+    }
+    // A known issue contradicts a pass or a "does not apply": the catalog
+    // defines "supports" as met without known defects.
+    const kind = STATUS_KINDS[finding.status];
+    if (finding.issues && (kind === "passing" || kind === "out-of-scope")) {
+      problems.push(
+        `${at}.issues: a "${finding.status}" finding may not list known issues; ` +
+          'use "known-defect" (or "failing") when an issue affects the criterion',
+      );
     }
     for (const field of ["evidence", "issues"]) {
       const ids = (finding[field] ?? []).map((item) => item.id);
@@ -175,33 +183,41 @@ function resolveComponent(finding, entry, declared, index, at, problems) {
 }
 
 // Validate a findings document against the contract and its catalog.
-// Returns a normalized, frozen copy: catalog filled with its default and
-// each Section 508 chapter finding's component set to "none". Throws
-// FindingsError listing every problem.
+// Returns a normalized, frozen copy: catalog set to the id of the catalog
+// actually used and each Section 508 chapter finding's component set to
+// "none". Throws FindingsError listing every problem.
 //
-// options.catalog: a catalog object to check against instead of loading
-// the one findings.catalog names (the emitted catalog id stays the named
-// one).
-export function validateFindings(input, { catalog } = {}) {
+// options.catalog: a catalog object to check against instead of the
+// bundled one findings.catalog names.
+// options.catalogPath: a catalog YAML file to check against instead.
+// Either must match the id the report will state (findings.catalog, else
+// the file's base name, else the default); see resolveCatalog.
+export function validateFindings(input, options = {}) {
+  return checkFindings(input, options).findings;
+}
+
+// validateFindings, also returning the resolved catalog object, for the
+// builder: { findings, catalog }.
+export function checkFindings(input, { catalog, catalogPath } = {}) {
   const shape = schemaProblems(input);
   if (shape.length) throw new FindingsError(shape);
-  const catalogId = input.catalog ?? DEFAULT_CATALOG_ID;
   let resolved;
+  let index;
   try {
-    resolved = catalog ? checkCatalog(catalog) : loadCatalog({ id: catalogId });
+    resolved = resolveCatalog({ id: input.catalog, path: catalogPath, catalog });
+    index = indexCatalog(resolved.catalog);
   } catch (error) {
     throw new FindingsError([`catalog: ${error.message}`]);
   }
-  const problems = catalogProblems(input, resolved, catalogId);
+  const problems = catalogProblems(input, index, resolved.id);
   if (problems.length) throw new FindingsError(problems);
 
-  const index = indexCatalog(resolved);
   const normalized = structuredClone(input);
-  normalized.catalog = catalogId;
+  normalized.catalog = resolved.id;
   for (const finding of normalized.findings) {
     if (hasNoComponents(index.criteria.get(finding.criterion))) finding.component = "none";
   }
-  return deepFreeze(normalized);
+  return { findings: deepFreeze(normalized), catalog: resolved.catalog };
 }
 
 function deepFreeze(value) {

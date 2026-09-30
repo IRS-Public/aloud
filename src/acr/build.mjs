@@ -12,8 +12,8 @@
 
 import { createRequire } from "node:module";
 import { dump } from "js-yaml";
-import { hasNoComponents, indexCatalog, loadCatalog } from "./catalog.mjs";
-import { validateFindings } from "./findings.mjs";
+import { checkCatalogId, hasNoComponents, indexCatalog, loadCatalog } from "./catalog.mjs";
+import { checkFindings } from "./findings.mjs";
 import { ADHERENCE_LEVELS, DEFAULT_POLICY, STATUSES, adherenceFor, isFailingStatus, resolvePolicy } from "./levels.mjs";
 
 // The validators ship as CJS with no type declarations.
@@ -166,15 +166,22 @@ function levelSummary(chapters) {
     .join(", ");
 }
 
-// Statuses whose level the caller changed from the default policy.
+// How the caller's policy differs from the default: one entry per status
+// whose level or note changed, such as "page-level -> not-evaluated" or
+// "met: note replaced".
 function policyChanges(policy) {
-  return STATUSES.filter((status) =>
-    JSON.stringify(policy[status].level) !== JSON.stringify(DEFAULT_POLICY[status].level))
-    .map((status) => {
-      const level = policy[status].level;
-      const shown = typeof level === "string" ? level : `some: ${level.some}, all: ${level.all}`;
-      return `${status} -> ${shown}`;
-    });
+  const changes = [];
+  for (const status of STATUSES) {
+    const { level, note } = policy[status];
+    const levelChanged = JSON.stringify(level) !== JSON.stringify(DEFAULT_POLICY[status].level);
+    const noteChanged = note !== DEFAULT_POLICY[status].note;
+    if (!levelChanged && !noteChanged) continue;
+    const shown = typeof level === "string" ? level : `some: ${level.some}, all: ${level.all}`;
+    if (levelChanged && noteChanged) changes.push(`${status} -> ${shown} (note replaced)`);
+    else if (levelChanged) changes.push(`${status} -> ${shown}`);
+    else changes.push(`${status}: note replaced`);
+  }
+  return changes;
 }
 
 function provenanceNote(provenance) {
@@ -203,15 +210,18 @@ const contact = (person) => ({
 // options:
 //   date              report date, YYYY-MM-DD (else provenance.date; one is required)
 //   policy            per-status overrides for the level policy (see resolvePolicy)
-//   catalog           a catalog object, instead of the one findings.catalog names
-//   catalogPath       a catalog YAML file, instead of the one findings.catalog names
+//   catalog           a catalog object, instead of the bundled one findings.catalog names
+//   catalogPath       a catalog YAML file, instead of the bundled one findings.catalog names
+//                     (either must match the id the report states: findings.catalog,
+//                     else the file's base name, else the default)
 //   disabledChapters  chapter ids emitted as disabled (default: ["hardware"])
 //   maxNoteLength     cap on each adherence note (default 1500)
 //   evaluationMethods replaces the default evaluation_methods_used text
 export function buildAcr(findings, options = {}) {
-  const catalog = options.catalog ?? (options.catalogPath ? loadCatalog({ path: options.catalogPath }) : undefined);
-  const input = validateFindings(findings, { catalog });
-  const resolvedCatalog = catalog ?? loadCatalog({ id: input.catalog });
+  const { findings: input, catalog: resolvedCatalog } = checkFindings(findings, {
+    catalog: options.catalog,
+    catalogPath: options.catalogPath,
+  });
   const index = indexCatalog(resolvedCatalog);
   const policy = resolvePolicy(options.policy);
 
@@ -272,11 +282,19 @@ export function buildAcr(findings, options = {}) {
     (changes.length ? ` The caller changed the default level policy: ${changes.join("; ")}.` : "") +
     " Every criterion marked 'not-evaluated' needs a human review. A Section 508 office must " +
     `complete those rows${placeholderContact ? " and replace the placeholder contact email" : ""} before publication.`;
+  // The policy sentence describes the default policy only when the caller
+  // kept it; otherwise it names the changes, so the methods section never
+  // claims a mapping the rows do not follow.
+  const policySentence = changes.length
+    ? "aloud's level policy (src/acr/levels.mjs) maps each finding's status to a conformance level, " +
+      `with the caller's changes: ${changes.join("; ")}. Even so, only passing evidence can support ` +
+      "a criterion, and no failure or unproven finding can read as supported or not applicable."
+    : "aloud's level policy (src/acr/levels.mjs) maps each finding's status to a conformance level: " +
+      "only passing evidence supports a criterion, failures partially support or do not support it, " +
+      "and anything unproven stays not-evaluated.";
   const evaluationMethods = options.evaluationMethods ??
     "Automated tests and recorded reviews produced one finding per criterion and component. " +
-      "aloud's level policy (src/acr/levels.mjs) maps each finding's status to a conformance level: " +
-      "only passing evidence supports a criterion, failures partially support or do not support it, " +
-      "and anything unproven stays not-evaluated." +
+      policySentence +
       toolsNote(input.provenance?.tools) +
       " Findings marked human-reviewed rest on a person's review; there is no other human evaluation yet.";
 
@@ -307,15 +325,28 @@ export function buildAcr(findings, options = {}) {
 // in @openacr/openacr, and against the draft's own completeness rules:
 // every enabled catalog chapter lists every criterion, in catalog order,
 // and every component row has a level and non-empty notes. Returns
-// { valid, problems }. options.catalog defaults to the catalog the report
-// names.
+// { valid, problems } and never throws for a bad report: an unknown or
+// invalid catalog is a problem too. options.catalog defaults to the
+// catalog the report names; when given, it must be that catalog (same
+// chapters and criteria, when the report names a bundled catalog).
 export function validateAcr(acr, { catalog } = {}) {
   const problems = [];
   const schema = validateOpenACR(acr, "openacr-0.1.0.json");
   if (!schema.result) problems.push(`schema: ${schema.message}`);
   if (problems.length) return { valid: false, problems };
 
-  const resolved = catalog ?? loadCatalog({ id: acr.catalog });
+  let resolved;
+  try {
+    if (catalog) {
+      checkCatalogId(catalog, acr.catalog);
+      resolved = catalog;
+    } else {
+      resolved = loadCatalog({ id: acr.catalog });
+    }
+    indexCatalog(resolved);
+  } catch (error) {
+    return { valid: false, problems: [`catalog: ${error.message}`] };
+  }
   const values = validateOpenACRCatalogValues(acr, resolved);
   if (!values.result) problems.push(`catalog values: ${values.message}`);
 

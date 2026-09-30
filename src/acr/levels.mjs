@@ -4,7 +4,8 @@
 // may claim from it. The default policy is conservative: only passing
 // evidence can reach "supports", and anything unproven is "not-evaluated"
 // so a person reviews it. Callers may override the policy per status, but
-// never so that a failure, or evidence that proves nothing, reads as a pass.
+// never so that a failure, or evidence that proves nothing, reads as a pass
+// or as "does not apply".
 //
 // Pure data and functions: no file access, no side effects on import.
 
@@ -48,14 +49,16 @@ export const STATUSES = Object.freeze(Object.keys(STATUS_KINDS));
 export const isFailingStatus = (status) => kindOf(status) === "failing";
 
 // Levels each kind of status may map to. Only passing evidence may support
-// a criterion. A failure may never read as a pass or as "does not apply".
-// Unproven statuses may be reported as anything short of a pass. A status
-// that says the criterion is outside the component may only say so, or
-// leave it for review.
+// a criterion. A failure may never read as a pass or as "does not apply",
+// since either would hide the defect. Unproven evidence may never read as
+// a pass or as "does not apply" either: nobody showed the criterion is
+// met or irrelevant, so it stays with a person (or is reported as a
+// failure by a stricter caller). A status that says the criterion is
+// outside the component may only say so, or leave it for review.
 const ALLOWED_LEVELS = Object.freeze({
   passing: ADHERENCE_LEVELS,
   failing: Object.freeze(["partially-supports", "does-not-support", "not-evaluated"]),
-  unproven: Object.freeze(["partially-supports", "does-not-support", "not-applicable", "not-evaluated"]),
+  unproven: Object.freeze(["partially-supports", "does-not-support", "not-evaluated"]),
   "out-of-scope": Object.freeze(["not-applicable", "not-evaluated"]),
 });
 

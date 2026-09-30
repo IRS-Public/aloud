@@ -6,9 +6,9 @@
 // Catalogs resolve inside aloud's own install of @openacr/openacr, not the
 // caller's project, so the catalog always matches the validator.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import { load } from "js-yaml";
 
 // WCAG 2.2 is the edition aloud's own rules need (2.5.8 exists only there).
@@ -56,6 +56,61 @@ export function checkCatalog(catalog, name = "catalog") {
   const result = validateCatalog(catalog, "openacr-catalog-0.1.0.json");
   if (!result.result) throw new Error(`invalid OpenACR catalog (${name}): ${result.message}`);
   return catalog;
+}
+
+// Every chapter id and criterion id in catalog order, one line per
+// chapter. Two catalogs with the same outline produce the same reports.
+function outline(catalog) {
+  return catalog.chapters
+    .map((chapter) => `${chapter.id}: ${(chapter.criteria ?? []).map((c) => c.id).join(", ")}`)
+    .join("\n");
+}
+
+// True when id names a catalog shipped in @openacr/openacr.
+export const isBundledCatalog = (id) => CATALOG_ID.test(id) && existsSync(catalogPath(id));
+
+// Check that a catalog object really is the catalog id names, so a report
+// never states one catalog while listing another's criteria. A bundled id
+// must have the same chapters and criteria as the bundled catalog (its
+// labels and components may differ, so a caller can adjust them). An id
+// @openacr/openacr does not ship cannot be checked against anything, so it
+// is accepted as named. Throws on a mismatch.
+export function checkCatalogId(catalog, id) {
+  if (!isBundledCatalog(id)) return;
+  if (outline(catalog) !== outline(loadCatalog({ id }))) {
+    throw new Error(
+      `the supplied catalog does not match catalog id "${id}" (its chapters or criteria differ); ` +
+        "set the findings catalog field to the id of the catalog it really is",
+    );
+  }
+}
+
+// Resolve the catalog a report is built against and the id it states.
+//   id       the catalog id the findings name (may be undefined)
+//   path     a catalog YAML file to use instead of the bundled one
+//   catalog  a catalog object to use instead of the bundled one
+// The stated id is id when given, else the file's base name for a path,
+// else the default. A supplied catalog must match the id it will be
+// reported as (checkCatalogId). Returns { id, catalog }; throws when the
+// catalog is missing, invalid, or does not match its id.
+export function resolveCatalog({ id, path, catalog } = {}) {
+  if (path !== undefined && catalog !== undefined) {
+    throw new Error("pass a catalog object or a catalog path, not both");
+  }
+  if (path === undefined && catalog === undefined) {
+    const resolvedId = id ?? DEFAULT_CATALOG_ID;
+    return { id: resolvedId, catalog: loadCatalog({ id: resolvedId }) };
+  }
+  const supplied = path !== undefined ? loadCatalog({ path }) : checkCatalog(catalog);
+  const resolvedId = id ?? (path !== undefined ? basename(path, extname(path)) : DEFAULT_CATALOG_ID);
+  if (!CATALOG_ID.test(resolvedId)) {
+    throw new Error(
+      `cannot name the catalog: ${JSON.stringify(resolvedId)} is not a catalog id; ` +
+        "set the findings catalog field to the catalog's id",
+    );
+  }
+  checkCatalogId(supplied, resolvedId);
+  return { id: resolvedId, catalog: supplied };
 }
 
 // Lookups the validator and builder need, computed once per catalog object:

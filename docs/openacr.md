@@ -119,8 +119,10 @@ the shape, then checks every criterion and component against the catalog
 (`catalog`, default `2.5-edition-wcag-2.2-508-en`). It rejects unknown
 criteria, statuses, components, and fields; duplicate criterion and
 component pairs; malformed evidence; `failingShare` on a status that is
-not a failure; and a `known-defect` with no issue. It lists every problem
-at once. Components are the catalog's: `web`, `electronic-docs`,
+not a failure; a `known-defect` with no issue; and known issues on a
+passing or not-applicable finding (`met`, `human-reviewed`,
+`not-triggered`, `page-level`), since "supports" means met without known
+defects. It lists every problem at once. Components are the catalog's: `web`, `electronic-docs`,
 `software`, `authoring-tool`. Section 508 chapter provisions (302.1,
 502.2.1, 602.3, ...) have no product component in the catalog, so their
 findings omit `component` (or use `none`).
@@ -139,8 +141,16 @@ Each status maps to a level through the policy in `src/acr/levels.mjs`:
 Pass `policy` to override a status, for example
 `buildAcr(findings, { policy: { "page-level": "not-evaluated" } })`.
 Overrides may choose only OpenACR levels. Only `met` and `human-reviewed`
-may map to `supports`. A failure may never map to `supports` or
-`not-applicable`. The report notes list any override.
+may map to `supports`. A failure or an unproven status may never map to
+`supports` or `not-applicable`. The report notes and the evaluation
+methods list every override, whether it changes a level or only a note.
+
+To build against a catalog of your own, pass `catalog` (an object) or
+`catalogPath` (a YAML file). The report states the catalog id from
+`findings.catalog`, else the file's base name, else the default. When that
+id names a catalog shipped in `@openacr/openacr`, the supplied catalog
+must have the same chapters and criteria, or the build throws; the report
+can never name one catalog and list another's criteria.
 
 The builder emits every catalog criterion for every declared component.
 A criterion with no finding is `not-evaluated` with a "needs human review"
@@ -153,7 +163,9 @@ report date comes from `options.date` or `provenance.date`; one is
 required. Without an author email, the draft uses a placeholder and says
 it must be replaced. `buildAcr` checks its own output with `validateAcr`,
 which runs the `@openacr/openacr` schema and catalog validators and checks
-that no criterion is missing.
+that no criterion is missing. `validateAcr` returns `{ valid, problems }`
+and reports an unknown or mismatched catalog as a problem rather than
+throwing.
 
 ## How to finish it into a real ACR
 
