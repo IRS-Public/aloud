@@ -13,16 +13,26 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { cliArgs } from "../cli-args.mjs";
 import { loadNavigator } from "../nav/index.mjs";
 import { computeTranscript, normalizeElements, runIosChecks, validateIosCapture } from "./tree.mjs";
 import { createAppleAuditor } from "./apple-audit.mjs";
 import { createVoiceOverCapturer } from "./voiceover-capture.mjs";
 
-const args = process.argv.slice(2);
-const opt = (name, fallback) => {
-  const i = args.indexOf(`--${name}`);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
-};
+const { opt } = cliArgs("ios/walk.mjs", {
+  nav: { type: "string" },
+  port: { type: "string" },
+  "screen-id": { type: "string" },
+  out: { type: "string" },
+  flow: { type: "string" },
+  // iOS has one combined pass. --pass is accepted so callers can drive both
+  // walkers with the same flags, but only its Android "tree" value fits.
+  pass: { type: "string" },
+});
+if (opt("pass", "tree") !== "tree") {
+  console.error(`ios/walk.mjs: unknown --pass ${opt("pass")} (the iOS walker has a single tree pass)`);
+  process.exit(1);
+}
 
 // Legs read the merged config bin/aloud.mjs wrote; flags override it.
 const cfgPath = process.env.ALOUD_CONFIG;

@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { join, resolve } from "node:path";
 import { release } from "node:os";
 import { pathToFileURL } from "node:url";
+import { cliArgs } from "../cli-args.mjs";
 import { WEB_VERSIONS, validateWebConfig, webScreens } from "./config.mjs";
 import { webDependency } from "./dependencies.mjs";
 import { hash, validateWebCapture } from "./evidence.mjs";
@@ -148,8 +149,7 @@ export async function captureWeb(cfg, { flow = [], screenId = "current", depende
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const args = process.argv.slice(2);
-  const opt = (name, fallback) => args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : fallback;
+  const { opt } = cliArgs("web/run.mjs", { flow: { type: "string" }, "screen-id": { type: "string" } });
   try {
     if (!process.env.ALOUD_CONFIG) throw new Error("run through aloud web");
     await captureWeb(JSON.parse(readFileSync(process.env.ALOUD_CONFIG, "utf8")), {

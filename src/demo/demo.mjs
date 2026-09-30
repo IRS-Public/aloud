@@ -24,6 +24,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dedupeConsecutive, segmentTranscript } from "../android/transcript.mjs";
 import { parseUiDump, runChecks } from "../android/ui-tree.mjs";
+import { cliArgs } from "../cli-args.mjs";
 import { reconstructSpeech } from "./speak.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -52,11 +53,7 @@ const EXPECTED_UTTERANCES = [
   "Cancel order, button",
 ];
 
-const args = process.argv.slice(2);
-const opt = (name, fallback) => {
-  const i = args.indexOf(`--${name}`);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
-};
+const { opt } = cliArgs("demo", { out: { type: "string" } });
 
 function fail(msg) {
   console.error(msg);

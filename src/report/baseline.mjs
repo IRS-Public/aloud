@@ -19,22 +19,27 @@
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { cliArgs } from "../cli-args.mjs";
 import { platformForReportDir } from "./platform.mjs";
 import { validateBaseline, validateTreeReport } from "./validation.mjs";
 
-const args = process.argv.slice(2);
-const opt = (name, fallback) => {
-  const i = args.indexOf(`--${name}`);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
-};
-const positional = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--baseline");
+const { opt, positionals } = cliArgs(
+  "baseline.mjs",
+  { baseline: { type: "string" } },
+  { allowPositionals: true },
+);
+// One report dir per run: a second one would be silently ignored.
+if (positionals.length > 1) {
+  console.error("usage: aloud baseline <report-dir> [--baseline <file>]");
+  process.exit(1);
+}
 
 const cfg = process.env.ALOUD_CONFIG
   ? JSON.parse(readFileSync(process.env.ALOUD_CONFIG, "utf8"))
   : null;
 
-const reportDir = positional[0]
-  ? resolve(positional[0])
+const reportDir = positionals[0]
+  ? resolve(positionals[0])
   : cfg?.out
     ? join(cfg.out, "android")
     : null;

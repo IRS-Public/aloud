@@ -24,6 +24,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { cliArgs } from "../cli-args.mjs";
 import { loadNavigator } from "../nav/index.mjs";
 import {
   getDensityDpi,
@@ -45,11 +46,14 @@ import { atfTreeNodes, validateAtfEvidence } from "./atf-evidence.mjs";
 import { dedupeConsecutive, segmentTranscript } from "./transcript.mjs";
 import { parseUiDump, runChecks, validateUiCapture } from "./ui-tree.mjs";
 
-const args = process.argv.slice(2);
-const opt = (name, fallback) => {
-  const i = args.indexOf(`--${name}`);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
-};
+const { opt } = cliArgs("android/walk.mjs", {
+  config: { type: "string" },
+  pass: { type: "string" },
+  port: { type: "string" },
+  out: { type: "string" },
+  flow: { type: "string" },
+  "talkback-settle": { type: "string" },
+});
 
 const CONFIG_PATH = opt("config", process.env.ALOUD_CONFIG);
 if (!CONFIG_PATH) {

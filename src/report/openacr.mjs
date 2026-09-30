@@ -27,6 +27,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { dump, load } from "js-yaml";
+import { cliArgs } from "../cli-args.mjs";
 import { validateVoiceOverCoverage } from "../ios/voiceover-capture.mjs";
 import { validateAtfSummary } from "../android/atf-evidence.mjs";
 import { readWebReport, webSummary } from "../web/evidence.mjs";
@@ -456,11 +457,17 @@ export function toYaml(acr) {
 
 // ── CLI ──
 function main() {
-  const args = process.argv.slice(2);
-  const opt = (name, fallback) => {
-    const i = args.indexOf(`--${name}`);
-    return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
-  };
+  const { opt } = cliArgs("openacr.mjs", {
+    android: { type: "string" },
+    ios: { type: "string" },
+    report: { type: "string" },
+    "report-ios": { type: "string" },
+    "report-web": { type: "string" },
+    date: { type: "string" },
+    catalog: { type: "string" },
+    version: { type: "string" },
+    out: { type: "string" },
+  });
 
   const cfg = process.env.ALOUD_CONFIG
     ? JSON.parse(readFileSync(process.env.ALOUD_CONFIG, "utf8"))

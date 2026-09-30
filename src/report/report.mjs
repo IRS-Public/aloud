@@ -21,15 +21,18 @@ import { runChecks as androidTreeChecks } from "../android/ui-tree.mjs";
 import { isDeepStrictEqual } from "node:util";
 import { validateVoiceOverCapture } from "../ios/voiceover-capture.mjs";
 import { reportWeb } from "../web/report.mjs";
+import { cliArgs } from "../cli-args.mjs";
 import { platformForReportDir } from "./platform.mjs";
 import { validateBaseline, validateTreeReport } from "./validation.mjs";
 
-const args = process.argv.slice(2);
-const opt = (name, fallback) => {
-  const i = args.indexOf(`--${name}`);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
-};
-const GATE = args.includes("--gate");
+const args = cliArgs("report.mjs", {
+  dir: { type: "string" },
+  out: { type: "string" },
+  baseline: { type: "string" },
+  gate: { type: "boolean" },
+});
+const opt = args.opt;
+const GATE = args.flag("gate");
 
 // Resolved config (written by bin/aloud.mjs) fills in whatever the flags
 // do not. There are no repo-relative defaults: this tool audits someone

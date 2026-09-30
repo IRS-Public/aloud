@@ -44,6 +44,10 @@ scrolling. See [the protocol](talkback-focus.md).
 existing report dir. `aloud baseline` accepts current counts. `aloud
 openacr` emits the draft conformance report.
 
+The scripts under `src/` can also be run directly with `node`. They parse
+flags as strictly as the `aloud` command: an unknown flag, a flag missing its
+value, or a flag given twice stops the script instead of being ignored.
+
 Reports land under the report root (`--out`, default `aloud-report`):
 `aloud-report/android/` and `aloud-report/ios/`. Each dir holds per-screen
 `*.tree.json` and `*.transcript.json` files, `shots/` screenshots,
