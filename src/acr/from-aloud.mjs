@@ -22,10 +22,10 @@
 //   - Web evidence is report-only: every web row is "untested".
 //   - A failure the baseline accepts (src/report/accepted.mjs) is still a
 //     failure: its reason becomes one of the finding's issues, so the
-//     draft's notes explain it. Only when every failure on a criterion is
-//     an accepted platform gap is the finding "platform-limitation"
-//     (not-evaluated, for a person to review) instead of "failing".
-//     Nothing accepted ever reads as "met".
+//     draft's notes explain it. That holds for every kind, platform gaps
+//     included: the checks ran and found the violation, so the product
+//     partially supports the criterion whatever the cause. Nothing
+//     accepted ever reads as "met" or as unevaluated.
 // Native evidence is reported on the catalog's "software" component and
 // web evidence on "web", as the drafts always have been.
 //
@@ -497,13 +497,6 @@ function acceptedIssues(failures) {
   });
 }
 
-// True when every rule id failing on every screen is accepted as a
-// platform gap: the failure comes from the platform, not the app.
-function onlyPlatformGaps(failures) {
-  return failures.every(({ ruleIds, accepted = [] }) =>
-    ruleIds.every((ruleId) => accepted.some((entry) => entry.ruleId === ruleId && entry.kind === "platform-gap")));
-}
-
 // The finding for a criterion aloud's error rules map to.
 function automatedFinding(num, audits) {
   const auto = AUTOMATED_CRITERIA[num];
@@ -528,9 +521,9 @@ function automatedFinding(num, audits) {
     result = "No completed tree checks for this criterion";
   } else if (failures.length > 0) {
     // A known failure stands even when other screens are incomplete. An
-    // accepted product bug or risk is still a failure; only a failure
-    // wholly caused by the platform is left for a person to judge.
-    status = onlyPlatformGaps(failures) ? "platform-limitation" : "failing";
+    // accepted failure of any kind is still a failure; its reason is in
+    // the finding's issues.
+    status = "failing";
     result = `The automated tree checks found violations on ${failures.length} of ${checked}`;
   } else {
     // A platform with no rules for this criterion is part of the same
@@ -540,12 +533,6 @@ function automatedFinding(num, audits) {
   }
 
   const notes = [result];
-  if (status === "platform-limitation") {
-    notes.push(
-      "Every violation found is accepted in the baseline as a platform gap, caused by the platform " +
-        "rather than the app; a person must judge whether the criterion is met",
-    );
-  }
   notes.push(`Automated checks cover part of this criterion only: ${auto.covers}`);
   if (auto.extra) notes.push(auto.extra);
   if (noTree.length) {

@@ -302,6 +302,21 @@ describe("aloud baseline with accepted reasons", () => {
     assert.doesNotMatch(gated.stdout, /508 gate passed/);
   });
 
+  it("warns about an invalid baseline on a summary-only report and still writes the evidence", (t) => {
+    // A capture-only leg (--no-gate) runs the report without --gate; it
+    // never needed the baseline, so a bad entry must not lose the run.
+    const f = fixture(t, {
+      reports: [treeReport("home", [LABEL])],
+      baseline: { home: { errors: 1, ruleIds: [LABEL], accepted: [{ ...bug, kind: "wontfix" }] } },
+    });
+    const result = f.aloud("report");
+    ok(result);
+    assert.match(result.stderr, /warning: ignoring the baseline for this report \(no --gate\): .*kind must be one of/);
+    const summary = JSON.parse(readFileSync(join(f.out, "summary.json"), "utf8"));
+    assert.equal(summary.screens.home.accepted, undefined);
+    assert.ok(existsSync(join(f.out, "index.html")));
+  });
+
   it("prunes screens this run did not cover only with --prune", (t) => {
     const f = fixture(t, {
       reports: [treeReport("home", [])],
@@ -430,19 +445,21 @@ describe("OpenACR findings from accepted reasons", () => {
     assert.equal(findingFor(d, "2.5.8").status, "failing");
   });
 
-  it("leaves a criterion whose failures are all platform gaps for a person, never supported", () => {
+  it("keeps a criterion failing when every failure is an accepted platform gap", () => {
+    // The checks ran and found the violation, so the cause does not make
+    // the criterion unevaluated; the reason explains it in the notes.
     const screens = { home: { errors: 1, ruleIds: [SIZE], accepted: [gap] }, other: { errors: 0, ruleIds: [] } };
     const f = findingFor(doc(screens), "2.5.8");
-    assert.equal(f.status, "platform-limitation");
-    assert.equal(f.failingShare, undefined);
-    assert.match(f.notes.join(" "), /accepted in the baseline as a platform gap/);
+    assert.equal(f.status, "failing");
+    assert.equal(f.failingShare, "some");
     const row = level(acr(screens), "success_criteria_level_aa", "2.5.8");
-    assert.equal(row.level, "not-evaluated");
+    assert.equal(row.level, "partially-supports");
+    assert.doesNotMatch(row.notes, /kept this criterion from being verified/);
     assert.match(row.notes, /Known issues: native-target-size-minimum on Android home \(platform-gap\)/);
     assert.match(row.notes, /https:\/\/example\.com\/issues\/7/);
   });
 
-  it("keeps the criterion failing when any failure is not an accepted platform gap", () => {
+  it("keeps the criterion failing when platform gaps and unaccepted failures mix", () => {
     const f = findingFor(doc({
       home: { errors: 1, ruleIds: [SIZE], accepted: [gap] },
       pay: { errors: 1, ruleIds: [SIZE] },

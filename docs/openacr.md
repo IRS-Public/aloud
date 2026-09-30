@@ -63,13 +63,12 @@ the output a draft you can trust, rather than a report you cannot:
   screens it was given, so it never claims `does-not-support`), and missing
   or stale checks are `incomplete`. A failure the baseline accepts (see
   [accepted findings](how-it-works.md#accepted-findings)) is still a
-  failure: a `product-bug` or `accepted-risk` reason leaves the criterion
-  `failing` (`partially-supports`), and the reason is listed as one of the
-  finding's `issues`, so the notes explain it ("Known issues: ..."). Screens
-  that accept the same rule for the same reason share one issue. Only when
-  every failure on a criterion is accepted as a `platform-gap` is the
-  finding `platform-limitation` (`not-evaluated`, for a person to judge),
-  with a note saying so. An accepted failure never reads as `supports`.
+  failure: whatever its kind (`product-bug`, `platform-gap`, or
+  `accepted-risk`), the criterion stays `failing` (`partially-supports`),
+  because the checks ran and found the violation. The reason is listed as
+  one of the finding's `issues`, so the notes explain it ("Known issues:
+  ..."). Screens that accept the same rule for the same reason share one
+  issue. An accepted failure never reads as `supports` or `not-evaluated`.
   Every other criterion is `not-evaluated`
   with a "needs human review" note. A few `not-evaluated` rows carry related evidence in
   their notes (for example, the transcript coverage on 302.1, or the

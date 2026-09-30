@@ -299,6 +299,9 @@ This writes an `accepted` list on the screen's entry:
 - The rule id must be one the screen's entry gates, and a rule in
   `src/rules/catalog.mjs`. An invalid entry stops `aloud report --gate` and
   `aloud baseline` without writing anything, like any other invalid baseline.
+  A report without `--gate` (including the report step of a leg run with
+  `--no-gate`) warns instead and writes its evidence without accepted
+  reasons.
 - One `--accept` per run adds or replaces the reason for that rule id; the
   command still merges the report dir first.
 - Re-baselining keeps each reason while its rule still fires on the screen,

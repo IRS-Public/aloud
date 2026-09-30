@@ -63,15 +63,29 @@ if (PLATFORM === "web") {
 // Entries naming reclassified rule ids are read in the current
 // classification (see readBaseline), with a note saying so. Without
 // --gate an existing baseline is still read, for the accepted reasons the
-// summary and the evidence page show; a missing one is fine.
+// summary and the evidence page show; a missing one is fine. A summary
+// run never needed the baseline before, so there an invalid one is a
+// warning and the report is written without accepted reasons, so a
+// capture-only leg (--no-gate) still produces its evidence.
 let baseline = null;
 let migratedScreens = new Set();
 if (BASELINE && (GATE || existsSync(BASELINE))) {
-  const loaded = readBaseline(existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")) : {}, BASELINE);
-  baseline = loaded.baseline;
-  migratedScreens = new Set(loaded.migrated.map(({ screen }) => screen));
-  const note = GATE ? migrationNote(loaded.migrated, BASELINE) : "";
-  if (note) console.warn(note);
+  let loaded = null;
+  try {
+    loaded = readBaseline(existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")) : {}, BASELINE);
+  } catch (error) {
+    if (GATE) throw error;
+    console.warn(
+      `warning: ignoring the baseline for this report (no --gate): ${error.message}. ` +
+        "Accepted reasons are left out; fix the baseline before gating.",
+    );
+  }
+  if (loaded) {
+    baseline = loaded.baseline;
+    migratedScreens = new Set(loaded.migrated.map(({ screen }) => screen));
+    const note = GATE ? migrationNote(loaded.migrated, BASELINE) : "";
+    if (note) console.warn(note);
+  }
 }
 
 const read = (f) => JSON.parse(readFileSync(join(OUT, f), "utf8"));
