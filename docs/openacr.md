@@ -29,7 +29,12 @@ The 48dp/44pt platform guidelines are warnings with no criterion.
 Inputs default to the baseline files named in the config. For a fresh
 run's results instead, pass `--report <dir>` and/or `--report-ios <dir>`
 (they read the run's `summary.json`). `--date YYYY-MM-DD` pins the report
-date; `--version` overrides `app.version`.
+date (it must be a real calendar date); `--version` overrides `app.version`.
+`--catalog <file>` replaces the bundled catalog YAML. The draft still
+states `2.5-edition-wcag-2.2-508-en`, so the replacement must list the same
+chapters and criteria in the same order; only labels and components may
+differ. A trimmed or reordered catalog is rejected rather than producing a
+report that names one catalog and lists another's criteria.
 
 The emitter turns the audit inputs into a findings document
 (`src/acr/from-aloud.mjs`) and builds the draft with the shared builder in
@@ -41,7 +46,10 @@ the output a draft you can trust, rather than a report you cannot:
 - **Only automated evidence gets a conformance level.** Criteria the
   audit's error rules map to (1.1.1, 1.3.1, 2.5.8, 4.1.2) get `supports` only
   when applicable tree checks completed without mapped failures on every
-  supplied screen for those platforms. Known failures produce
+  supplied screen, and every supplied platform has rules for the
+  criterion. The Android and iOS app is one software component, so 1.3.1,
+  which only Android rules check, stays `not-evaluated` whenever an iOS
+  audit is supplied. Known failures produce
   `partially-supports`, with the failing screens and rule ids in the notes.
   Missing tree checks produce `not-evaluated` unless there is already a
   known failure. So does evidence older than the target-size split, whether
@@ -73,7 +81,8 @@ the output a draft you can trust, rather than a report you cannot:
 - **Nothing is a silent pass.** Every adherence entry has a level and a
   note. Checked-screen counts include only completed tree checks on
   platforms that implement the criterion's rules. For example, 1.3.1 has
-  an Android-only check and stays `not-evaluated` in an iOS-only report.
+  an Android-only check and stays `not-evaluated` in any report with an
+  iOS audit (a known Android failure still shows as `partially-supports`).
   Transcript-only runs cannot establish support for tree criteria.
 
 Notes over 3000 characters are cut, and the cut is marked "(truncated; see
@@ -114,7 +123,8 @@ npx aloud acr --findings findings.json [--out acr-draft.yaml] \
 `--findings` is required. `--out` defaults to `acr-draft.yaml`. `--policy`
 is a JSON object of per-status overrides, the same as the `policy` option
 below. `--catalog` is a catalog YAML file, the same as `catalogPath`.
-`--date` defaults to `provenance.date`, else today. `aloud acr` reads no
+`--date` defaults to `provenance.date`, else today; either must be a real
+calendar date. `aloud acr` reads no
 aloud config. On a missing or malformed file, invalid findings, or an
 unsafe policy, it prints every problem, writes nothing, and exits
 non-zero.

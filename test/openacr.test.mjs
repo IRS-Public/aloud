@@ -299,8 +299,11 @@ describe("buildAcr on the fixture baselines", () => {
     for (const [num, { rules }] of Object.entries(AUTOMATED_CRITERIA)) {
       const adherence = findCriterion(acr, num);
       const failures = findFailures(rules, audits);
+      // A criterion only one platform's rules check cannot be supported
+      // for the two-platform app (1.3.1 is Android-only).
+      const everyPlatform = new Set(rules.map((r) => RULES[r].platform)).size === 2;
       if (failures.length === 0) {
-        assert.equal(adherence.level, "supports");
+        assert.equal(adherence.level, everyPlatform ? "supports" : "not-evaluated", num);
       } else {
         assert.equal(adherence.level, "partially-supports");
         assert.ok(adherence.notes.includes(failures[0].screen));
@@ -480,7 +483,9 @@ describe("OpenACR evidence coverage", () => {
       ios: summary({ home: completed, settings: completed }),
     });
     const adherence = findCriterion(acr, "1.3.1");
-    assert.equal(adherence.level, "supports");
+    // The iOS half of the software component was never checked for 1.3.1,
+    // so a clean Android result cannot support the row.
+    assert.equal(adherence.level, "not-evaluated");
     assert.match(adherence.notes, /no violations on 1 Android screens/);
     assert.doesNotMatch(adherence.notes, /no violations on .*iOS screens/);
     assert.match(adherence.notes, /no applicable.*iOS/i);
@@ -518,7 +523,19 @@ describe("OpenACR evidence coverage", () => {
   it("does not let a clean platform mask an incomplete applicable platform", () => {
     const acr = build({ android: summary({ home: completed }), ios: summary({ home: transcriptOnly }) });
     assert.equal(findCriterion(acr, "4.1.2").level, "not-evaluated");
-    assert.equal(findCriterion(acr, "1.3.1").level, "supports");
+    assert.equal(findCriterion(acr, "1.3.1").level, "not-evaluated");
+    // An Android-only audit is all the software component there is to check.
+    assert.equal(findCriterion(build({ android: summary({ home: completed }), ios: null }), "1.3.1").level, "supports");
+  });
+
+  it("keeps a known failure on the platform that has rules when the other has none", () => {
+    const acr = build({
+      android: summary({ home: { errors: 1, ruleIds: ["native-edittext-unlabeled"], utterances: null } }),
+      ios: summary({ home: completed }),
+    });
+    const adherence = findCriterion(acr, "1.3.1");
+    assert.equal(adherence.level, "partially-supports");
+    assert.match(adherence.notes, /no applicable.*iOS/i);
   });
 
   it("counts captured speech separately from absent or empty transcripts", () => {

@@ -36,7 +36,7 @@ import {
   splitReclassified,
 } from "../rules/catalog.mjs";
 import { DRAFT_AUTHOR, buildAcr } from "./build.mjs";
-import { DEFAULT_CATALOG_ID, hasNoComponents, indexCatalog, loadCatalog } from "./catalog.mjs";
+import { DEFAULT_CATALOG_ID, checkCatalog, checkCatalogId, hasNoComponents, indexCatalog, loadCatalog } from "./catalog.mjs";
 
 // The catalog aloud's drafts are built against. WCAG 2.2 is required: the
 // target-size rules map to 2.5.8, which exists only there.
@@ -467,7 +467,9 @@ function automatedFinding(num, audits) {
     status = "failing";
     result = `The automated tree checks found violations on ${failures.length} of ${checked}`;
   } else {
-    status = missing.length ? "incomplete" : "met";
+    // A platform with no rules for this criterion is part of the same
+    // software component, so a clean result elsewhere cannot support it.
+    status = missing.length || unsupported.length ? "incomplete" : "met";
     result = `The automated tree checks found no violations on ${checked}`;
   }
 
@@ -662,10 +664,31 @@ export function aloudFindings({
   };
 }
 
+// aloud's drafts always state CATALOG_ID, so a replacement catalog must
+// have its chapters and criteria, in the same order; only labels and
+// components may differ. Say so in the terms of the caller, who wrote no
+// findings file and has no catalog field to change. Throws on a mismatch.
+function checkReplacementCatalog(catalog) {
+  checkCatalog(catalog, "replacement catalog");
+  try {
+    checkCatalogId(catalog, CATALOG_ID);
+  } catch {
+    throw new Error(
+      `the replacement catalog must have the same chapters and criteria, in the same order, as the ` +
+        `bundled ${CATALOG_ID} catalog, because aloud's drafts state that catalog id; ` +
+        "only its labels and components may differ",
+    );
+  }
+}
+
 // Build the draft OpenACR for aloud's audit inputs: aloudFindings, then the
-// shared builder. Takes aloudFindings's inputs plus the report date.
+// shared builder. Takes aloudFindings's inputs plus the report date. A
+// catalog, when given, replaces the bundled one (checkReplacementCatalog).
 export function buildAloudAcr({ date, catalog, ...inputs }) {
+  // The evidence is checked first, so a bad audit is reported as such
+  // whatever catalog comes with it.
   const findings = aloudFindings({ ...inputs, catalog });
+  if (catalog) checkReplacementCatalog(catalog);
   return buildAcr(findings, {
     date,
     ...(catalog ? { catalog } : {}),

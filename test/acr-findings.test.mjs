@@ -211,6 +211,7 @@ describe("rejected findings", () => {
     assertProblem((f) => { f.findings[0].issues = [{ id: "I-1" }]; }, /issues\[0\]\.summary: is required/);
     assertProblem((f) => { f.findings[0].notes = [""]; }, /notes\[0\]: must not be empty/);
     assertProblem((f) => { f.provenance = { date: "30 Sep 2026" }; }, /provenance\.date: "30 Sep 2026" is not a date as YYYY-MM-DD/);
+    assertProblem((f) => { f.provenance = { date: "2026-09-31" }; }, /provenance\.date: "2026-09-31" is not a real calendar date/);
     assertProblem((f) => { f.author = { name: "A", email: "nobody" }; }, /author\.email: "nobody" is not an email address/);
   });
 

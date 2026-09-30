@@ -100,9 +100,12 @@ export const DEFAULT_POLICY = deepFreeze({
     level: "not-evaluated",
     note: "Some tests for this criterion did not run, so the evidence is incomplete. Needs human review.",
   },
+  // Also the status of rows where related checks ran but cannot establish
+  // the criterion (aloud's warning-only and report-only web rows), so the
+  // note says nothing established it, not that nothing ran.
   untested: {
     level: "not-evaluated",
-    note: "No automated test covers this criterion yet. Needs human review.",
+    note: "No automated test establishes whether this criterion is met yet. Needs human review.",
   },
   unreviewed: {
     level: "not-evaluated",

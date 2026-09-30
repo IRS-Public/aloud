@@ -86,6 +86,8 @@ Commands:
   report       Re-aggregate an existing report dir (--dir, --baseline, --gate)
   baseline     Accept current counts into a baseline: aloud baseline <report-dir> [--baseline <file>]
   openacr      Emit a draft OpenACR (--android/--ios baselines or --report/--report-ios/--report-web dirs)
+               [--date YYYY-MM-DD] [--version <v>] [--catalog <file>: same chapters and criteria
+               as the bundled 2.5-edition-wcag-2.2-508-en catalog]
   acr          Build a draft OpenACR from any findings JSON: aloud acr --findings <file.json>
                [--out acr-draft.yaml] [--policy <file.json>] [--catalog <file>] [--date YYYY-MM-DD]
 

@@ -102,6 +102,26 @@ describe("aloudFindings", () => {
     const iosOnly = aloudFindings(inputs({ android: null, ios: summary({ home: clean }) }));
     assert.equal(finding(iosOnly, "1.3.1").status, "untested");
     assert.equal(finding(iosOnly, "4.1.2").status, "met");
+    // Android clean, iOS present but without 1.3.1 rules: the one software
+    // component is only half checked, so it is incomplete, not met.
+    const both = aloudFindings(inputs({ android: summary({ home: clean }), ios: summary({ home: clean }) }));
+    assert.equal(finding(both, "1.3.1").status, "incomplete");
+    assert.equal(finding(both, "4.1.2").status, "met");
+  });
+
+  it("never says nothing ran on rows where related checks did run", () => {
+    const acr = buildAloudAcr(inputs({ web, date: "2026-09-05" }));
+    const notes = (chapter, num, component) =>
+      acr.chapters[chapter].criteria.find((c) => c.num === num).components.find((c) => c.name === component)
+        .adherence.notes;
+    for (const text of [
+      notes("success_criteria_level_aa", "2.4.6", "software"),
+      notes("success_criteria_level_aa", "2.4.6", "web"),
+      notes("functional_performance_criteria", "302.1", "none"),
+    ]) {
+      assert.doesNotMatch(text, /No automated test covers/);
+      assert.match(text, /^No automated test establishes whether this criterion is met yet\. Needs human review\./);
+    }
   });
 
   it("keeps 302.1 and warning-only criteria untested, with their related evidence", () => {

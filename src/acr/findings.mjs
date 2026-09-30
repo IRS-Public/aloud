@@ -44,6 +44,16 @@ function schemaValidator() {
   return compiled;
 }
 
+// True when text is a YYYY-MM-DD date that exists on the calendar, so
+// 2026-02-31 or 2026-13-45 never reaches a report. Round-tripping through
+// Date catches days past the end of a month, which Date would otherwise
+// roll into the next one.
+export function isCalendarDate(text) {
+  if (typeof text !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  const parsed = new Date(`${text}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === text;
+}
+
 // Thrown for any contract violation. problems lists each one on its own,
 // as "<path>: <what is wrong>".
 export class FindingsError extends Error {
@@ -95,10 +105,14 @@ function schemaProblems(input) {
   return [...new Set(validate.errors.map(describeSchemaError))];
 }
 
-// Checks the schema cannot express: catalog membership, duplicates, and
-// fields that contradict the status.
+// Checks the schema cannot express: real dates, catalog membership,
+// duplicates, and fields that contradict the status.
 function catalogProblems(input, index, catalogId) {
   const problems = [];
+  // The schema checks the date's shape; this checks the date exists.
+  if (input.provenance?.date !== undefined && !isCalendarDate(input.provenance.date)) {
+    problems.push(`provenance.date: ${JSON.stringify(input.provenance.date)} is not a real calendar date`);
+  }
   input.components.forEach((component, i) => {
     if (!index.components.includes(component)) {
       problems.push(

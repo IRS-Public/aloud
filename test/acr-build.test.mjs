@@ -391,6 +391,11 @@ describe("buildAcr input checks", () => {
     delete findings.provenance.date;
     assert.throws(() => build(findings), /needs a report date/);
     assert.throws(() => build(findings, { date: "09/30/2026" }), /needs a report date/);
+    // The right shape is not enough: the date must exist.
+    for (const date of ["2026-02-31", "2026-13-45", "2025-02-29"]) {
+      assert.throws(() => build(findings, { date }), /exists on the calendar/, date);
+    }
+    assert.equal(build(findings, { date: "2028-02-29" }).report_date, "2028-02-29");
     assert.equal(build(findings, { date: "2026-10-01" }).report_date, "2026-10-01");
   });
 

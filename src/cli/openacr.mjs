@@ -13,7 +13,9 @@
 //     --date <YYYY-MM-DD>   report date (defaults to the report's generated
 //                           date, else today)
 //     --version <v>         product version (config app.version otherwise)
-//     --catalog <file>      OpenACR catalog YAML override
+//     --catalog <file>      replacement for the bundled 2.5-edition-wcag-2.2-508-en
+//                           catalog YAML; it must have the same chapters and
+//                           criteria (only labels and components may differ)
 //     --out <file>          output path (config openacr.out, default acr-draft.yaml)
 //   Inputs default to the baselines named in the config.
 //
@@ -21,17 +23,27 @@
 //     --findings <file>     findings JSON (src/acr/findings.schema.json); required
 //     --out <file>          output path (default acr-draft.yaml)
 //     --policy <file>       JSON object of per-status level overrides
-//     --catalog <file>      OpenACR catalog YAML override
+//     --catalog <file>      OpenACR catalog YAML instead of the bundled one the
+//                           findings name (see resolveCatalog in src/acr/catalog.mjs)
 //     --date <YYYY-MM-DD>   report date (defaults to provenance.date, else today)
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildAcr, toYaml } from "../acr/build.mjs";
 import { loadCatalog } from "../acr/catalog.mjs";
+import { isCalendarDate } from "../acr/findings.mjs";
 import { buildAloudAcr, normalizeAudit } from "../acr/from-aloud.mjs";
 import { readWebReport, webSummary } from "../web/evidence.mjs";
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+// --date must be a date that exists, so an impossible one fails here, in
+// the flag's own terms, before anything is read.
+function checkDateFlag(date) {
+  if (date !== undefined && !isCalendarDate(date)) {
+    throw new Error(`--date must be a real calendar date as YYYY-MM-DD; got ${JSON.stringify(date)}`);
+  }
+}
 
 // Read and parse a JSON file, naming the file and what it is for in any
 // error. Errors keep their code, so a caller can tell a missing file apart.
@@ -68,6 +80,7 @@ function loadAudit(reportDir, flagPath, configPath) {
 // `aloud openacr`. values are the parsed flags; cfg is the resolved config
 // (src/config.mjs loadConfig). Returns { out, date }.
 export function openacr(values, cfg) {
+  checkDateFlag(values.date);
   const android = loadAudit(values.report, values.android, cfg?.baseline?.android);
   const ios = loadAudit(values["report-ios"], values.ios, cfg?.baseline?.ios);
   const web = values["report-web"] ? webSummary(readWebReport(values["report-web"])) : null;
@@ -106,6 +119,7 @@ export function openacr(values, cfg) {
 // `aloud acr`. values are the parsed flags. Returns { out, date }.
 export function acr(values) {
   if (!values.findings) throw new Error("--findings <file.json> is required");
+  checkDateFlag(values.date);
   const findings = readJson(values.findings, "findings file");
   const policy = values.policy ? readJson(values.policy, "policy file") : undefined;
   // The findings' own date wins over the wall clock; --date wins over both.

@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, before, describe, it } from "node:test";
-import { load } from "js-yaml";
+import { dump, load } from "js-yaml";
 
 import { validateAcr } from "../src/acr/index.mjs";
 
@@ -120,6 +120,23 @@ describe("aloud acr", () => {
     const unknownFlag = aloud("acr", "--findings", fixture("valid.json"), "--nope");
     assert.notEqual(unknownFlag.status, 0);
   });
+
+  it("rejects a --date or provenance.date that is not on the calendar", () => {
+    const out = join(dir, "bad-date.yaml");
+    for (const date of ["2026-02-31", "2026-13-45", "2026-00-10"]) {
+      const result = aloud("acr", "--findings", fixture("valid.json"), "--date", date, "--out", out);
+      assert.notEqual(result.status, 0, date);
+      assert.match(result.stderr, /aloud acr: --date must be a real calendar date as YYYY-MM-DD/, date);
+    }
+    const findings = JSON.parse(readFileSync(fixture("valid.json"), "utf8"));
+    findings.provenance = { ...findings.provenance, date: "2026-02-30" };
+    const file = join(dir, "bad-provenance-date.json");
+    writeFileSync(file, JSON.stringify(findings));
+    const result = aloud("acr", "--findings", file, "--out", out);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /provenance\.date: "2026-02-30" is not a real calendar date/);
+    assert.equal(existsSync(out), false);
+  });
 });
 
 describe("aloud openacr", () => {
@@ -145,6 +162,48 @@ describe("aloud openacr", () => {
     assert.equal(row(acr, "success_criteria_level_a", "1.1.1").components[0].adherence.level, "supports");
     assert.equal(row(acr, "success_criteria_level_aa", "2.5.8").components[0].adherence.level, "partially-supports");
     assert.match(acr.notes, /replace the placeholder contact email/);
+  });
+
+  it("rejects an impossible --date", () => {
+    const configPath = join(dir, "date.config.json");
+    writeFileSync(configPath, JSON.stringify({ app: { name: "Fixture App", version: "1.0.0" } }));
+    const out = join(dir, "bad-date-openacr.yaml");
+    const result = aloud(
+      "openacr",
+      "--config", configPath,
+      "--android", join(HERE, "fixtures/baseline-android.json"),
+      "--date", "2026-02-31",
+      "--out", out,
+    );
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /aloud openacr: --date must be a real calendar date as YYYY-MM-DD; got "2026-02-31"/);
+    assert.equal(existsSync(out), false);
+  });
+
+  it("explains in its own terms a --catalog that differs from the bundled catalog", () => {
+    const configPath = join(dir, "catalog.config.json");
+    writeFileSync(configPath, JSON.stringify({ app: { name: "Fixture App", version: "1.0.0" } }));
+    // The bundled catalog with one criterion removed.
+    const catalog = load(readFileSync(BUNDLED_CATALOG, "utf8"));
+    const chapter = catalog.chapters.find((c) => c.id === "success_criteria_level_a");
+    chapter.criteria = chapter.criteria.filter((c) => c.id !== "1.2.1");
+    const trimmed = join(dir, "trimmed.yaml");
+    writeFileSync(trimmed, dump(catalog));
+    const out = join(dir, "trimmed-openacr.yaml");
+    const result = aloud(
+      "openacr",
+      "--config", configPath,
+      "--android", join(HERE, "fixtures/baseline-android.json"),
+      "--catalog", trimmed,
+      "--out", out,
+    );
+    assert.notEqual(result.status, 0);
+    assert.match(
+      result.stderr,
+      /aloud openacr: the replacement catalog must have the same chapters and criteria, in the same order, as the bundled 2\.5-edition-wcag-2\.2-508-en catalog/,
+    );
+    assert.doesNotMatch(result.stderr, /findings/);
+    assert.equal(existsSync(out), false);
   });
 
   it("exits non-zero with a clear message when there is no audit input", () => {

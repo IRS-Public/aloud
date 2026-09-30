@@ -13,7 +13,7 @@
 import { createRequire } from "node:module";
 import { dump } from "js-yaml";
 import { checkCatalogId, hasNoComponents, indexCatalog, loadCatalog } from "./catalog.mjs";
-import { checkFindings } from "./findings.mjs";
+import { checkFindings, isCalendarDate } from "./findings.mjs";
 import { ADHERENCE_LEVELS, DEFAULT_POLICY, STATUSES, adherenceFor, isFailingStatus, resolvePolicy } from "./levels.mjs";
 
 // The validators ship as CJS with no type declarations.
@@ -211,7 +211,8 @@ const contact = (person) => ({
 // validated here, so invalid input throws before anything is built.
 //
 // options:
-//   date              report date, YYYY-MM-DD (else provenance.date; one is required)
+//   date              report date, a real YYYY-MM-DD date (else provenance.date;
+//                     one is required)
 //   policy            per-status overrides for the level policy (see resolvePolicy)
 //   catalog           a catalog object, instead of the bundled one findings.catalog names
 //   catalogPath       a catalog YAML file, instead of the bundled one findings.catalog names
@@ -230,8 +231,11 @@ export function buildAcr(findings, options = {}) {
   const policy = resolvePolicy(options.policy);
 
   const date = options.date ?? input.provenance?.date;
-  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    throw new Error("buildAcr needs a report date as YYYY-MM-DD (options.date or provenance.date)");
+  if (!isCalendarDate(date)) {
+    throw new Error(
+      "buildAcr needs a report date as YYYY-MM-DD (options.date or provenance.date) that exists " +
+        `on the calendar; got ${JSON.stringify(date)}`,
+    );
   }
   const maxNoteLength = options.maxNoteLength ?? DEFAULT_MAX_NOTE_LENGTH;
   if (!Number.isSafeInteger(maxNoteLength) || maxNoteLength < MIN_NOTE_LENGTH) {
