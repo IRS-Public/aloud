@@ -34,7 +34,7 @@ date; `--version` overrides `app.version`.
 The emitter turns the audit inputs into a findings document
 (`src/acr/from-aloud.mjs`) and builds the draft with the shared builder in
 `src/acr/`, the same one other evidence sources use (see
-[below](#build-a-draft-from-findings-library)). `src/report/openacr.mjs`
+[below](#build-a-draft-from-findings)). `src/report/openacr.mjs`
 keeps its exported functions for existing callers. These properties make
 the output a draft you can trust, rather than a report you cannot:
 
@@ -97,12 +97,29 @@ need that evidence in the draft.
 The author block defaults to "Automated draft" with a placeholder email
 (set `openacr.author` in the config).
 
-## Build a draft from findings (library)
+## Build a draft from findings
 
 `src/acr/` is a reusable OpenACR builder for any evidence source, such as
 the USWDS accessibility harness or a manual review. The source writes a
 findings document: one finding per criterion and component, saying what
 its evidence shows. `aloud openacr` builds its drafts this way too.
+
+From the command line:
+
+```bash
+npx aloud acr --findings findings.json [--out acr-draft.yaml] \
+  [--policy policy.json] [--catalog catalog.yaml] [--date YYYY-MM-DD]
+```
+
+`--findings` is required. `--out` defaults to `acr-draft.yaml`. `--policy`
+is a JSON object of per-status overrides, the same as the `policy` option
+below. `--catalog` is a catalog YAML file, the same as `catalogPath`.
+`--date` defaults to `provenance.date`, else today. `aloud acr` reads no
+aloud config. On a missing or malformed file, invalid findings, or an
+unsafe policy, it prints every problem, writes nothing, and exits
+non-zero.
+
+As a library:
 
 ```js
 import { writeFileSync } from "node:fs";

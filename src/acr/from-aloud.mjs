@@ -35,7 +35,7 @@ import {
   rulesForCriterion,
   splitReclassified,
 } from "../rules/catalog.mjs";
-import { buildAcr } from "./build.mjs";
+import { DRAFT_AUTHOR, buildAcr } from "./build.mjs";
 import { DEFAULT_CATALOG_ID, hasNoComponents, indexCatalog, loadCatalog } from "./catalog.mjs";
 
 // The catalog aloud's drafts are built against. WCAG 2.2 is required: the
@@ -645,8 +645,10 @@ export function aloudFindings({
     description: appDescription || (web ? `${appName} application.` : `${appName} mobile app for iOS and Android.`),
   };
   if (productVersion !== undefined && productVersion !== null) product.version = String(productVersion);
+  // The config's default email is the builder's placeholder; leave it out
+  // so the draft says it must be replaced.
   const author = { name: authorName || DEFAULT_AUTHOR_NAME };
-  if (authorEmail) author.email = authorEmail;
+  if (authorEmail && authorEmail !== DRAFT_AUTHOR.email) author.email = authorEmail;
 
   return {
     schemaVersion: 1,

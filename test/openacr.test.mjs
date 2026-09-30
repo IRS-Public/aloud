@@ -606,9 +606,9 @@ describe("OpenACR CLI evidence validation", () => {
         baseline: { android: androidPath, ios: iosPath },
         openacr: { out: outputPath },
       }));
-      const result = spawnSync(process.execPath, [join(HERE, "../src/report/openacr.mjs")], {
+      const result = spawnSync(process.execPath, [join(HERE, "../bin/aloud.mjs"), "openacr", "--config", configPath], {
+        cwd: dir,
         encoding: "utf8",
-        env: { ...process.env, ALOUD_CONFIG: configPath },
       });
       assert.notEqual(result.status, 0);
       assert.match(result.stderr, /JSON|invalid audit/i);

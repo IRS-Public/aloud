@@ -190,8 +190,16 @@ report in the GSA [OpenACR](https://github.com/GSA/openacr) format. It is a
 draft on purpose: only criteria the automated rules cover get a conformance
 level, and every note says so. See [docs/openacr.md](docs/openacr.md).
 Other evidence sources can build the same kind of draft from a findings
-document with the `src/acr` library; see
-[docs/openacr.md](docs/openacr.md#build-a-draft-from-findings-library).
+document (`src/acr/findings.schema.json`), from the command line or with
+the `src/acr` library:
+
+```bash
+npx aloud acr --findings findings.json --out acr-draft.yaml
+```
+
+It checks the findings first and exits non-zero, listing every problem,
+on an unknown criterion, component, or status or on an unsafe `--policy`.
+See [docs/openacr.md](docs/openacr.md#build-a-draft-from-findings).
 
 For mobile apps, aloud audits whatever screen is currently open
 (`--nav current-screen`, the default). Give it a screens manifest

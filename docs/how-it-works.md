@@ -43,11 +43,13 @@ scrolling. See [the protocol](talkback-focus.md).
 `aloud android` and `aloud ios` run the whole leg: install the build
 (`--apk` / `--app`), walk, report, gate. `aloud report` re-aggregates an
 existing report dir. `aloud baseline` accepts current counts. `aloud
-openacr` emits the draft conformance report.
+openacr` emits the draft conformance report, and `aloud acr` builds one from
+any findings document (see [docs/openacr.md](openacr.md)). Both run in the
+`aloud` process through `src/cli/openacr.mjs`.
 
 The scripts under `src/` can also be run directly with `node`. The walkers
 (`src/android/walk.mjs`, `src/ios/walk.mjs`), `src/report/report.mjs`,
-`src/report/baseline.mjs`, `src/report/openacr.mjs`, `src/demo/demo.mjs`, and
+`src/report/baseline.mjs`, `src/demo/demo.mjs`, and
 `src/web/run.mjs` parse flags as strictly as the `aloud` command: an unknown
 flag, a flag missing its value, or a flag given twice stops the script instead
 of being ignored. The low-level helpers (`src/android/talkback.mjs`,

@@ -61,6 +61,14 @@ describe("aloudFindings", () => {
     assert.equal(doc.author.email, undefined);
   });
 
+  it("treats the config's placeholder email as no email, so the draft asks for a real one", () => {
+    assert.equal(aloudFindings(inputs({ authorEmail: "todo@example.com" })).author.email, undefined);
+    const acr = buildAloudAcr(inputs({ authorEmail: "todo@example.com", date: "2026-08-26" }));
+    assert.equal(acr.author.email, "todo@example.com");
+    assert.match(acr.notes, /replace the placeholder contact email/);
+    assert.equal(aloudFindings(inputs({ authorEmail: "a11y@example.gov" })).author.email, "a11y@example.gov");
+  });
+
   it("is plain JSON, so it can be saved and built later with `aloud acr`", () => {
     const doc = aloudFindings(inputs());
     assert.deepEqual(JSON.parse(JSON.stringify(doc)), doc);

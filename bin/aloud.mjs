@@ -58,6 +58,16 @@ const OPTIONS = {
     catalog: { type: "string" },
     version: { type: "string" },
   },
+  // acr reads no config: any evidence source can run it. --out names the
+  // output YAML file.
+  acr: {
+    help: { type: "boolean" },
+    findings: { type: "string" },
+    out: { type: "string" },
+    policy: { type: "string" },
+    catalog: { type: "string" },
+    date: { type: "string" },
+  },
 };
 
 const USAGE = `aloud — the first 508 audit that actually listens
@@ -76,6 +86,8 @@ Commands:
   report       Re-aggregate an existing report dir (--dir, --baseline, --gate)
   baseline     Accept current counts into a baseline: aloud baseline <report-dir> [--baseline <file>]
   openacr      Emit a draft OpenACR (--android/--ios baselines or --report/--report-ios/--report-web dirs)
+  acr          Build a draft OpenACR from any findings JSON: aloud acr --findings <file.json>
+               [--out acr-draft.yaml] [--policy <file.json>] [--catalog <file>] [--date YYYY-MM-DD]
 
 Global flags:
   --config <file>   Config file (default: ./aloud.config.json if present)
@@ -302,25 +314,48 @@ function runBaseline(argv) {
   );
 }
 
-function runOpenacr(argv) {
+// Drop flags given an empty value (--date ""), which count as absent, as
+// they always have.
+function givenFlags(values) {
+  return Object.fromEntries(Object.entries(values).filter(([, value]) => value !== ""));
+}
+
+// The OpenACR commands run in this process. Their module loads the OpenACR
+// validators, so it is imported only when one of them runs.
+async function runOpenacrCommand(command, run) {
+  let result;
+  try {
+    const commands = await import("../src/cli/openacr.mjs");
+    result = run(commands);
+  } catch (err) {
+    fail(`aloud ${command}: ${err.message}`);
+  }
+  console.log(`draft OpenACR → ${result.out} (report_date ${result.date})`);
+}
+
+async function runOpenacr(argv) {
   const { values } = parse("openacr", argv);
   if (values.help) return console.log(USAGE);
+  const flags = givenFlags(values);
   // For openacr, --out names the output YAML file (config: openacr.out).
   // The report root still comes from the config file.
   const overrides = {};
-  if (values.out) setPath(overrides, ["openacr", "out"], resolve(values.out));
-  const { cfg, resolvedPath } = resolveAndWriteConfig({ ...values, out: undefined }, overrides);
+  if (flags.out) setPath(overrides, ["openacr", "out"], resolve(flags.out));
+  const { cfg } = resolveAndWriteConfig({ ...flags, out: undefined }, overrides);
   try {
-    validateForLeg(cfg, "openacr", { requireVersion: !values.version });
+    validateForLeg(cfg, "openacr", { requireVersion: !flags.version });
   } catch (err) {
     fail(`aloud openacr: ${err.message}`);
   }
-  const args = [join(ALOUD_HOME, "src", "report", "openacr.mjs")];
-  for (const flag of ["android", "ios", "report", "report-ios", "report-web", "date", "catalog", "version"]) {
-    if (values[flag]) args.push(`--${flag}`, values[flag]);
-  }
-  if (values.out) args.push("--out", cfg.openacr.out);
-  run(process.execPath, args, resolvedPath);
+  await runOpenacrCommand("openacr", ({ openacr }) => openacr({ ...flags, out: cfg.openacr.out }, cfg));
+}
+
+async function runAcr(argv) {
+  const { values } = parse("acr", argv);
+  if (values.help) return console.log(USAGE);
+  const flags = givenFlags(values);
+  if (!flags.findings) fail(`aloud acr: --findings <file.json> is required\n\nRun "aloud --help" for usage.`);
+  await runOpenacrCommand("acr", ({ acr }) => acr(flags));
 }
 
 const [command, ...rest] = process.argv.slice(2);
@@ -361,7 +396,10 @@ switch (command) {
     runBaseline(rest);
     break;
   case "openacr":
-    runOpenacr(rest);
+    await runOpenacr(rest);
+    break;
+  case "acr":
+    await runAcr(rest);
     break;
   default:
     fail(`aloud: unknown command "${command}"\n\n${USAGE}`);
