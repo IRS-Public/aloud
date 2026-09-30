@@ -49,6 +49,7 @@ import { parseUiDump, runChecks, validateUiCapture } from "./ui-tree.mjs";
 import { ATF_VERSION } from "./atf-evidence.mjs";
 import { TALKBACK_COMMIT } from "./talkback-companion/patch.mjs";
 import { collectProvenance } from "../provenance.mjs";
+import { aloudOutputPaths } from "../config.mjs";
 
 const { opt } = cliArgs("android/walk.mjs", {
   config: { type: "string" },
@@ -106,11 +107,12 @@ async function walk() {
   mkdirSync(OUT, { recursive: true });
   if (PASS === "tree") mkdirSync(SHOTS_DIR, { recursive: true });
   // Where this pass's evidence came from, stamped on every file it writes
-  // (see src/provenance.mjs). The report root is excluded from the app's
-  // dirty check: it holds aloud's own output, and the tree pass must not
-  // see the transcript pass's files as a change to the app.
+  // (see src/provenance.mjs). The report root, baselines, and draft are
+  // excluded from the app's dirty check: they hold aloud's own output, and
+  // the tree pass must not see the transcript pass's files (or a baseline
+  // accepted between legs) as a change to the app.
   const provenance = collectProvenance({
-    exclude: [OUT, ...(cfg.out ? [cfg.out] : [])],
+    exclude: [OUT, ...aloudOutputPaths(cfg)],
     // The adb the walker itself runs (ADB_PATH, ANDROID_HOME, or the SDK
     // dir, then PATH), not whichever adb happens to be first on PATH.
     probes: { adb: [ADB, "version"] },

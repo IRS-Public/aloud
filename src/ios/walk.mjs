@@ -19,6 +19,7 @@ import { computeTranscript, normalizeElements, runIosChecks, validateIosCapture 
 import { createAppleAuditor } from "./apple-audit.mjs";
 import { createVoiceOverCapturer } from "./voiceover-capture.mjs";
 import { collectProvenance } from "../provenance.mjs";
+import { aloudOutputPaths } from "../config.mjs";
 
 const { opt } = cliArgs("ios/walk.mjs", {
   nav: { type: "string" },
@@ -86,10 +87,10 @@ async function walk() {
   mkdirSync(TREES_DIR, { recursive: true });
   const udid = bootedUdid();
   // Where this run's evidence came from, stamped on every file it writes
-  // (see src/provenance.mjs). The report root holds aloud's own output, so
-  // it is excluded from the app's dirty check.
+  // (see src/provenance.mjs). The report root, baselines, and draft hold
+  // aloud's own output, so they are excluded from the app's dirty check.
   const provenance = collectProvenance({
-    exclude: [OUT, ...(cfg.out ? [cfg.out] : [])],
+    exclude: [OUT, ...aloudOutputPaths(cfg)],
     probes: { xcode: { command: ["xcodebuild", "-version"], lines: 2 } },
   });
   const appleAuditor = cfg.ios?.appleAudit

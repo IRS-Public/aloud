@@ -65,8 +65,10 @@ Reports land under the report root (`--out`, default `aloud-report`):
 
 Every evidence file records where it came from under `provenance`
 (`src/provenance.mjs`): the audited app's git commit and whether its
-working tree had uncommitted changes (aloud's own output, the report dir
-and the `.aloud-cache` download dir or `$ALOUD_CACHE`, does not count),
+working tree had uncommitted changes (aloud's own output does not count:
+the report dir, the config's baseline files and `openacr.out` draft, and
+the `.aloud-cache` download dir or `$ALOUD_CACHE`; a baseline written to
+another path with `--baseline` does count, so commit or ignore it),
 aloud's version and commit, the OS, architecture, and Node.js version,
 the GitHub Actions run id, attempt, and URL when there is one, and tool
 versions (the TalkBack build, the Accessibility Test Framework, the `adb`

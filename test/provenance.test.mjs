@@ -28,6 +28,7 @@ import {
   validateProvenance,
   validateSummaryProvenance,
 } from "../src/provenance.mjs";
+import { aloudOutputPaths } from "../src/config.mjs";
 import { aloudFindings, buildAloudAcr, normalizeAudit } from "../src/acr/from-aloud.mjs";
 import { validateFindings } from "../src/acr/index.mjs";
 
@@ -322,6 +323,50 @@ describe("readGitState in a real repo", () => {
     } finally {
       rmSync(app, { recursive: true, force: true });
     }
+  });
+
+  it("does not count a baseline or draft aloud wrote between legs as an app change", { skip: !hasGit && "git is not installed" }, () => {
+    // `aloud android`, then `aloud baseline`, then `aloud ios` in one
+    // checkout: the new baseline must not make the iOS leg look like
+    // different code, or `aloud openacr` would refuse to combine them.
+    const app = mkdtempSync(join(tmpdir(), "aloud-provenance-outputs-"));
+    const git = (...args) => execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.test", "-c", "commit.gpgsign=false", ...args], { cwd: app, encoding: "utf8" });
+    try {
+      git("init", "-q");
+      writeFileSync(join(app, "app.js"), "console.log(1);\n");
+      git("add", ".");
+      git("commit", "-q", "-m", "init");
+      const cfg = {
+        out: join(app, "aloud-report"),
+        baseline: { android: join(app, "aloud-baseline-android.json"), ios: join(app, "aloud-baseline-ios.json") },
+        openacr: { out: join(app, "acr-draft.yaml") },
+      };
+      writeFileSync(cfg.baseline.android, "{}");
+      writeFileSync(cfg.openacr.out, "title: x\n");
+      assert.equal(readGitState(app, { exclude: [cfg.out] }).workingTreeDirty, true);
+      assert.equal(readGitState(app, { exclude: aloudOutputPaths(cfg) }).workingTreeDirty, false);
+      writeFileSync(join(app, "other.js"), "console.log(2);\n");
+      assert.equal(readGitState(app, { exclude: aloudOutputPaths(cfg) }).workingTreeDirty, true);
+    } finally {
+      rmSync(app, { recursive: true, force: true });
+    }
+  });
+
+  it("has every walker exclude all of aloud's own output paths", () => {
+    for (const file of ["src/android/walk.mjs", "src/ios/walk.mjs", "src/web/run.mjs"]) {
+      assert.match(readFileSync(join(ROOT, file), "utf8"), /exclude: (\[OUT, \.\.\.)?aloudOutputPaths\(cfg\)/, file);
+    }
+  });
+});
+
+describe("aloudOutputPaths", () => {
+  it("lists the report root, baselines, and draft, skipping missing keys", () => {
+    assert.deepEqual(
+      aloudOutputPaths({ out: "/a/r", baseline: { android: "/a/b.json", ios: "/a/i.json" }, openacr: { out: "/a/acr.yaml" } }),
+      ["/a/r", "/a/b.json", "/a/i.json", "/a/acr.yaml"],
+    );
+    assert.deepEqual(aloudOutputPaths({ out: "/a/r" }), ["/a/r"]);
+    assert.deepEqual(aloudOutputPaths(undefined), []);
   });
 });
 

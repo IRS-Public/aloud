@@ -15,6 +15,7 @@ import {
 } from "./voiceover.mjs";
 import { reportWeb } from "./report.mjs";
 import { collectProvenance, formatTools } from "../provenance.mjs";
+import { aloudOutputPaths } from "../config.mjs";
 
 const json = (path, value) => {
   writeFileSync(`${path}.tmp`, `${JSON.stringify(value, null, 2)}\n`);
@@ -65,9 +66,10 @@ export async function captureWeb(cfg, { flow = [], screenId = "current", depende
       ...(safari ? { axeInjection: "apple-events" } : { playwright: WEB_VERSIONS.playwright, axeAdapter: WEB_VERSIONS["@axe-core/playwright"] }),
       screenReader: web.screenReader, headless: web.screenReader === "none" && !web.headed,
       locale: web.locale, viewport: web.viewport },
-    // Where the evidence came from (src/provenance.mjs). The report root
-    // holds aloud's own output, so it does not count as an app change.
-    provenance: collectProvenance({ exclude: [cfg.out], tools: {
+    // Where the evidence came from (src/provenance.mjs). The report root,
+    // baselines, and draft hold aloud's own output, so they do not count as
+    // an app change.
+    provenance: collectProvenance({ exclude: aloudOutputPaths(cfg), tools: {
       ...(safari ? {} : { playwright: WEB_VERSIONS.playwright }),
       "@axe-core/playwright": WEB_VERSIONS["@axe-core/playwright"],
       ...(readerKit ? { "@guidepup/guidepup": WEB_VERSIONS["@guidepup/guidepup"] } : {}),
