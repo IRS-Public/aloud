@@ -8,6 +8,7 @@
 // Xcode 27 real-VoiceOver API layer on later — rule ids here are stable and
 // live in the user's iOS baseline file (see `aloud baseline`).
 
+import { createFindings, hasArea, repeatedAnnouncements } from "../rules/shared.mjs";
 import { INTERACTIVE_ROLES, composeUtterance, isFocusable } from "./voiceover.mjs";
 
 // idb v1.1.8 (the brew-installed release) emits ONE flat JSON array in
@@ -87,7 +88,7 @@ function normFrame(f) {
 export function validateIosCapture(elements) {
   const containers = new Set(["Application", "Window", "SystemWide"]);
   const usable = elements.some((el) =>
-    el.role.trim() && !containers.has(el.role) && el.frame && el.frame.w > 0 && el.frame.h > 0 &&
+    el.role.trim() && !containers.has(el.role) && hasArea(el.frame) &&
     (isFocusable(el) || el.role === "Image"),
   );
   if (!usable) {
@@ -112,13 +113,10 @@ export function computeTranscript(elements) {
 }
 
 export function runIosChecks(elements) {
-  const violations = [];
-  const add = (ruleId, wcag, el, detail, severity = "error") =>
-    violations.push({ ruleId, wcag, severity, element: describe(el), detail });
+  const { violations, add } = createFindings(describe);
 
   for (const el of elements) {
-    const visible = el.frame && el.frame.w > 0 && el.frame.h > 0;
-    if (!visible) continue;
+    if (!hasArea(el.frame)) continue;
     const interactive = INTERACTIVE_ROLES.has(el.role);
 
     // 4.1.2 Name, Role, Value — an unlabeled control announces as just
@@ -219,17 +217,10 @@ export function runIosChecks(elements) {
 
   // 4.1.2 — two controls that announce identically are indistinguishable.
   // Warn-only, like the Android rule: lists legitimately repeat labels.
-  const spoken = new Map();
-  for (const el of elements) {
-    if (!INTERACTIVE_ROLES.has(el.role) || !el.enabled) continue;
-    if (!(el.frame && el.frame.w > 0 && el.frame.h > 0)) continue;
-    const utterance = composeUtterance(el).toLowerCase();
-    if (!utterance) continue;
-    if (spoken.has(utterance)) {
-      add("ios-duplicate-speakable", "4.1.2", el, `same announcement: "${utterance}"`, "warn");
-    } else {
-      spoken.set(utterance, el);
-    }
+  const controls = elements.filter((el) => INTERACTIVE_ROLES.has(el.role) && el.enabled && hasArea(el.frame));
+  const utteranceOf = (el) => composeUtterance(el).toLowerCase();
+  for (const { element, announcement } of repeatedAnnouncements(controls, utteranceOf)) {
+    add("ios-duplicate-speakable", "4.1.2", element, `same announcement: "${announcement}"`, "warn");
   }
 
   return violations;

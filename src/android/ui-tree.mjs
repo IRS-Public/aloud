@@ -7,6 +7,8 @@
 // opt-in AccessibilityNodeInfo/ATF companion, whose adapter also uses these rules.
 // These rules are the high-confidence subset that the dump can prove.
 
+import { createFindings, hasArea, repeatedAnnouncements } from "../rules/shared.mjs";
+
 // ── parser ──
 // uiautomator XML is flat-attribute <node> elements, nested or self-closing.
 // A tiny stack parser is enough; no XML library needed for this format.
@@ -123,7 +125,7 @@ export function validateUiCapture(nodes, appPackage) {
   const app = nodes.filter((n) => n.package === appPackage);
   if (!app.length) throw new Error(`no nodes from target app ${appPackage}; check the foreground app`);
   const usable = app.some((n) =>
-    n.class?.trim() && n.bounds && n.bounds.w > 0 && n.bounds.h > 0 &&
+    n.class?.trim() && hasArea(n.bounds) &&
     (speakableSelf(n) || ["focusable", "clickable", "long-clickable", "checkable"].some((key) => truthy(n[key]))),
   );
   if (!usable) {
@@ -146,21 +148,19 @@ export function runChecks(nodes, { densityDpi, appPackage }) {
   }
   const px2dp = (px) => (px * 160) / densityDpi;
   const app = nodes.filter((n) => n.package === appPackage);
-  const violations = [];
   // severity "error" counts toward the ratchet gate; "warn" is report-only
   // (duplicate labels are genuinely ambiguous but list-heavy screens repeat
   // labels legitimately — a warn keeps the signal without gating on it).
-  const add = (ruleId, wcag, node, detail, severity = "error") =>
-    violations.push({ ruleId, wcag, severity, element: describe(node), detail,
-      ...(node.nativeId !== undefined ? { nativeId: node.nativeId, source: "accessibility-node-info" } : {}) });
+  // Nodes from the ATF companion keep their native id on each finding.
+  const { violations, add } = createFindings(describe, (node) =>
+    node.nativeId !== undefined ? { nativeId: node.nativeId, source: "accessibility-node-info" } : {});
 
   for (const n of app) {
     const interactive = truthy(n.clickable) || truthy(n["long-clickable"]) || truthy(n.checkable);
     // Nodes with non-positive bounds are clipped/offscreen (observed live:
     // scrolled-out list rows dump with negative heights) — a screen reader
     // can't reach them here, so no rule should judge them.
-    const visible = n.bounds && n.bounds.w > 0 && n.bounds.h > 0;
-    if (!visible) continue;
+    if (!hasArea(n.bounds)) continue;
 
     // 4.1.2 Name, Role, Value — an interactive element with no speakable text
     // anywhere in its subtree is announced as just "button"/"unlabeled".
@@ -238,29 +238,14 @@ export function runChecks(nodes, { densityDpi, appPackage }) {
 
   // 4.1.2 — two interactive elements announcing identically are
   // indistinguishable to a screen-reader user (ATF DuplicateSpeakableText).
-  const spoken = new Map();
-  for (const n of app) {
-    if (!(truthy(n.clickable) && truthy(n.enabled))) continue;
-    if (!(n.bounds && n.bounds.w > 0 && n.bounds.h > 0)) continue;
-    const label = ((n.text || "").trim() || (n["content-desc"] || "").trim()).toLowerCase();
-    if (!label) continue;
-    if (spoken.has(label)) {
-      const first = spoken.get(label);
-      if (first.flagged !== true) {
-        add(
-          "native-duplicate-speakable",
-          "4.1.2",
-          n,
-          `same announcement as ${describe(first.node)}: "${label}"`,
-          "warn",
-        );
-        first.flagged = true;
-      } else {
-        add("native-duplicate-speakable", "4.1.2", n, `same announcement: "${label}"`, "warn");
-      }
-    } else {
-      spoken.set(label, { node: n, flagged: false });
-    }
+  // The first repeat of a label names the node it duplicates.
+  const tappable = app.filter((n) => truthy(n.clickable) && truthy(n.enabled) && hasArea(n.bounds));
+  const labelOf = (n) => ((n.text || "").trim() || (n["content-desc"] || "").trim()).toLowerCase();
+  for (const { element, announcement, first, occurrence } of repeatedAnnouncements(tappable, labelOf)) {
+    const detail = occurrence === 1
+      ? `same announcement as ${describe(first)}: "${announcement}"`
+      : `same announcement: "${announcement}"`;
+    add("native-duplicate-speakable", "4.1.2", element, detail, "warn");
   }
 
   return violations;
