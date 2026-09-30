@@ -19,8 +19,9 @@ web checks run without a screen reader by default.
   through Xcode 27's `XCUIVoiceOverService` uses
   `--voiceover real --no-gate` and labels traversal as partial.
 - **Web (experimental)**: Chromium page checks, screenshots, and structural
-  snapshots, with an opt-in NVDA command-capture adapter for Windows. Web
-  evidence is report-only. [Setup and validation status](docs/web.md).
+  snapshots, with an opt-in NVDA command-capture adapter for Windows and an
+  unvalidated Safari + VoiceOver adapter for disposable GitHub-hosted macOS
+  runners. Web evidence is report-only. [Setup and validation status](docs/web.md).
 
 Both mobile audit legs have passed real CI runs on the IRS mobile app project
 it was built for. Browser validation covers Chromium fixtures and the public
@@ -178,6 +179,10 @@ fixtures and the external TodoMVC scenarios have passed repeated runs,
 including NVDA on Windows; [recorded results and limits](docs/web.md#validation-and-promotion)
 describe the tested scope.
 
+`--screen-reader voiceover` drives Safari and VoiceOver instead. It runs only
+on a disposable GitHub-hosted macOS runner that opts in, and has not yet
+passed a hosted run; see [VoiceOver command capture](docs/web.md#voiceover-command-capture-safari).
+
 Web evidence is **report-only**: browser baselines and regression gates are
 disabled, and every web OpenACR component remains `not-evaluated`.
 
@@ -240,7 +245,9 @@ Both templates use only GitHub-owned actions. See [docs/ci.md](docs/ci.md).
 
 The repository's [browser acceptance workflow](.github/workflows/web.yml)
 runs Chromium fixtures on relevant pull requests. Manual dispatch adds the
-external web-app scenarios and can enable Windows NVDA validation.
+external web-app scenarios and can enable Windows NVDA validation. The
+[VoiceOver workflow](.github/workflows/web-voiceover.yml) runs the Safari +
+VoiceOver fixtures on manual dispatch only.
 
 ## How it works
 
@@ -266,7 +273,8 @@ limits are documented in [docs/ios.md](docs/ios.md).
 
 **Web** captures configured Chromium page states with Playwright, runs axe-core,
 and retains ARIA snapshots, screenshots, and keyboard/focus assertions. Opt-in
-NVDA adds captured command output. Run inventories and artifact hashes are
+NVDA adds captured command output; opt-in VoiceOver drives Safari through Apple
+Events on a disposable macOS runner. Run inventories and artifact hashes are
 verified when reports are regenerated. Scripted scenario completion does not
 establish full traversal or conformance; see [web coverage](docs/web.md).
 
@@ -346,7 +354,8 @@ Roadmap, in implementation order:
 6. **Web app evidence.** Experimental `aloud web` uses pinned Chromium and
    axe-core, with a separate NVDA command-capture adapter. Repeated Windows
    fixtures validate scripted command capture; browser gates still require
-   their own coverage policy. [Scope and validation](docs/web.md).
+   their own coverage policy. A Safari + VoiceOver adapter awaits its first
+   hosted acceptance run. [Scope and validation](docs/web.md).
 
 Acceptance criteria and dependencies: [technical roadmap](docs/roadmap.md).
 External app results and limits: [Wikipedia mobile validation](docs/real-app-validation.md)
@@ -375,8 +384,8 @@ wrong, open an issue; we would genuinely like to know.
 \* Real TalkBack on Android today. On iOS the default transcript is computed and
 labeled as computed; opt-in real VoiceOver captures are partial on Xcode 27
 GA, with the experimental harness already in this repo. Web defaults to
-structural checks; opt-in NVDA preserves Guidepup-formatted command output
-and remains report-only.
+structural checks; opt-in NVDA (and experimental Safari + VoiceOver) preserve
+Guidepup-formatted command output and remain report-only.
 
 ## License
 

@@ -90,7 +90,8 @@ Commands:
                real checks and report into ./aloud-demo-report [--out <dir>]
   android      Run the Android leg: TalkBack transcript pass + tree pass + report + gate
   ios          Run the iOS leg: computed VoiceOver transcript + tree checks + report + gate
-  web          Experimental Chromium page checks and optional NVDA command evidence (report-only)
+  web          Experimental Chromium page checks and optional NVDA or VoiceOver command evidence
+               (report-only)
   talkback     Manage TalkBack on the device: status | install <apk> | enable | disable |
                configure | get [--foss|--build]
   tts          Build or install the optional silent recording TTS engine
@@ -138,8 +139,11 @@ Baseline flags:
 Web flags:
   --url <url>                  HTTP(S) page or base URL for a manifest
   --screens <file>             Web scenario manifest; --flow selects flows
-  --screen-reader none|nvda    NVDA requires a dedicated Windows desktop
-  --storage-state <file>       Playwright authentication state (kept out of artifacts)
+  --screen-reader none|nvda|voiceover
+                               NVDA requires a dedicated Windows desktop; VoiceOver uses
+                               Safari on a disposable GitHub-hosted macOS runner only
+  --storage-state <file>       Playwright authentication state (kept out of artifacts;
+                               Chromium only)
   --headed                    Show Chromium (always enabled with NVDA)
   --no-gate                   Optional acknowledgment; web captures are always report-only
 

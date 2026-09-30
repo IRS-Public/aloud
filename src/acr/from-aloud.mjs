@@ -606,9 +606,13 @@ function transcriptMethods(audits) {
 
 function webNote(web) {
   const { browser, browserVersion, screenReader } = web.environment;
-  const speech = screenReader === "nvda"
-    ? "NVDA command output formatted by Guidepup"
-    : "none; no screen reader was run";
+  const speeches = {
+    none: "none; no screen reader was run",
+    nvda: "NVDA command output formatted by Guidepup",
+    voiceover: "VoiceOver command output formatted by Guidepup",
+  };
+  if (!Object.hasOwn(speeches, screenReader)) throw new Error(`invalid report-only web summary: unknown screen reader ${screenReader}`);
+  const speech = speeches[screenReader];
   return (
     `Experimental web checks captured ${Object.keys(web.screens).length} named state(s) in ` +
     `${browser} ${browserVersion}. Speech source: ${speech}. Scripted scenario completion does not ` +

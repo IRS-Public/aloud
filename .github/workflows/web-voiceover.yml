@@ -1,0 +1,38 @@
+name: Experimental web VoiceOver evidence
+# Safari + VoiceOver on a disposable GitHub-hosted macOS runner, dispatched
+# by hand only. Guidepup setup changes the runner's accessibility settings,
+# which is why aloud refuses to start VoiceOver anywhere else: it requires
+# GITHUB_ACTIONS=true, RUNNER_ENVIRONMENT=github-hosted and the explicit
+# ALOUD_ALLOW_NATIVE_DESKTOP opt-in set below.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  voiceover:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      ALOUD_ALLOW_NATIVE_DESKTOP: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npx --yes @guidepup/setup@0.25.3 setup --ci
+      - run: npx --yes @guidepup/setup@0.25.3 install
+      # Aloud observes its Safari window through Apple Events. Full keyboard
+      # access lets Tab reach buttons and checkboxes; Safari's tab-to-links
+      # preference is left off, and aloud sends Option+Tab to reach links.
+      - name: Prepare Safari
+        run: |
+          defaults write com.apple.Safari AllowJavaScriptFromAppleEvents -bool true
+          defaults write NSGlobalDomain AppleKeyboardUIMode -int 2
+      - run: npm run test:web:voiceover
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-voiceover-evidence
+          path: aloud-report/web-voiceover-smoke
+          retention-days: 14

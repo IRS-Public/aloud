@@ -2,7 +2,9 @@
 
 `aloud web` captures named states in Chromium, runs axe-core, and writes an
 HTML evidence page. Opt-in NVDA capture adds command output and interaction
-assertions on a dedicated Windows desktop. This milestone is **report-only**:
+assertions on a dedicated Windows desktop. Opt-in VoiceOver capture drives
+Safari on a disposable GitHub-hosted macOS runner; it has not yet passed a
+hosted acceptance run. This milestone is **report-only**:
 there is no browser baseline or regression gate yet. Every web component in
 the OpenACR draft remains `not-evaluated`.
 
@@ -109,15 +111,77 @@ notification provenance. These limits keep the integration report-only.
 The runner stops its reader and closes its browser on ordinary success or
 failure. Cleanup failure prevents a completed report. A forced kill, hung
 native command, or machine failure can require recovery of the disposable
-desktop. macOS VoiceOver, Safari, Firefox, JAWS, and mobile browsers are not
-part of this milestone.
+desktop. Firefox, JAWS, and mobile browsers are not part of this milestone.
+
+## VoiceOver command capture (Safari)
+
+`--screen-reader voiceover` (or `web.screenReader: "voiceover"`) runs the
+same scenarios in Safari with macOS VoiceOver, through Guidepup 0.34.0. It is
+ported from the USWDS accessibility harness's native driver and is
+**unvalidated**: the [web VoiceOver workflow](../.github/workflows/web-voiceover.yml)
+exists, but no hosted run has been reviewed yet.
+
+Starting VoiceOver changes the machine's accessibility settings, so Aloud
+refuses to run it on a developer's Mac. It requires macOS and all of
+`GITHUB_ACTIONS=true`, `RUNNER_ENVIRONMENT=github-hosted`, and
+`ALOUD_ALLOW_NATIVE_DESKTOP=1`, and checks them before touching any output.
+These variables prevent accidents; they are not a security boundary. It also
+refuses to start when VoiceOver is already running, and at cleanup it stops
+only the VoiceOver processes it started (matched by process id and start
+time). The runner needs Guidepup's setup, Safari's "Allow JavaScript from
+Apple Events", and full keyboard access:
+
+```sh
+npx --yes @guidepup/setup@0.25.3 setup --ci
+npx --yes @guidepup/setup@0.25.3 install
+defaults write com.apple.Safari AllowJavaScriptFromAppleEvents -bool true
+defaults write NSGlobalDomain AppleKeyboardUIMode -int 2
+ALOUD_ALLOW_NATIVE_DESKTOP=1 npx aloud web --url http://127.0.0.1:3000 --screen-reader voiceover
+```
+
+Safari WebDriver blocks native keys, so Aloud does not use Playwright here.
+It opens its own Safari window and observes it through Apple Events. That
+changes what the evidence can say:
+
+- `click`, `fill`, and `wait` run as page JavaScript. Their events are not
+  trusted input, and selectors are plain CSS (no Playwright selector
+  extensions, no piercing of shadow roots).
+- `press` goes to Safari through VoiceOver. Safari's tab-to-links preference
+  is ignored on hosted runners, so `Tab` and `Shift+Tab` are sent as
+  `Option+Tab` and `Option+Shift+Tab`; each step records the key actually
+  sent as `sentKey`.
+- `voiceover` steps send a VoiceOver cursor command: `next`, `previous`,
+  `nextHeading`, `nextLandmark`, `nextLink`, `act`, `interact`, or
+  `stopInteracting`. `speechIncludes` works on these and on `press` steps.
+- Before each command, Aloud waits until VoiceOver's last phrase has been
+  unchanged for one second (at most five), so earlier speech does not land
+  in the command's log. After navigation it records what VoiceOver said as
+  the page loaded; no command is sent, unlike NVDA's `Control+Home`.
+- Apple Events cannot see HTTP status, so a direct request from Node checks
+  the URL first, and Safari's navigation timing is checked too when Safari
+  reports a status.
+- The structural snapshot is a DOM outline computed in the page
+  (`safari-dom-outline`): roles, simple names, and common states. It is not
+  Safari's accessibility tree.
+- axe-core runs from the same pinned build that `@axe-core/playwright` uses,
+  injected into the page. Frames are not injected.
+- Safari's language comes from the system; a `web.locale` that differs fails
+  the run. The window is sized so the page area matches `web.viewport`.
+- The screenshot is `screencapture` of the window's screen rectangle and
+  needs Screen Recording permission on the runner.
+- Playwright storage state cannot be loaded, so `storageState` is refused.
+
+Speech is labelled `voiceover-guidepup`, with the same limits as NVDA's
+command logs: formatted by Guidepup, not audio, and silent windows prove
+nothing. A timed-out command is never retried, and no further reader is
+started in that process.
 
 ## Evidence and re-aggregation
 
 The run writes `web-run.json`, per-state `*.web.json`, screenshots, a summary,
 and a self-contained HTML page. `web-run.json` records the run's provenance
 (commit, dirty state, machine, CI run, and the Playwright, axe-core,
-Chromium, and NVDA versions; see [how-it-works](how-it-works.md)), even for
+Chromium or Safari, and NVDA or VoiceOver versions; see [how-it-works](how-it-works.md)), even for
 a failed run, and the summary and HTML page state it. Before each final checkpoint it records a
 Playwright ARIA snapshot; after axe and screenshot capture it checks that the
 URL and ARIA snapshot still match. This detects exposed structural changes,
@@ -156,6 +220,12 @@ The real Chromium suite exercises validation errors, dialog focus return,
 live content, axe findings, empty pages, redirects, HTTP failures, failed
 assertions, evidence regeneration, and conservative OpenACR output. The
 separate unit suite exercises malformed artifacts and command-log handling.
+
+Run `npm run test:web:voiceover` only through the **Experimental web
+VoiceOver evidence** workflow (manual dispatch). It repeats the NVDA fixture
+scenarios in Safari, plus VoiceOver cursor commands, and retains raw
+artifacts. The unit suite `test/web-voiceover.test.mjs` covers the driver
+and its wiring with fakes; it never starts Safari or VoiceOver.
 
 Run `npm run test:web:nvda` on the prepared Windows desktop, or dispatch the
 **Experimental web evidence** workflow with the NVDA input enabled. It repeats

@@ -2,11 +2,30 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readWebReport, webSummary } from "./evidence.mjs";
 import { describeProvenance } from "../provenance.mjs";
+import { capturesSpeech } from "./config.mjs";
 
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const phrases = (lines) => lines.length ? `<ol>${lines.map((line) => `<li><q>${esc(line)}</q></li>`).join("")}</ol>` : "<p>No command output captured.</p>";
 const results = (rules) => rules.length ? `<ul>${rules.map((rule) => `<li><strong>${esc(rule.help)}</strong> <code>${esc(rule.id)}</code>
   <p>${esc(rule.description)}</p><ul>${rule.nodes.map((node) => `<li><code>${esc(JSON.stringify(node.target))}</code><p>${esc(node.failureSummary ?? "Review raw result")}</p></li>`).join("")}</ul></li>`).join("")}</ul>` : "<p>None reported by the selected engine.</p>";
+
+const READER_NAMES = { nvda: "NVDA", voiceover: "VoiceOver" };
+
+// The run's speech source in one sentence.
+function readerNote(env) {
+  if (env.screenReader === "none") return "No screen reader was run. ARIA snapshots describe page structure; no speech was computed or captured.";
+  const name = READER_NAMES[env.screenReader];
+  const safari = env.screenReader === "voiceover"
+    ? " Safari was driven through Apple Events: setup actions are page scripts, not trusted input, and Tab was sent as Option+Tab. The structural outline is computed from the DOM, not read from Safari's accessibility tree."
+    : "";
+  return `${name} ${esc(env.screenReaderVersion)} · Guidepup ${esc(env.guidepup)}. Guidepup formats and groups captured command output. ` +
+    "This is not an audio recording or proof of complete speech delivery. Delayed announcements outside command capture windows may be absent." + safari;
+}
+
+// The heading for the speech recorded before the first step.
+const initialHeading = (reader) => reader === "voiceover"
+  ? "Speech after the page loaded (no command sent)"
+  : "Initial NVDA command (Control+Home)";
 
 export function renderWebReport({ run, screens }) {
   const env = run.environment;
@@ -24,10 +43,10 @@ export function renderWebReport({ run, screens }) {
   </style></head><body><a class="skip" href="#evidence">Skip to evidence</a>
   <header><p>aloud · Web</p><h1>Experimental web evidence</h1>
   <p>${esc(env.browser)} ${esc(env.browserVersion)} · ${esc(env.os)} ${esc(env.osVersion)} · ${esc(env.locale)} · ${env.viewport.width} × ${env.viewport.height}</p>
-  <p>axe-core ${esc(env.axe)} · Playwright ${esc(env.playwright)} · ${esc(run.generated)}</p>
+  <p>axe-core ${esc(env.axe)} · ${env.playwright ? `Playwright ${esc(env.playwright)}` : "injected through Apple Events"} · ${esc(run.generated)}</p>
   ${run.provenance ? `<p>${esc(describeProvenance(run.provenance))}</p>` : ""}
   <p class="note"><strong>Report-only.</strong> These checks cover named page states and scripted actions. Completing a scenario does not establish full page traversal or accessibility conformance. Skipped checks and results requiring review are not passes.</p>
-  <p>${env.screenReader === "none" ? "No screen reader was run. ARIA snapshots describe page structure; no speech was computed or captured." : `NVDA ${esc(env.screenReaderVersion)} · Guidepup ${esc(env.guidepup)}. Guidepup formats and groups captured command output. This is not an audio recording or proof of complete speech delivery. Delayed announcements outside command capture windows may be absent.`}</p>
+  <p>${readerNote(env)}</p>
   <nav aria-label="Captured states"><ul>${Object.values(screens).map((s) => `<li><a href="#${esc(s.screen)}">${esc(s.title)}</a></li>`).join("")}</ul></nav></header>
   <main id="evidence">${Object.values(screens).map((s) => `<section id="${esc(s.screen)}"><h2>${esc(s.title)}</h2>
     <p><code>${esc(s.url)}</code></p><p>Scripted scenario completed · full traversal unverified</p>
@@ -35,9 +54,9 @@ export function renderWebReport({ run, screens }) {
     <h3>Automated findings</h3>${results(s.axe.violations)}
     <h3>Needs review</h3>${results(s.axe.incomplete)}
     <details><summary>Check inventory</summary><p>${s.axe.passes.length} rules reported passes; ${s.axe.inapplicable.length} rules were inapplicable. Raw results retain the engine's rule and element coverage.</p></details>
-    <details><summary>Structural ARIA snapshot</summary><pre>${esc(s.ariaSnapshot)}</pre></details>
-    ${s.speechSource === "none" ? "" : `<h3>Initial NVDA command (Control+Home)</h3>${phrases(s.navigationSpeech)}`}
-    <h3>Scripted actions</h3>${s.steps.length ? `<ol>${s.steps.map((step) => `<li><code>${esc(JSON.stringify(step.action))}</code><p>Completed${step.action.expect ? " · assertions satisfied" : ""}</p>${s.speechSource === "none" ? "" : (["press", "nvda"].includes(step.action.action) ? phrases(step.speech) : "<p>Browser setup action; speech was not captured.</p>")}</li>`).join("")}</ol>` : "<p>No interaction steps requested; only the final page state was checked.</p>"}
+    <details><summary>${s.snapshotSource === "safari-dom-outline" ? "Structural DOM outline (computed in the page)" : "Structural ARIA snapshot"}</summary><pre>${esc(s.ariaSnapshot)}</pre></details>
+    ${s.speechSource === "none" ? "" : `<h3>${initialHeading(env.screenReader)}</h3>${phrases(s.navigationSpeech)}`}
+    <h3>Scripted actions</h3>${s.steps.length ? `<ol>${s.steps.map((step) => `<li><code>${esc(JSON.stringify(step.action))}</code><p>Completed${step.action.expect ? " · assertions satisfied" : ""}${step.sentKey && step.sentKey !== step.action.key ? ` · sent as ${esc(step.sentKey)}` : ""}</p>${s.speechSource === "none" ? "" : (capturesSpeech(step.action, env.screenReader) ? phrases(step.speech) : "<p>Browser setup action; speech was not captured.</p>")}</li>`).join("")}</ol>` : "<p>No interaction steps requested; only the final page state was checked.</p>"}
     <p><a href="${s.screen}.web.json">Raw capture</a></p></section>`).join("")}</main>
     <footer><p><a href="web-run.json">Run identity, environment, scope, and artifact receipts</a></p></footer></body></html>`;
 }

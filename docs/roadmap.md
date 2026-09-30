@@ -129,3 +129,6 @@ Next acceptance steps:
   gating. Baselines must identify the browser/reader/OS/locale/viewport and rule suite.
 - Validate additional browser and screen-reader combinations independently. A
   Playwright WebKit run must not be labeled as Safari coverage.
+- Run the Safari + VoiceOver fixtures (`web-voiceover.yml`) on a hosted macOS
+  runner, review the retained command logs, screenshots, and DOM outlines, and
+  record the environment before describing that adapter as validated.

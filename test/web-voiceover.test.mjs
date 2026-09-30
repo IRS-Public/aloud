@@ -1,13 +1,23 @@
-// Device-free tests for the experimental Safari + VoiceOver web driver.
+// Device-free tests for the experimental Safari + VoiceOver web driver and
+// its wiring into aloud web.
 // Every operating-system call is a fake: nothing here starts VoiceOver,
 // opens Safari, or runs osascript.
 import assert from "node:assert/strict";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import {
   SETTLE, assertNativeDesktop, awaitQuiet, matchingOwnedProcesses, parseVoiceOverProcesses, resetVoiceOverTimeoutForTests,
   safariKey, settleVoiceOver, speechLog, startVoiceOver, stopOwnedVoiceOver, stopVoiceOver, voiceOverCommand, withAttempts,
 } from "../src/web/voiceover.mjs";
 import { createSafari, domOutline, pageResult, pageScript } from "../src/web/safari.mjs";
+import { loadConfig } from "../src/config.mjs";
+import { WEB_DEFAULTS, validateWebConfig, webScreens } from "../src/web/config.mjs";
+import { hash, readWebReport, validateWebCapture, webSummary } from "../src/web/evidence.mjs";
+import { renderWebReport } from "../src/web/report.mjs";
+import { captureWeb } from "../src/web/run.mjs";
+import { buildAcr } from "../src/report/openacr.mjs";
 
 const HOSTED = { GITHUB_ACTIONS: "true", RUNNER_ENVIRONMENT: "github-hosted", ALOUD_ALLOW_NATIVE_DESKTOP: "1" };
 const VO = "/System/Library/CoreServices/VoiceOver.app/Contents/MacOS/VoiceOver";
@@ -242,7 +252,10 @@ test("Safari page scripts report values and errors through a JSON envelope", () 
 
 // A fake page world for Safari's `do JavaScript`: page scripts run as real
 // JavaScript against a small document the test controls.
-function fakeSafari({ language = "en-US", chrome = [0, 80], status = 200, axeVersion = "4.13.0" } = {}) {
+// `body` is the page content that the DOM outline reads.
+const AXE_RESULT = { testEngine: { name: "axe-core", version: "4.13.0" }, incomplete: [], passes: [], inapplicable: [],
+  violations: [{ id: "button-name", tags: ["wcag412"], help: "Name buttons", description: "Buttons need names", nodes: [{ target: ["#unnamed"], html: "<button></button>" }] }] };
+function fakeSafari({ language = "en-US", chrome = [0, 80], status = 200, axeVersion = "4.13.0", body = element("BODY") } = {}) {
   const world = { windows: [], closed: [], activated: 0, bounds: [0, 0, 0, 0], scripts: 0 };
   const makeDocument = (url) => {
     const elements = { "#email": { tagName: "INPUT", value: "", focused: false, clicked: 0, visible: true, events: [] } };
@@ -252,7 +265,8 @@ function fakeSafari({ language = "en-US", chrome = [0, 80], status = 200, axeVer
         getClientRects: () => (el.visible ? [{}] : []), dispatchEvent: (event) => el.events.push(event.type),
       });
     }
-    return { URL: url, readyState: "complete", elements, querySelector: (sel) => elements[sel] ?? null, hasFocus: () => true };
+    return { URL: url, readyState: "complete", elements, body, activeElement: null, getElementById: () => null,
+      querySelector: (sel) => (sel === "body" ? body : elements[sel] ?? null), hasFocus: () => true };
   };
   world.document = makeDocument("about:blank");
   world.window = {};
@@ -270,17 +284,17 @@ function fakeSafari({ language = "en-US", chrome = [0, 80], status = 200, axeVer
       const { document, window } = world;
       const navigator = { language };
       const performance = { getEntriesByType: () => [{ responseStatus: status }] };
-      const getComputedStyle = () => ({ visibility: "visible" });
+      const getComputedStyle = () => ({ display: "block", visibility: "visible" });
       const innerWidth = world.bounds[2] - chrome[0], innerHeight = world.bounds[3] - chrome[1];
       Object.assign(window, { innerWidth, innerHeight });
       return String(new Function("document", "window", "navigator", "performance", "getComputedStyle", "Event",
         `return ${source}`)(document, window, navigator, performance, getComputedStyle, class { constructor(type) { this.type = type; } }));
     },
-    screenshot: async (path, bounds) => { world.shot = { path, bounds }; },
+    screenshot: async (path, bounds) => { world.shot = { path, bounds }; writeFileSync(path, "fixture image"); },
     fetch: async (url) => ({ ok: !url.includes("missing"), status: url.includes("missing") ? 404 : 200 }),
     axeSource: () => ({
       version: "4.13.0",
-      source: `window.axe = { version: "${axeVersion}", run: async () => ({ testEngine: { name: "axe-core", version: "4.13.0" }, url: document.URL, violations: [] }) }`,
+      source: `window.axe = { version: "${axeVersion}", run: async () => ({ ...${JSON.stringify(AXE_RESULT)}, url: document.URL }) }`,
     }),
   };
   return { io, world };
@@ -324,8 +338,9 @@ test("the Safari page navigates, drives setup actions as page scripts, and scans
   const result = await page.axe();
   assert.equal(result.testEngine.name, "axe-core");
   assert.equal(result.url, "http://127.0.0.1:3000/form");
-  await page.screenshot({ path: "/tmp/shot.png" });
-  assert.deepEqual(world.shot, { path: "/tmp/shot.png", bounds: world.bounds });
+  const shot = join(mkdtempSync(join(tmpdir(), "aloud-safari-shot-")), "shot.png");
+  await page.screenshot({ path: shot });
+  assert.deepEqual(world.shot, { path: shot, bounds: world.bounds });
 
   // A page that never loads times out instead of reading the old document.
   io.setUrl = async () => {};
@@ -342,7 +357,7 @@ test("the Safari page navigates, drives setup actions as page scripts, and scans
 });
 
 // A tiny DOM for the outline, which normally runs inside Safari.
-const text = (value) => ({ nodeType: 3, textContent: value });
+function text(value) { return { nodeType: 3, textContent: value }; }
 function element(tagName, attributes = {}, children = [], extra = {}) {
   return {
     nodeType: 1, tagName, childNodes: children, ...extra,
@@ -395,4 +410,167 @@ test("the Safari DOM outline lists roles, names, and states and skips hidden con
     if (saved.document === undefined) delete globalThis.document;
     if (saved.getComputedStyle === undefined) delete globalThis.getComputedStyle;
   }
+});
+
+// ── wiring: config, evidence, report, capture ──
+
+test("web config accepts voiceover, its cursor steps, and speech assertions on captured steps only", () => {
+  const web = { ...structuredClone(WEB_DEFAULTS), url: "https://example.test/", screenReader: "voiceover" };
+  assert.doesNotThrow(() => validateWebConfig(web));
+  assert.throws(() => validateWebConfig({ ...web, screenReader: "jaws" }), /none, nvda, or voiceover/);
+  assert.throws(() => validateWebConfig({ ...web, storageState: "auth.json" }), /storageState is not supported with voiceover/);
+  const manifest = (steps) => [{ id: "flow", screens: [{ id: "form", url: "/form", steps }] }];
+  assert.doesNotThrow(() => webScreens(web, manifest([
+    { action: "press", key: "Tab", expect: { speechIncludes: "Save" } },
+    { action: "voiceover", command: "interact", expect: { speechIncludes: "group" } },
+    { action: "voiceover", command: "stopInteracting" },
+  ])));
+  for (const steps of [
+    [{ action: "voiceover", command: "eval" }],
+    [{ action: "nvda", command: "next" }],
+    [{ action: "voiceover" }],
+    [{ action: "click", selector: "#save", expect: { speechIncludes: "Saved" } }],
+  ]) assert.throws(() => webScreens(web, manifest(steps)));
+  // NVDA runs keep their own command list; VoiceOver steps are refused there.
+  assert.throws(() => webScreens({ ...web, screenReader: "nvda" }, manifest([{ action: "voiceover", command: "next" }])), /requires VoiceOver/);
+  assert.throws(() => webScreens({ ...web, screenReader: "nvda" }, manifest([{ action: "nvda", command: "interact" }])), /requires NVDA/);
+  assert.throws(() => webScreens({ ...web, screenReader: "none" }, manifest([{ action: "voiceover", command: "next" }])), /requires VoiceOver/);
+});
+
+function voiceOverFixture() {
+  const screen = { id: "home", url: "https://example.test/", expectedUrl: "https://example.test/", steps: [
+    { action: "press", key: "Tab", expect: { speechIncludes: "Save" } },
+    { action: "voiceover", command: "next" },
+    { action: "click", selector: "#email" },
+  ] };
+  const run = { schemaVersion: 1, platform: "web", runId: "fixture", status: "completed", cleanupComplete: true,
+    generated: "2026-09-30T00:00:00Z", receipts: {}, screens: [screen],
+    environment: { os: "darwin", osVersion: "25.0.0", browser: "safari", browserVersion: "26.0", axeInjection: "apple-events",
+      axe: "4.13.0", screenReader: "voiceover", screenReaderVersion: "fixture-voiceover", guidepup: "0.34.0",
+      locale: "en-US", viewport: { width: 1280, height: 800 }, headless: false } };
+  const capture = { schemaVersion: 1, platform: "web", runId: "fixture", screen: "home", title: "Home", status: "completed",
+    requestedUrl: screen.url, url: screen.url, speechSource: "voiceover-guidepup", navigationSpeech: ["Home, web content"],
+    steps: [
+      { sequence: 0, action: screen.steps[0], completed: true, speech: ["Save, button"], focused: null, assertionsPassed: true, sentKey: "Option+Tab" },
+      { sequence: 1, action: screen.steps[1], completed: true, speech: ["Help, link"], focused: null, assertionsPassed: true },
+      { sequence: 2, action: screen.steps[2], completed: true, speech: [], focused: null, assertionsPassed: true },
+    ],
+    ariaSnapshot: '- heading "Home" [level=1]', snapshotSource: "safari-dom-outline",
+    coverage: { scope: "scripted-scenario", scenarioComplete: true, fullTraversal: false },
+    axe: { ...structuredClone(AXE_RESULT), url: screen.url } };
+  return { run, screen, capture };
+}
+
+test("VoiceOver evidence carries its speech source, sent keys, and Safari outline, and cannot borrow another reader's", () => {
+  const { run, screen, capture } = voiceOverFixture();
+  assert.doesNotThrow(() => validateWebCapture(capture, run, screen));
+  for (const mutate of [
+    (c) => { c.speechSource = "nvda-guidepup"; },
+    (c) => { c.snapshotSource = "playwright-aria-snapshot"; },
+    (c) => { delete c.steps[0].sentKey; },
+    (c) => { c.steps[0].sentKey = "Tab"; },
+    (c) => { c.steps[1].sentKey = "Option+Tab"; },
+    (c) => { c.steps[2].speech = ["invented"]; },
+    (c) => { c.steps[0].speech = ["Cancel, button"]; },
+  ]) {
+    const changed = structuredClone(capture);
+    mutate(changed);
+    assert.throws(() => validateWebCapture(changed, run, screen));
+  }
+  // A Chromium run cannot claim a Safari outline, and NVDA cannot claim VoiceOver speech.
+  assert.throws(() => validateWebCapture(capture, { ...run, environment: { ...run.environment, screenReader: "nvda" } }, screen));
+});
+
+test("persisted VoiceOver runs require Safari provenance and render their own speech note", () => {
+  const { run, capture } = voiceOverFixture();
+  const dir = mkdtempSync(join(tmpdir(), "aloud-web-voiceover-"));
+  const write = (value) => writeFileSync(join(dir, "web-run.json"), JSON.stringify(value));
+  try {
+    mkdirSync(join(dir, "shots"));
+    writeFileSync(join(dir, "home.web.json"), JSON.stringify(capture));
+    writeFileSync(join(dir, "shots", "home.png"), "fixture image");
+    run.receipts.home = { capture: hash(readFileSync(join(dir, "home.web.json"))), screenshot: hash("fixture image") };
+    write(run);
+    const evidence = readWebReport(dir);
+    assert.equal(webSummary(evidence).screens.home.utterances, 3);
+    const html = renderWebReport(evidence);
+    assert.match(html, /VoiceOver fixture-voiceover · Guidepup 0\.34\.0/);
+    assert.match(html, /sent as Option\+Tab/);
+    assert.match(html, /Speech after the page loaded \(no command sent\)/);
+    assert.match(html, /Structural DOM outline/);
+    assert.match(html, /injected through Apple Events/);
+    assert.doesNotMatch(html, /Initial NVDA command/);
+    for (const env of [
+      { ...run.environment, browser: "chromium" },
+      { ...run.environment, os: "linux" },
+      { ...run.environment, screenReaderVersion: "" },
+      { ...run.environment, playwright: "1.63.0" },
+      { ...run.environment, axeInjection: undefined },
+    ]) {
+      write({ ...run, environment: env });
+      assert.throws(() => readWebReport(dir), /invalid web evidence/);
+    }
+    write(run);
+    const acr = buildAcr({ appName: "Fixture", productVersion: "1", date: "2026-09-30", web: webSummary(readWebReport(dir)) });
+    assert.match(acr.notes, /VoiceOver command output formatted by Guidepup/);
+    assert.throws(() => buildAcr({ appName: "Fixture", productVersion: "1", date: "2026-09-30",
+      web: { ...webSummary(evidence), environment: { ...run.environment, screenReader: "jaws" } } }), /unknown screen reader/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("aloud web refuses VoiceOver on a developer desktop before touching output", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "aloud-web-voiceover-guard-"));
+  const saved = process.env.ALOUD_ALLOW_NATIVE_DESKTOP;
+  delete process.env.ALOUD_ALLOW_NATIVE_DESKTOP;
+  try {
+    const cfg = loadConfig(undefined, { out: dir, web: { url: "http://127.0.0.1:3000/", screenReader: "voiceover" } });
+    await assert.rejects(captureWeb(cfg), /Experimental VoiceOver capture/);
+    assert.equal(existsSync(join(dir, "web")), false);
+  } finally {
+    if (saved !== undefined) process.env.ALOUD_ALLOW_NATIVE_DESKTOP = saved;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a VoiceOver capture drives Safari and VoiceOver end to end with fakes and produces verified evidence", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "aloud-web-voiceover-run-"));
+  const body = element("BODY", {}, [element("MAIN", {}, [element("H1", {}, [text("Account settings")])])]);
+  const { io: safariIo, world } = fakeSafari({ body });
+  const io = fakeIo();
+  const voiceOver = fakeVoiceOver({ io, log: ["Save email, button"] });
+  const url = "http://127.0.0.1:3000/";
+  const screens = join(dir, "screens.json");
+  writeFileSync(screens, JSON.stringify([{ id: "voiceover", screens: [{ id: "form", url, steps: [
+    { action: "click", selector: "#email" },
+    { action: "press", key: "Shift+Tab", expect: { speechIncludes: "Save email" } },
+    { action: "voiceover", command: "next" },
+  ] }] }]));
+  try {
+    const cfg = loadConfig(undefined, { out: dir, web: { screens, screenReader: "voiceover", timeoutMs: 1000 } });
+    const out = await captureWeb(cfg, { flow: ["voiceover"], dependencies: {
+      safari: createSafari(safariIo),
+      startReader: () => startVoiceOver({ env: HOSTED, platform: "darwin", io, guidepup: guidepup(voiceOver) }),
+    } });
+    const { run, screens: captured } = readWebReport(out);
+    assert.equal(run.environment.browser, "safari");
+    assert.equal(run.environment.browserVersion, "26.0");
+    assert.equal(run.environment.screenReaderVersion, "fixture-voiceover");
+    assert.equal(run.environment.playwright, undefined);
+    assert.equal(run.provenance.tools.safari, "26.0");
+    assert.equal(run.provenance.tools.voiceover, "fixture-voiceover");
+    assert.equal(run.provenance.tools.playwright, undefined);
+    const form = captured.form;
+    assert.equal(form.speechSource, "voiceover-guidepup");
+    assert.equal(form.snapshotSource, "safari-dom-outline");
+    assert.equal(form.ariaSnapshot, '- main\n  - heading "Account settings" [level=1]');
+    assert.deepEqual(form.steps.map((step) => [step.sentKey, step.speech]), [
+      [undefined, []], ["Option+Shift+Tab", ["Save email, button"]], [undefined, ["Save email, button"]],
+    ]);
+    assert.ok(voiceOver.calls.some((call) => call[0] === "press" && call[1] === "Option+Shift+Tab"));
+    assert.equal(world.document.elements["#email"].clicked, 1);
+    // Cleanup stopped the reader and closed the owned window.
+    assert.ok(voiceOver.calls.some(([name]) => name === "stop"));
+    assert.deepEqual(world.closed, ["7"]);
+    assert.ok(existsSync(join(out, "index.html")));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
