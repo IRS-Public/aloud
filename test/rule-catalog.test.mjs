@@ -16,6 +16,7 @@ import { load } from "js-yaml";
 
 import { CRITERIA, RULES, rulesForCriterion, ruleSpec } from "../src/rules/catalog.mjs";
 import { AUTOMATED_CRITERIA, CATALOG_ID } from "../src/report/openacr.mjs";
+import { ATF_CHECKS } from "../src/android/atf-evidence.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -56,6 +57,15 @@ describe("rule catalog traceability", () => {
     }
   });
 
+  it("cross-references ATF checks only to catalogued Android tree rules", () => {
+    const overlaps = ATF_CHECKS.flatMap((check) => check.overlaps);
+    assert.ok(overlaps.length > 0);
+    for (const id of overlaps) {
+      assert.ok(Object.hasOwn(RULES, id), `ATF overlap ${id} is not in the catalog`);
+      assert.equal(RULES[id].platform, "Android", `ATF overlap ${id} is not an Android rule`);
+    }
+  });
+
   it("maps every criterion to one in the OpenACR edition the draft uses", () => {
     for (const [id, rule] of Object.entries(RULES)) {
       for (const criterion of rule.criteria) {
@@ -92,6 +102,13 @@ describe("rule catalog traceability", () => {
       for (const id of warnings) {
         assert.ok(CRITERIA[criterion].warnings?.includes(id), `${criterion} notes never mention ${id}`);
       }
+    }
+    // A hand-written count would drift as warnings are added; the ids are
+    // the list, so the sentence must not state how many there are.
+    for (const [criterion, entry] of Object.entries(CRITERIA)) {
+      if (!entry.warnings) continue;
+      assert.doesNotMatch(entry.warnings, /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+report-only/i,
+        `${criterion} warnings sentence hardcodes a count`);
     }
     // And the notes name no warning the catalog does not map there.
     for (const [criterion, entry] of Object.entries(CRITERIA)) {

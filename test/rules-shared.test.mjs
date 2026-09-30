@@ -57,7 +57,7 @@ describe("shared rule helpers", () => {
     violations[0].criteria.push("9.9.9");
     const again = createFindings("iOS", () => "Image");
     again.add("ios-image-unlabeled", {}, "detail");
-    assert.deepEqual(again.violations[0].criteria, ["1.1.1"]);
+    assert.deepEqual(again.violations[0].criteria, ["1.1.1", "4.1.2"]);
   });
 
   it("repeatedAnnouncements reports each repeat in order with the first speaker", () => {

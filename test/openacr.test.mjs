@@ -181,6 +181,7 @@ describe("rule mapping", () => {
       "1.3.1": ["native-edittext-unlabeled"],
       "2.5.8": ["ios-touch-target-small", "native-touch-target-small"],
       "4.1.2": [
+        "ios-image-unlabeled",
         "ios-interactive-unlabeled",
         "native-edittext-unlabeled",
         "native-image-button-unlabeled",
@@ -198,11 +199,23 @@ describe("rule mapping", () => {
     ]);
   });
 
-  it("counts an unlabeled iOS image against 1.1.1, not 4.1.2", () => {
+  it("counts an unlabeled iOS image against 1.1.1 and, conservatively, 4.1.2", () => {
+    // The dump cannot tell a static image from a tappable one with no
+    // button trait, so an iOS image failure must not leave 4.1.2 at supports.
     const acr = build({ android: null, ios: normalizeAudit({ home: { errors: 1, ruleIds: ["ios-image-unlabeled"] } }) });
     assert.equal(findCriterion(acr, "1.1.1").level, "partially-supports");
     assert.match(findCriterion(acr, "1.1.1").notes, /iOS home: ios-image-unlabeled/);
-    assert.equal(findCriterion(acr, "4.1.2").level, "supports");
+    assert.equal(findCriterion(acr, "4.1.2").level, "partially-supports");
+    assert.match(findCriterion(acr, "4.1.2").notes, /iOS home: ios-image-unlabeled/);
+  });
+
+  it("scopes each covers note to the platform whose rules check it", () => {
+    // No iOS rule judges image controls for 1.1.1 (an unlabeled iOS
+    // Button reaches 4.1.2 only), so the note must not claim it does.
+    const acr = build({ android: null, ios: normalizeAudit({ home: { errors: 1, ruleIds: ["ios-interactive-unlabeled"] } }) });
+    assert.equal(findCriterion(acr, "1.1.1").level, "supports");
+    assert.match(findCriterion(acr, "1.1.1").notes, /image controls \(Android\) and image-role elements \(iOS\)/);
+    assert.equal(findCriterion(acr, "4.1.2").level, "partially-supports");
   });
 
   it("points warning-only criteria at their related evidence without a level", () => {

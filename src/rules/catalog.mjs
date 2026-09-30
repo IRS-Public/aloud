@@ -65,13 +65,16 @@ export const RULES = deepFreeze({
     criteria: ["4.1.2"],
     what: "interactive element with no label or value",
   },
-  // The rule judges elements with the Image role, which are not controls
-  // (an image button dumps as Button). A missing text alternative for
-  // non-text content is 1.1.1; 4.1.2 covers user interface components.
+  // The rule judges elements with the Image role: a missing text
+  // alternative for non-text content is 1.1.1. An image button dumps as
+  // Button only when the developer set the button trait; a tappable image
+  // with a gesture recognizer and no trait still dumps as Image, and that
+  // is a 4.1.2 name-and-role failure. The dump cannot tell the two apart,
+  // so the rule also counts against 4.1.2 rather than risk a silent pass.
   "ios-image-unlabeled": {
     platform: "iOS",
     severity: "error",
-    criteria: ["1.1.1"],
+    criteria: ["1.1.1", "4.1.2"],
     what: "image element without an accessibility label",
   },
   "ios-touch-target-small": {
@@ -108,7 +111,7 @@ export const RULES = deepFreeze({
 //             related evidence to a criterion error rules also reach.
 export const CRITERIA = deepFreeze({
   "1.1.1": {
-    covers: "image controls and image elements must carry a text label",
+    covers: "image controls (Android) and image-role elements (iOS) must carry a text label",
   },
   "1.3.1": {
     covers: "text fields must expose a label a screen reader can announce (Android check only)",
@@ -122,9 +125,11 @@ export const CRITERIA = deepFreeze({
       "both exceed the 24 CSS px minimum of this criterion)",
   },
   "4.1.2": {
-    covers: "interactive elements, image controls, and text fields must expose an accessible name",
+    covers:
+      "interactive elements, image controls (Android), image-role elements (iOS), and text fields " +
+      "must expose an accessible name",
     warnings:
-      "Three report-only warnings add related evidence: elements that announce identical labels " +
+      "Report-only warnings add related evidence: elements that announce identical labels " +
       "(native-duplicate-speakable, ios-duplicate-speakable), " +
       'iOS controls announcing a raw "1"/"0" where a switch state should speak on/off (ios-toggle-raw-value), ' +
       "and iOS list rows with no interactive trait among interactive siblings (ios-list-row-not-interactive); " +

@@ -164,7 +164,7 @@ criteria from the same catalog:
 | Rule id | WCAG | Severity |
 | --- | --- | --- |
 | `ios-interactive-unlabeled` | 4.1.2 | error |
-| `ios-image-unlabeled` | 1.1.1 | error |
+| `ios-image-unlabeled` | 1.1.1, 4.1.2 | error |
 | `ios-touch-target-small` (44pt Apple bar) | 2.5.8 | error |
 | `ios-toggle-raw-value` (non-switch control speaking "1"/"0") | 4.1.2 | warn (report-only) |
 | `ios-list-row-not-interactive` (static row among interactive siblings) | 4.1.2 | warn (report-only) |
