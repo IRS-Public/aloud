@@ -18,7 +18,8 @@ export const hasArea = (box) => Boolean(box && box.w > 0 && box.h > 0);
 // platform, throws. severity "error" counts toward the ratchet gate;
 // "warn" is report-only. `wcag` is the primary criterion (kept for older
 // readers); `criteria` lists every criterion the rule gives evidence
-// toward. `extra` adds platform fields after the common ones (Android ATF
+// toward (empty for a platform-guideline warn, which then has no `wcag`
+// either). `extra` adds platform fields after the common ones (Android ATF
 // node ids).
 export function createFindings(platform, describe, extra = () => ({})) {
   if (!PLATFORMS.includes(platform)) {
@@ -29,7 +30,8 @@ export function createFindings(platform, describe, extra = () => ({})) {
     const rule = ruleSpec(ruleId, platform);
     violations.push({
       ruleId,
-      wcag: rule.criteria[0],
+      // A guideline warn maps to no criterion, so it has no primary one.
+      ...(rule.criteria.length ? { wcag: rule.criteria[0] } : {}),
       criteria: [...rule.criteria],
       severity: rule.severity,
       element: describe(element),
@@ -61,4 +63,42 @@ export function repeatedAnnouncements(elements, announcementOf) {
     repeats.push({ element, announcement, first: entry.first, occurrence: entry.repeats });
   }
   return repeats;
+}
+
+// ── WCAG 2.5.8 target size ──
+// Both engines measure in a unit that approximates one CSS px (Android dp,
+// iOS points), so the criterion's 24 CSS px becomes 24 units.
+export const TARGET_SIZE_MINIMUM = 24;
+
+// Floating-point slack for the spacing geometry: bounds converted from
+// pixels can land a hair off an exact tangent.
+const EPSILON = 1e-9;
+
+// The 2.5.8 spacing exception. An undersized target still passes when a
+// circle of TARGET_SIZE_MINIMUM diameter centred on its bounding box
+// intersects no other target and no other undersized target's circle.
+// Each target is { box: { x1, y1, x2, y2 }, undersized } in the rule's unit;
+// `others` are the screen's other targets. A circle that only touches a box
+// or another circle at one point does not intersect it. Returns the first
+// conflict ({ other, with: "target" | "circle" }), or null when the
+// exception applies.
+export function spacingConflict(target, others) {
+  const radius = TARGET_SIZE_MINIMUM / 2;
+  const centre = centreOf(target.box);
+  for (const other of others) {
+    if (other === target) continue;
+    if (distanceToBox(centre, other.box) < radius - EPSILON) return { other, with: "target" };
+    const apart = Math.hypot(centre.x - centreOf(other.box).x, centre.y - centreOf(other.box).y);
+    if (other.undersized && apart < TARGET_SIZE_MINIMUM - EPSILON) return { other, with: "circle" };
+  }
+  return null;
+}
+
+const centreOf = (box) => ({ x: (box.x1 + box.x2) / 2, y: (box.y1 + box.y2) / 2 });
+
+// Distance from a point to the nearest point of a box (zero inside it).
+function distanceToBox(point, box) {
+  const dx = Math.max(box.x1 - point.x, 0, point.x - box.x2);
+  const dy = Math.max(box.y1 - point.y, 0, point.y - box.y2);
+  return Math.hypot(dx, dy);
 }

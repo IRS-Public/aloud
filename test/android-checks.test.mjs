@@ -78,12 +78,16 @@ describe("runChecks", () => {
     assert.ok(!v.map((x) => x.ruleId).includes("native-interactive-unlabeled"));
   });
 
-  it("flags a sub-48dp touch target with dp math", () => {
-    // 100px @420dpi = 38dp
+  it("warns on a sub-48dp touch target against the Material guideline", () => {
+    // 100px @420dpi = 38dp: under Material's 48dp, over WCAG 2.5.8's 24dp.
     const v = check(node({ ...base, text: "x", bounds: "[0,0][100,100]" }));
     const hit = v.find((x) => x.ruleId === "native-touch-target-small");
     assert.ok(hit);
     assert.ok(hit.detail.includes("38x38dp"));
+    assert.equal(hit.severity, "warn");
+    assert.deepEqual(hit.criteria, []);
+    assert.equal(Object.hasOwn(hit, "wcag"), false, "a guideline warning has no primary criterion");
+    assert.ok(!v.some((x) => x.ruleId === "native-target-size-minimum"));
   });
 
   it("flags an unlabeled image button", () => {
@@ -153,6 +157,110 @@ describe("runChecks", () => {
   it("skips zero-sized layout ghosts in the target-size rule", () => {
     const v = check(node({ ...base, text: "x", bounds: "[0,0][0,0]" }));
     assert.ok(!v.map((x) => x.ruleId).includes("native-touch-target-small"));
+  });
+});
+
+describe("WCAG 2.5.8 target size (Android)", () => {
+  // At 160dpi one pixel is one dp, which keeps the geometry readable.
+  const checkAt = (densityDpi, xml) =>
+    runChecks(parseUiDump(wrap(xml)), { densityDpi, appPackage: "com.example.app" });
+  const minimum = (v) => v.filter((x) => x.ruleId === "native-target-size-minimum");
+  const box = ([x1, y1, x2, y2]) => `[${x1},${y1}][${x2},${y2}]`;
+  const target = (bounds, over = {}) => node({ ...base, text: "Go", bounds: box(bounds), ...over });
+  // A labeled, full-size button whose left edge touches x.
+  const neighbourAt = (x, size) => target([x, 0, x + 1000, size], { text: "Neighbour" });
+
+  it("holds the boundary at exactly 24dp (23.9 fails, 24 and 24.1 pass)", () => {
+    // 1600dpi is ten pixels per dp, so tenths of a dp are whole pixels.
+    for (const [px, fails] of [[239, true], [240, false], [241, false]]) {
+      const v = checkAt(1600, target([0, 0, px, px]) + neighbourAt(px, px));
+      assert.equal(minimum(v).length, fails ? 1 : 0, `${px / 10}dp`);
+    }
+    const [hit] = minimum(checkAt(1600, target([0, 0, 239, 239]) + neighbourAt(239, 239)));
+    assert.equal(hit.severity, "error");
+    assert.equal(hit.wcag, "2.5.8");
+    assert.deepEqual(hit.criteria, ["2.5.8"]);
+    assert.match(hit.detail, /touch target 23\.9x23\.9dp \(minimum 24x24dp\)/);
+  });
+
+  it("judges one dimension alone: a wide target that is 23.9dp tall fails", () => {
+    const v = checkAt(1600, target([0, 0, 2000, 239]) + target([0, 239, 2000, 739], { text: "Below" }));
+    assert.equal(minimum(v).length, 1);
+  });
+
+  it("converts pixels to dp at each density the way Android lays views out", () => {
+    // Android sizes a 24dp view at round(24 x density) pixels; one pixel
+    // less is a real deficit at every density.
+    for (const [dpi, px] of [[120, 18], [160, 24], [213, 32], [320, 48], [420, 63], [480, 72], [640, 96]]) {
+      assert.equal(minimum(checkAt(dpi, target([0, 0, px, px]) + neighbourAt(px, px))).length, 0, `${px}px at ${dpi}dpi`);
+      assert.equal(minimum(checkAt(dpi, target([0, 0, px - 1, px - 1]) + neighbourAt(px - 1, px))).length, 1,
+        `${px - 1}px at ${dpi}dpi`);
+    }
+  });
+
+  it("applies the spacing exception to an undersized target with room around it", () => {
+    // A lone 20dp target: its 24dp circle touches nothing.
+    assert.deepEqual(minimum(checkAt(160, target([100, 100, 120, 120]))), []);
+    // A full-size neighbour whose edge is exactly 12dp from the centre only
+    // touches the circle, which the exception allows.
+    assert.deepEqual(minimum(checkAt(160, target([0, 0, 20, 20]) + neighbourAt(22, 48))), []);
+  });
+
+  it("fails an undersized target whose circle overlaps another target", () => {
+    // Centre at x=10; the neighbour starts 11dp away.
+    const [hit] = minimum(checkAt(160, target([0, 0, 20, 20]) + neighbourAt(21, 48)));
+    assert.ok(hit);
+    assert.match(hit.detail, /20x20dp .*spacing circle overlaps Button/);
+  });
+
+  it("fails two undersized targets whose circles overlap, and passes them 24dp apart", () => {
+    // Centres 23dp apart: neither circle reaches the other box (13dp away),
+    // but the circles overlap each other.
+    const close = minimum(checkAt(160, target([0, 0, 20, 20]) + target([23, 0, 43, 20], { text: "Next" })));
+    assert.equal(close.length, 2);
+    assert.match(close[0].detail, /overlaps the spacing circle of Button/);
+    // Centres exactly 24dp apart: the circles only touch.
+    const apart = minimum(checkAt(160, target([0, 0, 20, 20]) + target([24, 0, 44, 20], { text: "Next" })));
+    assert.deepEqual(apart, []);
+  });
+
+  it("ignores disabled neighbours, which accept no pointer input", () => {
+    const v = checkAt(160, target([0, 0, 20, 20]) + neighbourAt(21, 48).replace('enabled="true"', 'enabled="false"'));
+    assert.deepEqual(minimum(v), []);
+  });
+
+  it("treats a target's own clickable descendants as part of it, not neighbours", () => {
+    const v = checkAt(160, node({ ...base, text: "", "content-desc": "Close", bounds: box([0, 0, 20, 20]) },
+      target([4, 4, 16, 16], { text: "x" })));
+    // The parent passes: its child is part of its own hit area. The child
+    // is judged too, and the undersized parent around it is another target
+    // its circle overlaps (a parent of 24dp or more would exempt it).
+    const hits = minimum(v);
+    assert.equal(hits.length, 1);
+    assert.match(hits[0].element, /@\[4,4 12x12px\]/);
+    assert.match(hits[0].detail, /overlaps Button @\[0,0 20x20px\]/);
+  });
+
+  it("keeps the exemptions: large labeled ancestor, scroll clipping, and non-positive bounds", () => {
+    // A 30dp labeled clickable row is the real target for its 20dp switch:
+    // fine for 2.5.8, still under the 48dp guideline.
+    const row = node({ ...base, text: "", "content-desc": "Paperless", bounds: box([0, 0, 300, 30]) },
+      target([5, 5, 25, 25], { class: "android.widget.Switch", checkable: "true", text: "" }));
+    const inRow = checkAt(160, row + neighbourAt(300, 30));
+    assert.deepEqual(minimum(inRow), []);
+    assert.ok(inRow.some((x) => x.ruleId === "native-touch-target-small" && x.element.includes("Switch")));
+    // A row cut to 10dp by the scroll viewport's edge is not judged.
+    const clipped = `<node package="com.example.app" class="android.widget.ScrollView" scrollable="true" bounds="[0,0][400,400]">` +
+      target([0, 390, 400, 400]) + target([0, 380, 400, 390], { text: "Above" }) + `</node>`;
+    assert.ok(!minimum(checkAt(160, clipped)).some((x) => x.element.includes("@[0,390")));
+    // Zero-sized ghosts are not judged, and are not neighbours either.
+    assert.deepEqual(minimum(checkAt(160, target([0, 0, 0, 0]) + target([100, 0, 120, 20]))), []);
+  });
+
+  it("refuses to judge sizes without a real screen density", () => {
+    for (const densityDpi of [undefined, 0, -1, Number.NaN, "420"]) {
+      assert.throws(() => checkAt(densityDpi, target([0, 0, 20, 20])), /densityDpi must be a positive number/);
+    }
   });
 });
 

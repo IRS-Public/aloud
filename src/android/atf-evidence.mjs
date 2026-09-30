@@ -11,7 +11,7 @@ const prefix = "com.google.android.apps.common.testing.accessibility.framework.c
 export const ATF_CHECKS = [
   ["atf-speakable-text-present", "SpeakableTextPresentCheck", ["native-interactive-unlabeled", "native-image-button-unlabeled", "native-edittext-unlabeled"]],
   ["atf-editable-content-desc", "EditableContentDescCheck", []],
-  ["atf-touch-target-size", "TouchTargetSizeCheck", ["native-touch-target-small"]],
+  ["atf-touch-target-size", "TouchTargetSizeCheck", ["native-target-size-minimum", "native-touch-target-small"]],
   ["atf-duplicate-speakable-text", "DuplicateSpeakableTextCheck", ["native-duplicate-speakable"]],
   ["atf-redundant-description", "RedundantDescriptionCheck", []],
   ["atf-class-name", "ClassNameCheck", []],

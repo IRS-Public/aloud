@@ -41,7 +41,7 @@ export const setNight = (wantDark) => shell("cmd", "uimode", "night", wantDark ?
 export const getNight = () => /yes/i.test(shell("cmd", "uimode", "night"));
 
 // Physical density in dpi — needed to convert uiautomator px bounds to dp
-// for the 48dp touch-target rule. "Physical density: 420" (or "Override…").
+// for the 24dp and 48dp touch-target rules. "Physical density: 420" (or "Override…").
 export function getDensityDpi() {
   const out = shell("wm", "density");
   const m = out.match(/density:\s*(\d+)/i);

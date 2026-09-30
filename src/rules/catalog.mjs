@@ -17,6 +17,8 @@
 //   severity  "error" counts toward the gate; "warn" is report-only
 //   criteria  WCAG 2.2 success criteria the rule gives evidence toward,
 //             primary first. A finding's `wcag` field is the primary one.
+//             Only a warn may list none: a platform-guideline check
+//             (Material, Apple HIG) that no WCAG criterion requires.
 //   what      plain description of what the rule flags
 export const RULES = deepFreeze({
   // ── Android (uiautomator or ATF-companion node trees) ──
@@ -42,11 +44,24 @@ export const RULES = deepFreeze({
     criteria: ["4.1.2", "1.3.1"],
     what: "text field with no label, hint, or content description",
   },
-  "native-touch-target-small": {
+  // WCAG 2.5.8 Target Size (Minimum) asks for 24x24 CSS px. One dp
+  // approximates one CSS px (both are defined against a ~160dpi reference),
+  // so the rule holds 24x24dp, with the criterion's spacing exception.
+  "native-target-size-minimum": {
     platform: "Android",
     severity: "error",
     criteria: ["2.5.8"],
-    what: "touch target under 48x48dp",
+    what: "touch target under 24x24dp that the 2.5.8 spacing exception does not cover",
+  },
+  // Platform guidance, not a WCAG requirement: Material Design asks for
+  // 48x48dp, twice what 2.5.8 needs. Report-only, and mapped to no
+  // criterion. The id predates the 24dp rule; it was an error counted
+  // against 2.5.8, and old baselines still list it (see RECLASSIFIED).
+  "native-touch-target-small": {
+    platform: "Android",
+    severity: "warn",
+    criteria: [],
+    what: "touch target under the 48x48dp Material Design guideline",
   },
   // Warn-only: lists legitimately repeat labels. Identical names leave the
   // user unable to tell controls apart, so the evidence also bears on
@@ -77,11 +92,22 @@ export const RULES = deepFreeze({
     criteria: ["1.1.1", "4.1.2"],
     what: "image element without an accessibility label",
   },
-  "ios-touch-target-small": {
+  // WCAG 2.5.8 at 24x24pt. One iOS point approximates one CSS px (both
+  // are defined against a ~160dpi reference), same policy as Android.
+  "ios-target-size-minimum": {
     platform: "iOS",
     severity: "error",
     criteria: ["2.5.8"],
-    what: "touch target under 44x44pt",
+    what: "touch target under 24x24pt that the 2.5.8 spacing exception does not cover",
+  },
+  // Platform guidance, not a WCAG requirement: the Apple Human Interface
+  // Guidelines ask for 44x44pt. Report-only, mapped to no criterion; the
+  // id predates the 24pt rule (see RECLASSIFIED).
+  "ios-touch-target-small": {
+    platform: "iOS",
+    severity: "warn",
+    criteria: [],
+    what: "touch target under the 44x44pt Apple Human Interface Guidelines size",
   },
   "ios-toggle-raw-value": {
     platform: "iOS",
@@ -121,8 +147,11 @@ export const CRITERIA = deepFreeze({
   },
   "2.5.8": {
     covers:
-      "touch targets must meet the platform minimum (48x48dp on Android, 44x44pt on iOS; " +
-      "both exceed the 24 CSS px minimum of this criterion)",
+      "enabled touch targets must be at least 24x24 (dp on Android, pt on iOS; each approximates " +
+      "one CSS px), unless the spacing exception applies: a 24-unit circle centred on the " +
+      "undersized target intersects no other target and no other undersized target's circle. " +
+      "The inline, user-agent control, essential, and equivalent-control exceptions need human " +
+      "judgment, so a flagged target may still meet the criterion on review",
   },
   "4.1.2": {
     covers:
@@ -134,6 +163,33 @@ export const CRITERIA = deepFreeze({
       'iOS controls announcing a raw "1"/"0" where a switch state should speak on/off (ios-toggle-raw-value), ' +
       "and iOS list rows with no interactive trait among interactive siblings (ios-list-row-not-interactive); " +
       "warnings do not gate.",
+  },
+});
+
+// Rule ids whose classification changed after adopters had committed them
+// to baselines. Each entry records what the id used to count toward and
+// the rule that now carries that criterion. Readers of persisted evidence
+// (src/report/validation.mjs, src/report/openacr.mjs) use this to read old
+// baselines, tree reports, and summaries without error and without
+// treating them as evidence they never were.
+//   was        the severity and criteria the id had before
+//   successor  the error rule that now gives evidence toward those criteria
+//   change     plain description, quoted in notes and error messages
+//
+// The touch-target ids held the platform bars (48dp, 44pt) as 2.5.8
+// errors. 2.5.8 asks for 24 CSS px, so a screen that met the criterion
+// was reported as failing it. A finding under the old rule says nothing
+// about the 24-unit bar, and a screen with none under it met 2.5.8.
+export const RECLASSIFIED = deepFreeze({
+  "native-touch-target-small": {
+    was: { severity: "error", criteria: ["2.5.8"] },
+    successor: "native-target-size-minimum",
+    change: "the 48x48dp check became a report-only guideline; 2.5.8 is now checked at 24x24dp",
+  },
+  "ios-touch-target-small": {
+    was: { severity: "error", criteria: ["2.5.8"] },
+    successor: "ios-target-size-minimum",
+    change: "the 44x44pt check became a report-only guideline; 2.5.8 is now checked at 24x24pt",
   },
 });
 
@@ -152,6 +208,25 @@ export function ruleSpec(ruleId, platform) {
     throw new Error(`rule id "${ruleId}" runs on ${rule.platform}, not ${platform}`);
   }
   return rule;
+}
+
+// Split a gate-shaped entry ({ errors, ruleIds }, as baselines and
+// summaries store it) written before a reclassification. Reclassified ids
+// leave the error list. Each accounted for at least one error, so the
+// remaining count is at most errors minus their number (exactly zero when
+// none remain). `unchecked` names the criteria the entry holds no current
+// evidence for: the old findings cannot say whether the successor rule
+// would have fired. The entry must already be valid; this never throws.
+export function splitReclassified({ errors, ruleIds }) {
+  const retired = ruleIds.filter((id) => Object.hasOwn(RECLASSIFIED, id));
+  if (retired.length === 0) return { errors, ruleIds, retired, unchecked: [] };
+  const kept = ruleIds.filter((id) => !Object.hasOwn(RECLASSIFIED, id));
+  return {
+    errors: kept.length ? errors - retired.length : 0,
+    ruleIds: kept,
+    retired,
+    unchecked: [...new Set(retired.flatMap((id) => RECLASSIFIED[id].was.criteria))],
+  };
 }
 
 // Rule ids that give evidence toward a criterion, in catalog order,
@@ -175,8 +250,9 @@ function validateCatalog() {
     if (!PLATFORMS.includes(rule.platform)) fail(`${id} has unknown platform "${rule.platform}"`);
     if (!SEVERITIES.includes(rule.severity)) fail(`${id} has unknown severity "${rule.severity}"`);
     if (typeof rule.what !== "string" || !rule.what.trim()) fail(`${id} needs a description`);
-    if (!Array.isArray(rule.criteria) || rule.criteria.length === 0) {
-      fail(`${id} must map to at least one criterion`);
+    if (!Array.isArray(rule.criteria)) fail(`${id} needs a criteria list`);
+    if (rule.criteria.length === 0 && rule.severity === "error") {
+      fail(`${id} is an error, so it must map to at least one criterion`);
     }
     if (new Set(rule.criteria).size !== rule.criteria.length) fail(`${id} repeats a criterion`);
     for (const criterion of rule.criteria) {
@@ -185,6 +261,21 @@ function validateCatalog() {
       used.add(criterion);
     }
   }
+  for (const [id, entry] of Object.entries(RECLASSIFIED)) {
+    const rule = RULES[id];
+    const successor = RULES[entry.successor];
+    if (!rule) fail(`reclassified ${id} must stay in the catalog: old baselines name it`);
+    if (rule.severity === entry.was.severity && isSameList(rule.criteria, entry.was.criteria)) {
+      fail(`reclassified ${id} still has its old severity and criteria`);
+    }
+    if (!successor || successor.platform !== rule.platform || successor.severity !== "error") {
+      fail(`reclassified ${id} needs an error successor on ${rule.platform}`);
+    }
+    if (!entry.was.criteria.every((criterion) => successor.criteria.includes(criterion))) {
+      fail(`successor ${entry.successor} must carry every criterion ${id} used to`);
+    }
+    if (typeof entry.change !== "string" || !entry.change.trim()) fail(`reclassified ${id} needs a change note`);
+  }
   for (const [criterion, entry] of Object.entries(CRITERIA)) {
     if (!used.has(criterion)) fail(`criterion ${criterion} has covers text but no rule maps to it`);
     if (typeof entry.covers !== "string" || !entry.covers.trim()) fail(`criterion ${criterion} needs covers text`);
@@ -192,6 +283,10 @@ function validateCatalog() {
       fail(`criterion ${criterion} has a warnings sentence but no error rules`);
     }
   }
+}
+
+function isSameList(a, b) {
+  return a.length === b.length && a.every((value, i) => value === b[i]);
 }
 
 function deepFreeze(value) {

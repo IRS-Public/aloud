@@ -23,7 +23,8 @@ const FIXTURES = join(ROOT, "src", "demo", "fixtures");
 
 const DEMO_NOTICE =
   "Demo data. This is a replay of a captured audit of the bundled sample screen, not your app.";
-const EXPECTED_RULE_IDS = ["native-interactive-unlabeled", "native-touch-target-small"];
+const EXPECTED_RULE_IDS = ["native-interactive-unlabeled"];
+const EXPECTED_WARN_IDS = ["native-touch-target-small"];
 const EXPECTED_UTTERANCES = [
   "Order status, heading",
   "Your order shipped on Tuesday, August 25th.",
@@ -33,19 +34,25 @@ const EXPECTED_UTTERANCES = [
 ];
 
 describe("demo fixtures through the real pipeline", () => {
-  it("fires exactly the two documented findings on the sample tree", () => {
+  it("fires exactly the documented error and warning on the sample tree", () => {
     const xml = readFileSync(join(FIXTURES, "order-status.uidump.xml"), "utf8");
     const violations = runChecks(parseUiDump(xml), {
       densityDpi: 420,
       appPackage: "com.example.shop",
     });
-    assert.deepEqual(violations.map((v) => v.ruleId).sort(), EXPECTED_RULE_IDS);
-    assert.ok(violations.every((v) => v.severity === "error"));
+    const byRule = (severity) =>
+      violations.filter((v) => v.severity === severity).map((v) => v.ruleId).sort();
+    assert.deepEqual(byRule("error"), EXPECTED_RULE_IDS);
+    assert.deepEqual(byRule("warn"), EXPECTED_WARN_IDS);
+    assert.equal(violations.length, 2);
     const unlabeled = violations.find((v) => v.ruleId === "native-interactive-unlabeled");
     assert.ok(unlabeled.element.includes("share_order"));
     const small = violations.find((v) => v.ruleId === "native-touch-target-small");
     assert.ok(small.element.includes("cancel_order"));
+    // 32dp meets WCAG 2.5.8's 24dp minimum but misses Android's 48dp guideline.
     assert.ok(small.detail.includes("32x32dp"));
+    assert.deepEqual(small.criteria, []);
+    assert.ok(!violations.some((v) => v.ruleId === "native-target-size-minimum"));
   });
 
   it("segments the bundled logcat into the documented five utterances", () => {
@@ -70,7 +77,7 @@ describe("aloud demo end to end", () => {
       assert.ok(res.stdout.includes(DEMO_NOTICE));
 
       const tree = JSON.parse(readFileSync(join(out, "order-status.tree.json"), "utf8"));
-      assert.deepEqual(tree.gate, { errors: 2, ruleIds: EXPECTED_RULE_IDS });
+      assert.deepEqual(tree.gate, { errors: 1, ruleIds: EXPECTED_RULE_IDS });
 
       const transcript = JSON.parse(
         readFileSync(join(out, "order-status.transcript.json"), "utf8"),
@@ -79,7 +86,8 @@ describe("aloud demo end to end", () => {
       assert.deepEqual(transcript.transcript, EXPECTED_UTTERANCES);
 
       const summary = JSON.parse(readFileSync(join(out, "summary.json"), "utf8"));
-      assert.equal(summary.screens["order-status"].errors, 2);
+      assert.equal(summary.screens["order-status"].errors, 1);
+      assert.equal(summary.screens["order-status"].warns, 1);
       assert.equal(summary.screens["order-status"].utterances, 5);
 
       assert.ok(existsSync(join(out, "shots", "order-status.png")));

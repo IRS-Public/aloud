@@ -137,9 +137,19 @@ describe("report-only Apple audit evidence", () => {
 
 describe("normalizeAudit", () => {
   it("accepts the flat baseline map", () => {
-    const a = normalizeAudit({ home: { errors: 1, ruleIds: ["native-touch-target-small"] } });
+    const a = normalizeAudit({ home: { errors: 1, ruleIds: ["native-target-size-minimum"] } });
     assert.equal(a.screens.home.errors, 1);
     assert.equal(a.generated, null);
+  });
+
+  it("reads a baseline written before the target-size reclassification", () => {
+    const raw = readJson("fixtures/baseline-ios-legacy.json");
+    const a = normalizeAudit(raw);
+    // The old 44pt id leaves the error list, taking one error with it, and
+    // 2.5.8 becomes unchecked on that screen; the file is not modified.
+    assert.deepEqual(a.screens.pay, { errors: 2, ruleIds: ["ios-interactive-unlabeled"], uncheckedCriteria: ["2.5.8"] });
+    assert.deepEqual(a.screens["guest-home"], { errors: 0, ruleIds: [] });
+    assert.deepEqual(raw.pay.ruleIds, ["ios-interactive-unlabeled", "ios-touch-target-small"]);
   });
 
   it("accepts report.mjs summary.json", () => {
@@ -179,7 +189,7 @@ describe("rule mapping", () => {
     assert.deepEqual(mapping, {
       "1.1.1": ["ios-image-unlabeled", "native-image-button-unlabeled"],
       "1.3.1": ["native-edittext-unlabeled"],
-      "2.5.8": ["ios-touch-target-small", "native-touch-target-small"],
+      "2.5.8": ["ios-target-size-minimum", "native-target-size-minimum"],
       "4.1.2": [
         "ios-image-unlabeled",
         "ios-interactive-unlabeled",
@@ -191,11 +201,11 @@ describe("rule mapping", () => {
     assert.deepEqual(Object.keys(RULES).sort(), [
       "ios-image-unlabeled",
       "ios-interactive-unlabeled",
-      "ios-touch-target-small",
+      "ios-target-size-minimum",
       "native-edittext-unlabeled",
       "native-image-button-unlabeled",
       "native-interactive-unlabeled",
-      "native-touch-target-small",
+      "native-target-size-minimum",
     ]);
   });
 
@@ -231,14 +241,14 @@ describe("findFailures", () => {
       {
         platform: "Android",
         screens: {
-          "pay-tab": { errors: 1, ruleIds: ["native-touch-target-small"] },
+          "pay-tab": { errors: 1, ruleIds: ["native-target-size-minimum"] },
           home: { errors: 0, ruleIds: [] },
         },
       },
     ];
-    const failures = findFailures(["native-touch-target-small", "ios-touch-target-small"], audits);
+    const failures = findFailures(["native-target-size-minimum", "ios-target-size-minimum"], audits);
     assert.deepEqual(failures, [
-      { platform: "Android", screen: "pay-tab", ruleIds: ["native-touch-target-small"] },
+      { platform: "Android", screen: "pay-tab", ruleIds: ["native-target-size-minimum"] },
     ]);
   });
 });
@@ -343,9 +353,56 @@ describe("buildAcr on the fixture baselines", () => {
   });
 });
 
+describe("buildAcr on evidence from before the target-size reclassification", () => {
+  const legacy = normalizeAudit(readJson("fixtures/baseline-android-legacy.json"));
+
+  it("leaves 2.5.8 unevaluated instead of failing it on the old 48dp findings", () => {
+    // orders-list failed the old 48dp rule. That says nothing about the
+    // 24dp minimum, so the screen neither fails nor passes 2.5.8.
+    const adherence = findCriterion(build({ android: legacy, ios: null }), "2.5.8");
+    assert.equal(adherence.level, "not-evaluated");
+    assert.match(adherence.notes, /no violations on 2 Android screens/);
+    assert.match(adherence.notes, /Evidence on 1 Android screens predates the current rules for this criterion/);
+    assert.match(adherence.notes, /native-touch-target-small as errors/);
+    assert.match(adherence.notes, /24x24dp/);
+    assert.doesNotMatch(adherence.notes, /Missing tree checks/);
+  });
+
+  it("still evaluates the other criteria on those screens", () => {
+    const acr = build({ android: legacy, ios: null });
+    assert.equal(findCriterion(acr, "4.1.2").level, "supports");
+    assert.equal(findCriterion(acr, "1.3.1").level, "supports");
+    const mixed = normalizeAudit(readJson("fixtures/baseline-ios-legacy.json"));
+    const ios = build({ android: null, ios: mixed });
+    assert.equal(findCriterion(ios, "4.1.2").level, "partially-supports");
+    assert.equal(findCriterion(ios, "2.5.8").level, "not-evaluated");
+  });
+
+  it("migrates screens passed to buildAcr without normalizeAudit too", () => {
+    const acr = build({ android: { screens: readJson("fixtures/baseline-android-legacy.json") }, ios: null });
+    assert.equal(findCriterion(acr, "2.5.8").level, "not-evaluated");
+  });
+
+  it("accepts summaries that already mark a criterion unchecked, and rejects malformed marks", () => {
+    const summary = normalizeAudit({ screens: { home: { errors: 0, ruleIds: [], uncheckedCriteria: ["2.5.8"] } } });
+    assert.equal(findCriterion(build({ android: summary, ios: null }), "2.5.8").level, "not-evaluated");
+    for (const uncheckedCriteria of [[], ["2.5.8", "2.5.8"], ["9.9.9"], ["2.4.6"], "2.5.8"]) {
+      assert.throws(() => normalizeAudit({ home: { errors: 0, ruleIds: [], uncheckedCriteria } }), /uncheckedCriteria/);
+    }
+    assert.throws(() => normalizeAudit({ home: { errors: null, ruleIds: [], uncheckedCriteria: ["2.5.8"] } }),
+      /needs completed tree checks/);
+  });
+
+  it("still validates against schema and catalog", () => {
+    const acr = build({ android: legacy });
+    assert.equal(validateOpenACR(acr, "openacr-0.1.0.json").result, true);
+    assert.equal(validateOpenACRCatalogValues(acr, catalog).result, true);
+  });
+});
+
 describe("buildAcr on a failing fixture", () => {
   const failing = normalizeAudit({
-    "pay-tab": { errors: 2, ruleIds: ["native-touch-target-small"] },
+    "pay-tab": { errors: 2, ruleIds: ["native-target-size-minimum"] },
     home: { errors: 0, ruleIds: [] },
   });
   const acr = build({ android: failing });
@@ -354,7 +411,7 @@ describe("buildAcr on a failing fixture", () => {
     const adherence = findCriterion(acr, "2.5.8");
     assert.equal(adherence.level, "partially-supports");
     assert.ok(adherence.notes.includes("pay-tab"));
-    assert.ok(adherence.notes.includes("native-touch-target-small"));
+    assert.ok(adherence.notes.includes("native-target-size-minimum"));
   });
 
   it("leaves unrelated automated criteria at supports", () => {

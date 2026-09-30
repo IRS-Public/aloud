@@ -21,7 +21,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { cliArgs } from "../cli-args.mjs";
 import { platformForReportDir } from "./platform.mjs";
-import { validateBaseline, validateTreeReport } from "./validation.mjs";
+import { migrateTreeReport, migrationNote, readBaseline, validateTreeReport } from "./validation.mjs";
 
 const { opt, positionals } = cliArgs(
   "baseline.mjs",
@@ -64,7 +64,9 @@ if (!existsSync(reportDir)) {
   process.exit(1);
 }
 
-const baseline = validateBaseline(existsSync(baselinePath)
+// Entries naming reclassified rule ids come back in the current
+// classification, so the rewrite below also migrates untouched screens.
+const { baseline, migrated } = readBaseline(existsSync(baselinePath)
   ? JSON.parse(readFileSync(baselinePath, "utf8"))
   : {}, baselinePath);
 const updated = [];
@@ -74,6 +76,17 @@ const files = readdirSync(reportDir)
 
 for (const file of files) {
   const report = validateTreeReport(JSON.parse(readFileSync(join(reportDir, file), "utf8")), file);
+  // A report from before the touch-target reclassification holds no
+  // evidence for the rule that now gates 2.5.8; accepting it would bless
+  // counts nobody measured.
+  const { uncheckedCriteria } = migrateTreeReport(report);
+  if (uncheckedCriteria.length) {
+    console.error(
+      `${report.screen}: ${file} predates the current target-size rules, so WCAG ` +
+        `${uncheckedCriteria.join(", ")} was not checked — re-run the tree pass before accepting a baseline.`,
+    );
+    process.exit(1);
+  }
   baseline[report.screen] = report.gate;
   updated.push(report.screen);
 }
@@ -82,6 +95,13 @@ if (updated.length === 0) {
   console.error("No gate reports found — nothing written.");
   process.exit(1);
 }
+
+const note = migrationNote(
+  migrated.filter(({ screen }) => !updated.includes(screen)),
+  baselinePath,
+  "This run rewrites them in the current classification.",
+);
+if (note) console.warn(note);
 
 const untouched = Object.keys(baseline).filter((s) => !updated.includes(s));
 if (untouched.length > 0) {

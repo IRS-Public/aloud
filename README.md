@@ -60,11 +60,12 @@ Cancel order, button
 
 Line four is the audit. A static scanner logs "missing contentDescription"
 in a table. aloud shows you the moment a blind user reaches a share button
-and hears the word "Unlabeled". The demo report fails that screen on two
-real findings: the unlabeled control, and a cancel button smaller than the
-touch-target minimum. If your machine has a text-to-speech voice, the
-report also reconstructs the transcript as playable audio, labeled as a
-reconstruction.
+and hears the word "Unlabeled". The demo report fails that screen on one
+real finding, the unlabeled control. It also warns that the 32dp cancel
+button is under Android's 48dp touch-target guideline. That is a warning,
+not a failure, because the button meets WCAG 2.5.8's 24dp minimum. If
+your machine has a text-to-speech voice, the report also reconstructs
+the transcript as playable audio, labeled as a reconstruction.
 
 ## Quickstart
 
@@ -275,7 +276,7 @@ honest shape of dogfooding:
 - **A switch flagged for being 51x31pt.** Adding CheckBox to the
   interactive set tripped the 44pt target rule on Apple's own UISwitch
   geometry. Apple's audit passes it; aloud now exempts switch-family
-  roles from the platform-minimum rule.
+  roles from both target-size rules.
 
 The meta-lesson is the tool's thesis restated: the dump is not the speech.
 Every one of these was invisible to a static tree check and surfaced only

@@ -14,7 +14,14 @@ import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { load } from "js-yaml";
 
-import { CRITERIA, RULES, rulesForCriterion, ruleSpec } from "../src/rules/catalog.mjs";
+import {
+  CRITERIA,
+  RECLASSIFIED,
+  RULES,
+  rulesForCriterion,
+  ruleSpec,
+  splitReclassified,
+} from "../src/rules/catalog.mjs";
 import { AUTOMATED_CRITERIA, CATALOG_ID } from "../src/report/openacr.mjs";
 import { ATF_CHECKS } from "../src/android/atf-evidence.mjs";
 
@@ -79,8 +86,8 @@ describe("rule catalog traceability", () => {
 
   it("maps every error rule to at least one criterion the draft evaluates", () => {
     for (const [id, rule] of Object.entries(RULES)) {
-      assert.ok(rule.criteria.length > 0, `${id} maps to no criterion`);
       if (rule.severity !== "error") continue;
+      assert.ok(rule.criteria.length > 0, `${id} maps to no criterion`);
       for (const criterion of rule.criteria) {
         assert.ok(AUTOMATED_CRITERIA[criterion]?.rules.includes(id), `${id} does not drive ${criterion}`);
       }
@@ -139,9 +146,66 @@ describe("rule catalog traceability", () => {
   });
 
   it("ruleSpec fails closed on unknown ids and wrong platforms", () => {
-    assert.equal(ruleSpec("ios-touch-target-small", "iOS").severity, "error");
+    assert.equal(ruleSpec("ios-target-size-minimum", "iOS").severity, "error");
     assert.throws(() => ruleSpec("ios-new-rule", "iOS"), /unknown rule id/);
     assert.throws(() => ruleSpec("constructor"), /unknown rule id/);
     assert.throws(() => ruleSpec("ios-touch-target-small", "Android"), /runs on iOS/);
+  });
+});
+
+describe("target-size rules", () => {
+  it("gates WCAG 2.5.8 on the 24-unit minimum, not the platform guidelines", () => {
+    assert.deepEqual(rulesForCriterion("2.5.8"), ["native-target-size-minimum", "ios-target-size-minimum"]);
+    for (const id of ["native-target-size-minimum", "ios-target-size-minimum"]) {
+      assert.equal(RULES[id].severity, "error");
+      assert.deepEqual(RULES[id].criteria, ["2.5.8"]);
+    }
+  });
+
+  it("keeps the platform-guideline ids as report-only warnings with no criterion", () => {
+    // The ids stay: adopters' committed baselines name them.
+    for (const id of ["native-touch-target-small", "ios-touch-target-small"]) {
+      assert.equal(RULES[id].severity, "warn");
+      assert.deepEqual(RULES[id].criteria, []);
+    }
+  });
+
+  it("states in the 2.5.8 covers text which exceptions automation cannot judge", () => {
+    const covers = CRITERIA["2.5.8"].covers;
+    assert.match(covers, /24x24/);
+    assert.match(covers, /spacing exception/);
+    for (const exception of ["inline", "user-agent control", "essential", "equivalent-control"]) {
+      assert.ok(covers.includes(exception), `covers text omits the ${exception} exception`);
+    }
+    assert.doesNotMatch(covers, /48x48|44x44/);
+  });
+
+  it("records each reclassified id's old meaning and its error successor", () => {
+    assert.deepEqual(Object.keys(RECLASSIFIED).sort(), ["ios-touch-target-small", "native-touch-target-small"]);
+    for (const [id, entry] of Object.entries(RECLASSIFIED)) {
+      assert.deepEqual(entry.was, { severity: "error", criteria: ["2.5.8"] });
+      assert.equal(RULES[entry.successor].platform, RULES[id].platform);
+      assert.equal(RULES[entry.successor].severity, "error");
+    }
+    assert.ok(Object.isFrozen(RECLASSIFIED["native-touch-target-small"].was.criteria));
+  });
+});
+
+describe("splitReclassified", () => {
+  it("leaves entries without reclassified ids alone", () => {
+    const entry = { errors: 2, ruleIds: ["native-interactive-unlabeled"] };
+    assert.deepEqual(splitReclassified(entry), { ...entry, retired: [], unchecked: [] });
+  });
+
+  it("clears an entry whose only errors came from a reclassified id", () => {
+    assert.deepEqual(splitReclassified({ errors: 3, ruleIds: ["native-touch-target-small"] }), {
+      errors: 0, ruleIds: [], retired: ["native-touch-target-small"], unchecked: ["2.5.8"],
+    });
+  });
+
+  it("takes at least one error per retired id from a mixed entry", () => {
+    assert.deepEqual(splitReclassified({ errors: 3, ruleIds: ["ios-interactive-unlabeled", "ios-touch-target-small"] }), {
+      errors: 2, ruleIds: ["ios-interactive-unlabeled"], retired: ["ios-touch-target-small"], unchecked: ["2.5.8"],
+    });
   });
 });

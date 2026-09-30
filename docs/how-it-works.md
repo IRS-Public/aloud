@@ -141,11 +141,30 @@ OpenACR draft also reads (primary criterion first):
 | `native-interactive-unlabeled` | 4.1.2 | error |
 | `native-image-button-unlabeled` | 4.1.2, 1.1.1 | error |
 | `native-edittext-unlabeled` | 4.1.2, 1.3.1 | error |
-| `native-touch-target-small` (48dp platform bar) | 2.5.8 | error |
+| `native-target-size-minimum` (under 24dp, spacing circle overlaps another target) | 2.5.8 | error |
+| `native-touch-target-small` (48dp Android guideline) | none | warn (report-only) |
 | `native-duplicate-speakable` | 4.1.2, 2.4.6 | warn (report-only) |
 
-Errors count toward the gate; warns appear in the report only. The dump
-format omits `stateDescription`, `roleDescription`, hints, and `paneTitle`.
+Errors count toward the gate; warns appear in the report only.
+
+WCAG 2.5.8 needs a target to be at least 24x24 CSS px. aloud reads that as
+24dp on Android and 24pt on iOS. It also applies the spacing exception: an
+undersized target still passes if a 24-unit circle centred on it does not
+touch any other target, or another undersized target's circle. aloud cannot
+judge the inline, user-agent-control, essential and equivalent-control
+exceptions, so those still need a human. The 48dp and 44pt platform
+guidelines stay in the report as warnings.
+
+Reports and baselines written before this split still load. A baseline
+that accepted the old 48dp/44pt ids as errors drops those ids and their
+count. A new 24-unit violation still fails the gate. An old tree report
+that gated on the 48dp/44pt rule cannot show whether 2.5.8 is met. So
+`aloud report` fails that screen, `aloud baseline` refuses it, and the
+OpenACR draft leaves 2.5.8 `not-evaluated` until the tree pass is re-run.
+ATF reports carry the native evidence, so aloud recomputes them in the
+current classification.
+
+The dump format omits `stateDescription`, `roleDescription`, hints, and `paneTitle`.
 Opt-in `--atf` uses the companion's `AccessibilityNodeInfo` snapshot for both
 tree rules and six pinned Google Accessibility Test Framework checks. It
 captures those missing properties, retains exact node identities, and verifies
@@ -165,15 +184,18 @@ criteria from the same catalog:
 | --- | --- | --- |
 | `ios-interactive-unlabeled` | 4.1.2 | error |
 | `ios-image-unlabeled` | 1.1.1, 4.1.2 | error |
-| `ios-touch-target-small` (44pt Apple bar) | 2.5.8 | error |
+| `ios-target-size-minimum` (under 24pt, spacing circle overlaps another target) | 2.5.8 | error |
+| `ios-touch-target-small` (44pt Apple guideline) | none | warn (report-only) |
 | `ios-toggle-raw-value` (non-switch control speaking "1"/"0") | 4.1.2 | warn (report-only) |
 | `ios-list-row-not-interactive` (static row among interactive siblings) | 4.1.2 | warn (report-only) |
 | `ios-duplicate-speakable` | 4.1.2, 2.4.6 | warn (report-only) |
 
 Errors count toward the gate; warns appear in the report only. Switch-family
 roles (`Switch`, `Toggle`, and `CheckBox`, which is how a UISwitch reaches
-the mac-AX dump) speak numeric state as on/off and are exempt from the
-44pt rule: Apple's own UISwitch is 51x31pt and Apple's audit passes it.
+the mac-AX dump) speak numeric state as on/off and are exempt from
+both target-size rules: Apple's own UISwitch is 51x31pt and Apple's audit
+passes it. A switch still counts as a neighbour when aloud checks another
+target's spacing.
 
 Each dump is taken twice or more: the walker re-dumps every half second
 until two consecutive dumps agree (up to six), because a dump can race the

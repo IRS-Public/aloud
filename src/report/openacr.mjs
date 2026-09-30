@@ -31,10 +31,16 @@ import { cliArgs } from "../cli-args.mjs";
 import { validateVoiceOverCoverage } from "../ios/voiceover-capture.mjs";
 import { validateAtfSummary } from "../android/atf-evidence.mjs";
 import { readWebReport, webSummary } from "../web/evidence.mjs";
-import { CRITERIA, RULES as RULE_CATALOG, rulesForCriterion } from "../rules/catalog.mjs";
+import {
+  CRITERIA,
+  RECLASSIFIED,
+  RULES as RULE_CATALOG,
+  rulesForCriterion,
+  splitReclassified,
+} from "../rules/catalog.mjs";
 
 // The catalog names the edition the draft is built against. WCAG 2.2 is
-// required: the touch-target rules map to 2.5.8, which exists only there.
+// required: the target-size rules map to 2.5.8, which exists only there.
 export const CATALOG_ID = "2.5-edition-wcag-2.2-508-en";
 
 // ── audit rule → WCAG evidence ──
@@ -62,14 +68,17 @@ export const AUTOMATED_CRITERIA = Object.freeze(Object.fromEntries(
 ));
 
 // Criteria only report-only warnings reach stay not-evaluated; their notes
-// point at the related evidence. 2.5.5 is not a criterion any rule maps to:
-// the target-size rules hold platform bars, and whether they settle 2.5.5
-// depends on its exceptions, so its note is written here. The 302.1 note
+// point at the related evidence. 2.5.5 (AAA, 44 CSS px) is not a criterion
+// any rule maps to: the platform-guideline warnings measure near its bar
+// but not against its exceptions, so its note is written here. The 302.1 note
 // names the transcript coverage, so it is built per run in buildAcr from
 // the actual screen counts.
 const SPECIAL_NOTES = {
   "2.5.5":
-    "Not evaluated; needs human review. Related evidence: where tree checks completed, the automated target-size rules check platform bars (48x48dp Android, 44x44pt iOS). Review the findings and criterion exceptions before drawing a conformance conclusion.",
+    "Not evaluated; needs human review. Related evidence: where tree checks completed, report-only " +
+    "platform-guideline warnings flag targets under 48x48dp on Android (native-touch-target-small) and " +
+    "44x44pt on iOS (ios-touch-target-small); the gating target-size rules check the 24-unit minimum " +
+    "of 2.5.8 only. Review the findings and criterion exceptions before drawing a conformance conclusion.",
 };
 for (const [num, entry] of Object.entries(CRITERIA)) {
   if (AUTOMATED_CRITERIA[num]) continue;
@@ -193,7 +202,32 @@ function validateScreens(screens, platform = "input") {
     if (s.appleAudit !== undefined && platform === "Android") {
       invalid("Apple audit evidence belongs to iOS");
     }
+    if (s.uncheckedCriteria !== undefined) {
+      const unchecked = s.uncheckedCriteria;
+      if (!Array.isArray(unchecked) || unchecked.length === 0 || new Set(unchecked).size !== unchecked.length ||
+          !unchecked.every((num) => Object.hasOwn(AUTOMATED_CRITERIA, num))) {
+        invalid("uncheckedCriteria must list unique criteria the automated rules reach");
+      }
+      if (s.errors === null) invalid("uncheckedCriteria needs completed tree checks");
+    }
   }
+}
+
+// Evidence written before a rule reclassification (RECLASSIFIED in
+// src/rules/catalog.mjs) lists reclassified ids as errors. Read it in the
+// current classification: those ids leave the error list, and the criteria
+// they used to count toward become unchecked on that screen, so the draft
+// neither fails a criterion on findings that no longer mean failure nor
+// passes it on evidence that never checked the current rule. Returns new
+// screen objects; the input is not modified.
+function migrateScreens(screens) {
+  return Object.fromEntries(Object.entries(screens).map(([id, s]) => {
+    if (s.errors === null) return [id, s];
+    const { errors, ruleIds, unchecked } = splitReclassified(s);
+    if (unchecked.length === 0) return [id, s];
+    const uncheckedCriteria = [...new Set([...(s.uncheckedCriteria ?? []), ...unchecked])];
+    return [id, { ...s, errors, ruleIds, uncheckedCriteria }];
+  }));
 }
 
 // ── inputs ──
@@ -210,7 +244,7 @@ export function normalizeAudit(data) {
   if (audit.generated !== null && typeof audit.generated !== "string") {
     throw new Error("invalid audit: generated must be a date string or null");
   }
-  return audit;
+  return { ...audit, screens: migrateScreens(audit.screens) };
 }
 
 // For one criterion, list the screens whose baseline error rule ids
@@ -231,12 +265,23 @@ function adherenceForAutomated(num, audits) {
   const platforms = new Set(auto.rules.map((r) => RULES[r].platform));
   const applicable = audits.filter(({ platform }) => platforms.has(platform));
   const unsupported = audits.filter(({ platform }) => !platforms.has(platform));
-  const completed = selectScreens(applicable, (s) => s.errors !== null);
-  const missing = selectScreens(applicable, (s) => s.errors === null);
+  const unchecked = (s) => (s.uncheckedCriteria ?? []).includes(num);
+  const completed = selectScreens(applicable, (s) => s.errors !== null && !unchecked(s));
+  const stale = selectScreens(applicable, (s) => s.errors !== null && unchecked(s));
+  const missing = selectScreens(applicable, (s) => s.errors === null || unchecked(s));
   const failures = findFailures(auto.rules, completed);
   const checked = screenCoverage(completed);
+  const stalePlatforms = new Set(stale.map(({ platform }) => platform));
+  const retired = Object.keys(RECLASSIFIED).filter((id) =>
+    RECLASSIFIED[id].was.criteria.includes(num) && stalePlatforms.has(RULE_CATALOG[id].platform));
+  const noTree = selectScreens(applicable, (s) => s.errors === null);
   const gaps = [
-    missing.length ? `Missing tree checks on ${screenCoverage(missing)}; those screens remain unevaluated.` : "",
+    noTree.length ? `Missing tree checks on ${screenCoverage(noTree)}; those screens remain unevaluated.` : "",
+    stale.length
+      ? `Evidence on ${screenCoverage(stale)} predates the current rules for this criterion ` +
+        `(it lists ${retired.join(" or ")} as errors: ${retired.map((id) => RECLASSIFIED[id].change).join("; ")}); ` +
+        "re-run the audit, as those screens remain unevaluated."
+      : "",
     unsupported.length
       ? `No applicable automated checks for ${unsupported.map(({ platform }) => platform).join(" or ")}; this criterion remains unevaluated on that platform.`
       : "",
@@ -284,9 +329,14 @@ export function buildAcr({
   if (!appName) {
     throw new Error("buildAcr needs an app name (config app.name)");
   }
+  // Validate before migrating, so a malformed input fails on its own terms;
+  // normalizeAudit output passes through unchanged.
   const audits = [];
-  if (android != null) audits.push({ platform: "Android", screens: android.screens });
-  if (ios != null) audits.push({ platform: "iOS", screens: ios.screens });
+  for (const [platform, audit] of [["Android", android], ["iOS", ios]]) {
+    if (audit == null) continue;
+    validateScreens(audit.screens, platform);
+    audits.push({ platform, screens: migrateScreens(audit.screens) });
+  }
   if (audits.length === 0 && !web) throw new Error("no audit input: provide at least one platform audit");
   if (web && (web.platform !== "web" || web.reportOnly !== true || !isRecord(web.screens) || !Object.keys(web.screens).length ||
     Object.values(web.screens).some((s) => s.errors !== null || s.ruleIds?.length !== 0 || s.web?.reportOnly !== true ||

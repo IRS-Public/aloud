@@ -23,7 +23,8 @@ npx aloud openacr
 This writes `acr-draft.yaml` (or `openacr.out` from the config, or
 `--out`). The report is built against the WCAG 2.2 / Revised 508 edition
 catalog (`2.5-edition-wcag-2.2-508-en`). WCAG 2.2 is required because the
-touch-target rules map to criterion 2.5.8, which exists only there.
+24dp/24pt target-size rules map to criterion 2.5.8, which exists only there.
+The 48dp/44pt platform guidelines are warnings with no criterion.
 
 Inputs default to the baseline files named in the config. For a fresh
 run's results instead, pass `--report <dir>` and/or `--report-ios <dir>`
@@ -39,7 +40,9 @@ a draft you can trust, rather than a report you cannot:
   supplied screen for those platforms. Known failures produce
   `partially-supports`, with the failing screens and rule ids in the notes.
   Missing tree checks produce `not-evaluated` unless there is already a
-  known failure. Notes state that automation covers part of the criterion
+  known failure. So does a tree report older than the target-size split: it
+  gated on 48dp/44pt, not on 2.5.8's 24-unit minimum, so it leaves 2.5.8
+  `not-evaluated` until the tree pass is re-run. Notes state that automation covers part of the criterion
   only. Every other criterion is `not-evaluated` with a "needs human
   review" note. A few `not-evaluated` rows carry related evidence in
   their notes (for example, the transcript coverage on 302.1, or the

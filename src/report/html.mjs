@@ -34,6 +34,9 @@ export function displayOrder(ids, screens) {
 
 function statusOf(s) {
   if (!s.gate) return { key: "nodata", label: "No tree check" };
+  if (s.gate.errors === 0 && s.uncheckedCriteria?.length) {
+    return { key: "nodata", label: `Review · WCAG ${s.uncheckedCriteria.join(", ")} unchecked` };
+  }
   if (s.gate.errors === 0 && s.source === "voiceover") {
     return { key: "nodata", label: "Review · partial VoiceOver" };
   }
@@ -48,20 +51,26 @@ function statusOf(s) {
 
 // Findings list every criterion the rule gives evidence toward; tree
 // reports written before findings carried `criteria` show their `wcag`.
+// A platform-guideline warning maps to no criterion and says so.
 function findingsHtml(s) {
   if (!s.gate) return `<p class="none">No tree check in this run.</p>`;
+  const unchecked = s.uncheckedCriteria?.length
+    ? `<p class="none">This tree report predates the current target-size rules, so WCAG ${esc(s.uncheckedCriteria.join(", "))} was not checked on this screen. Re-run the tree pass for current evidence.</p>`
+    : "";
   const items = (s.violations ?? [])
     .map((v) => {
       const sev = v.severity === "error" ? "error" : "warn";
       const sevLabel = sev === "error" ? "Error" : "Warning";
+      const criteria = v.criteria ?? (v.wcag ? [v.wcag] : []);
+      const mapping = criteria.length ? `WCAG ${criteria.join(", ")}` : "Platform guideline · no WCAG criterion";
       return `<li class="finding ${sev}">
-        <p class="finding-head"><span class="sev sev-${sev}">${sevLabel}</span> <code class="rule">${esc(v.ruleId)}</code> <span class="wcag">WCAG ${esc((v.criteria ?? [v.wcag]).join(", "))}</span></p>
+        <p class="finding-head"><span class="sev sev-${sev}">${sevLabel}</span> <code class="rule">${esc(v.ruleId)}</code> <span class="wcag">${esc(mapping)}</span></p>
         <p class="finding-detail">${esc(v.detail)}</p>
         ${v.element ? `<code class="el">${esc(v.element)}</code>` : ""}
       </li>`;
     })
     .join("\n");
-  return items ? `<ul class="findings">${items}</ul>` : `<p class="none">No findings on this screen.</p>`;
+  return unchecked + (items ? `<ul class="findings">${items}</ul>` : `<p class="none">No findings on this screen.</p>`);
 }
 
 function transcriptHtml(s, id, audioEntries, includeAudioNote) {
@@ -355,7 +364,12 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
 
   const withGate = order.filter((id) => screens[id].gate);
   const failCount = withGate.filter((id) => screens[id].gate.errors > 0).length;
-  const passCount = withGate.length - failCount;
+  // A screen whose tree report could not check a criterion is not a pass:
+  // the gate fails it, so the header must not count it as passing either.
+  const uncheckedCount = withGate.filter(
+    (id) => screens[id].gate.errors === 0 && screens[id].uncheckedCriteria?.length,
+  ).length;
+  const passCount = withGate.length - failCount - uncheckedCount;
   const errorTotal = withGate.reduce((n, id) => n + screens[id].gate.errors, 0);
   const warnTotal = order.reduce(
     (n, id) => n + (screens[id].violations?.filter((v) => v.severity === "warn").length ?? 0),

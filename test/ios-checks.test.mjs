@@ -118,11 +118,14 @@ describe("runIosChecks", () => {
     assert.deepEqual(hit.criteria, ["1.1.1", "4.1.2"]);
   });
 
-  it("flags a sub-44pt target with pt math", () => {
+  it("warns on a sub-44pt target against the Apple guideline", () => {
     const v = check([el({ frame: { x: 0, y: 0, width: 100, height: 32 } })]);
     const hit = v.find((x) => x.ruleId === "ios-touch-target-small");
     assert.ok(hit);
     assert.ok(hit.detail.includes("100x32pt"));
+    assert.equal(hit.severity, "warn");
+    assert.deepEqual(hit.criteria, []);
+    assert.ok(!v.some((x) => x.ruleId === "ios-target-size-minimum"), "32pt meets WCAG 2.5.8");
   });
 
   it("warns, not errors, on duplicate announcements", () => {
@@ -185,6 +188,56 @@ describe("runIosChecks", () => {
       el({ type: "CheckBox", AXLabel: "Paperless", AXValue: "1", frame: { x: 0, y: 0, width: 51, height: 31 } }),
     ]);
     assert.equal(v.filter((x) => x.ruleId === "ios-touch-target-small").length, 0);
+  });
+
+  it("describes the 2.5.8 minimum in the findings", () => {
+    const v = check([
+      el({ frame: { x: 0, y: 0, width: 20, height: 20 } }),
+      el({ AXLabel: "Next", frame: { x: 20, y: 0, width: 200, height: 48 } }),
+    ]);
+    const hit = v.find((x) => x.ruleId === "ios-target-size-minimum");
+    assert.equal(hit.severity, "error");
+    assert.equal(hit.wcag, "2.5.8");
+    assert.match(hit.detail, /touch target 20x20pt \(minimum 24x24pt\) and its 24pt spacing circle overlaps Button/);
+  });
+
+  it("holds the WCAG 2.5.8 boundary at exactly 24pt (23.9 fails, 24 and 24.1 pass)", () => {
+    for (const [size, fails] of [[23.9, true], [24, false], [24.1, false]]) {
+      const v = check([
+        el({ frame: { x: 0, y: 0, width: size, height: size } }),
+        el({ AXLabel: "Next", frame: { x: size, y: 0, width: 200, height: 48 } }),
+      ]);
+      assert.equal(v.filter((x) => x.ruleId === "ios-target-size-minimum").length, fails ? 1 : 0, `${size}pt`);
+    }
+  });
+
+  it("applies the 2.5.8 spacing exception to undersized targets", () => {
+    const minimum = (elements) => check(elements).filter((x) => x.ruleId === "ios-target-size-minimum");
+    const small = (x, label) => el({ AXLabel: label, frame: { x, y: 0, width: 20, height: 20 } });
+    // Alone, a 20pt target's circle touches nothing.
+    assert.deepEqual(minimum([small(0, "Close")]), []);
+    // Centres 23pt apart: the circles overlap, so both fail.
+    const close = minimum([small(0, "Close"), small(23, "Info")]);
+    assert.equal(close.length, 2);
+    assert.match(close[0].detail, /overlaps the spacing circle of Button/);
+    // Centres exactly 24pt apart: the circles only touch.
+    assert.deepEqual(minimum([small(0, "Close"), small(24, "Info")]), []);
+    // A full-size neighbour 11pt from the centre overlaps; 12pt only touches.
+    assert.equal(minimum([small(0, "Close"), el({ AXLabel: "Next", frame: { x: 21, y: 0, width: 200, height: 48 } })]).length, 1);
+    assert.deepEqual(minimum([small(0, "Close"), el({ AXLabel: "Next", frame: { x: 22, y: 0, width: 200, height: 48 } })]), []);
+    // Disabled controls and static text are not targets.
+    assert.deepEqual(minimum([small(0, "Close"), el({ AXLabel: "Next", enabled: false, frame: { x: 21, y: 0, width: 200, height: 48 } })]), []);
+    assert.deepEqual(minimum([small(0, "Close"), el({ AXLabel: "Note", type: "StaticText", frame: { x: 21, y: 0, width: 200, height: 48 } })]), []);
+  });
+
+  it("exempts switch-family roles from both size rules but counts them as neighbours", () => {
+    const tinySwitch = el({ type: "Switch", AXLabel: "Paperless", AXValue: true, frame: { x: 0, y: 0, width: 20, height: 20 } });
+    const v = check([tinySwitch, el({ AXLabel: "Next", frame: { x: 20, y: 0, width: 200, height: 48 } })]);
+    assert.ok(!v.some((x) => ["ios-target-size-minimum", "ios-touch-target-small"].includes(x.ruleId)));
+    // A small button beside the switch still has to clear it.
+    const beside = check([tinySwitch, el({ AXLabel: "Info", frame: { x: 21, y: 0, width: 20, height: 20 } })]);
+    const hit = beside.find((x) => x.ruleId === "ios-target-size-minimum");
+    assert.match(hit.detail, /Switch/);
   });
 
   it("normalizes switch-family numeric state to on/off in the transcript", () => {

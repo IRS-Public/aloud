@@ -9,7 +9,13 @@
 // live in the user's iOS baseline file (see `aloud baseline`). Severity and
 // WCAG criteria per rule live in src/rules/catalog.mjs.
 
-import { createFindings, hasArea, repeatedAnnouncements } from "../rules/shared.mjs";
+import {
+  TARGET_SIZE_MINIMUM,
+  createFindings,
+  hasArea,
+  repeatedAnnouncements,
+  spacingConflict,
+} from "../rules/shared.mjs";
 import { INTERACTIVE_ROLES, composeUtterance, isFocusable } from "./voiceover.mjs";
 
 // idb v1.1.8 (the brew-installed release) emits ONE flat JSON array in
@@ -102,6 +108,8 @@ export function validateIosCapture(elements) {
 const isHeading = (el) =>
   el.role === "Heading" || /\bheading\b/i.test(el.roleDescription ?? "");
 
+const oneDecimal = (value) => Number(value.toFixed(1));
+
 const describe = (el) =>
   `${el.role || "?"}${el.testID ? ` testID=${el.testID}` : ""}` +
   `${el.frame ? ` @[${Math.round(el.frame.x)},${Math.round(el.frame.y)} ${Math.round(el.frame.w)}x${Math.round(el.frame.h)}pt]` : ""}`;
@@ -115,6 +123,17 @@ export function computeTranscript(elements) {
 
 export function runIosChecks(elements) {
   const { violations, add } = createFindings("iOS", describe);
+
+  // Every enabled target on screen, for the 2.5.8 spacing exception.
+  // Frames are already in points, the unit the rule measures in.
+  const undersized = (el) => el.frame.w < TARGET_SIZE_MINIMUM || el.frame.h < TARGET_SIZE_MINIMUM;
+  const targets = elements
+    .filter((el) => INTERACTIVE_ROLES.has(el.role) && el.enabled && hasArea(el.frame))
+    .map((el) => ({
+      element: el,
+      undersized: undersized(el),
+      box: { x1: el.frame.x, y1: el.frame.y, x2: el.frame.x + el.frame.w, y2: el.frame.y + el.frame.h },
+    }));
 
   for (const el of elements) {
     if (!hasArea(el.frame)) continue;
@@ -133,13 +152,37 @@ export function runIosChecks(elements) {
       add("ios-image-unlabeled", el, "image element without an accessibility label");
     }
 
-    // Target size — 44x44pt is the Apple platform minimum (HIG; Apple's
-    // hitRegion audit uses the same bar. WCAG 2.5.8 AA is 24px — we hold
-    // the platform bar, same policy as the Android 48dp rule).
     // UISwitch is 51x31pt from Apple's own hands — their audit passes it,
-    // so the platform-minimum rule exempts switch-family roles (the row
-    // that hosts one typically extends the hit area anyway).
-    if (interactive && el.enabled && !SWITCH_ROLES.has(el.role) && (el.frame.w < 44 || el.frame.h < 44)) {
+    // so both target-size rules exempt switch-family roles (the row that
+    // hosts one typically extends the hit area anyway). A switch still
+    // counts as a neighbour in other targets' spacing checks.
+    const sizeJudged = interactive && el.enabled && !SWITCH_ROLES.has(el.role);
+
+    // 2.5.8 Target Size (Minimum) — a target under 24x24pt fails unless
+    // the spacing exception covers it: its 24pt circle must stay clear of
+    // every other target and every other undersized target's circle. The
+    // dump is flat, so every other target is a neighbour. The inline,
+    // essential, user-agent, and equivalent-control exceptions need a human.
+    if (sizeJudged && undersized(el)) {
+      const self = targets.find((t) => t.element === el);
+      const conflict = spacingConflict(self, targets);
+      if (conflict) {
+        const overlap = conflict.with === "target"
+          ? `overlaps ${describe(conflict.other.element)}`
+          : `overlaps the spacing circle of ${describe(conflict.other.element)}`;
+        add(
+          "ios-target-size-minimum",
+          el,
+          `touch target ${oneDecimal(el.frame.w)}x${oneDecimal(el.frame.h)}pt ` +
+            `(minimum 24x24pt) and its 24pt spacing circle ${overlap}`,
+        );
+      }
+    }
+
+    // Platform guideline, report-only — the Apple Human Interface
+    // Guidelines (and Apple's hitRegion audit) ask for 44x44pt. No WCAG AA
+    // criterion requires it, so the catalog maps it to none.
+    if (sizeJudged && (el.frame.w < 44 || el.frame.h < 44)) {
       add(
         "ios-touch-target-small",
         el,
