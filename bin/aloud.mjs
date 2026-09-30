@@ -51,6 +51,7 @@ const OPTIONS = {
     ...GLOBAL_OPTIONS,
     baseline: { type: "string" },
     prune: { type: "boolean" },
+    "allow-mixed": { type: "boolean" },
     accept: { type: "string" },
     kind: { type: "string" },
     summary: { type: "string" },
@@ -97,6 +98,7 @@ Commands:
                combine per-screen evidence from different runs]
   baseline     Accept current counts into a baseline: aloud baseline <report-dir> [--baseline <file>]
                [--prune] [--accept <screen>:<ruleId> --kind <kind> --summary "..." [--issue <ref>]]
+               [--allow-mixed: accept tree reports from different runs]
   openacr      Emit a draft OpenACR (--android/--ios baselines or --report/--report-ios/--report-web dirs)
                [--date YYYY-MM-DD] [--version <v>] [--catalog <file>: same chapters and criteria
                as the bundled 2.5-edition-wcag-2.2-508-en catalog] [--allow-mixed: combine inputs
@@ -343,6 +345,7 @@ function runBaseline(argv) {
       : cfg.baseline.android;
   const args = [join(ALOUD_HOME, "src", "report", "baseline.mjs"), dir, "--baseline", baseline];
   if (values.prune) args.push("--prune");
+  if (values["allow-mixed"]) args.push("--allow-mixed");
   // --flag=value, so a summary that starts with "-" is not read as a flag.
   for (const flag of ["accept", "kind", "summary", "issue"]) {
     if (values[flag] !== undefined) args.push(`--${flag}=${values[flag]}`);

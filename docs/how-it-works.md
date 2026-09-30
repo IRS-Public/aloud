@@ -65,18 +65,24 @@ Reports land under the report root (`--out`, default `aloud-report`):
 
 Every evidence file records where it came from under `provenance`
 (`src/provenance.mjs`): the audited app's git commit and whether its
-working tree had uncommitted changes (the report dir itself does not
-count), aloud's version and commit, the OS, architecture, and Node.js
-version, the GitHub Actions run URL when there is one, and tool versions
-(the TalkBack build, the Accessibility Test Framework, `adb`, Xcode).
+working tree had uncommitted changes (aloud's own output, the report dir
+and the `.aloud-cache` download dir or `$ALOUD_CACHE`, does not count),
+aloud's version and commit, the OS, architecture, and Node.js version,
+the GitHub Actions run id, attempt, and URL when there is one, and tool
+versions (the TalkBack build, the Accessibility Test Framework, the `adb`
+the walker runs, Xcode). The shared fields use the USWDS accessibility
+harness's `evidence.json` names (`commit`, `workingTreeDirty`,
+`platform`, `architecture`, `osRelease`, `node`, `githubRunId`,
+`githubRunAttempt`); aloud adds `githubRunUrl`, `aloud`, and `tools`.
 Anything that cannot be read, such as a directory that is not a git
 checkout, is `null`, never "clean". `summary.json` states the run's
 provenance, and the evidence page shows it. A report dir must hold one
-run: `aloud report` refuses to combine files from another commit, a
-dirty tree, another aloud, machine, or CI run, or files written before
-provenance next to newer ones. Re-run into a fresh report dir, or pass
-`--allow-mixed`; the summary then lists every source and the files it
-covers. Report dirs written before provenance still aggregate unchanged.
+run: `aloud report` and `aloud baseline` refuse to combine files from
+another commit, a dirty tree, another aloud, machine, or CI run, or
+files written before provenance next to newer ones. Re-run into a fresh
+report dir, or pass `--allow-mixed`; the summary then lists every source
+and the files it covers. Report dirs written before provenance still
+aggregate unchanged.
 
 A missing accessibility capture fails the walk before it writes that screen's
 tree report or screenshot. Android requires a complete XML hierarchy with

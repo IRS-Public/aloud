@@ -27,6 +27,7 @@ import { fileURLToPath } from "node:url";
 import { cliArgs } from "../cli-args.mjs";
 import { loadNavigator } from "../nav/index.mjs";
 import {
+  ADB,
   getDensityDpi,
   getNight,
   launchApp,
@@ -110,7 +111,9 @@ async function walk() {
   // see the transcript pass's files as a change to the app.
   const provenance = collectProvenance({
     exclude: [OUT, ...(cfg.out ? [cfg.out] : [])],
-    probes: { adb: ["adb", "version"] },
+    // The adb the walker itself runs (ADB_PATH, ANDROID_HOME, or the SDK
+    // dir, then PATH), not whichever adb happens to be first on PATH.
+    probes: { adb: [ADB, "version"] },
     tools: {
       ...(PASS === "transcript" && cfg.android?.talkBack === "focus" ? { talkback: TALKBACK_COMMIT } : {}),
       ...(PASS === "tree" && cfg.android?.atf ? { "accessibility-test-framework": ATF_VERSION } : {}),

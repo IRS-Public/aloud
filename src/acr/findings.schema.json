@@ -30,8 +30,8 @@
       "properties": {
         "commit": { "$ref": "#/definitions/text" },
         "workingTreeDirty": {
-          "description": "True when the commit had uncommitted changes as the evidence was produced.",
-          "type": "boolean"
+          "description": "True when the commit had uncommitted changes as the evidence was produced; null when the producer could not tell.",
+          "type": ["boolean", "null"]
         },
         "runUrl": { "$ref": "#/definitions/url" },
         "date": { "$ref": "#/definitions/date" },

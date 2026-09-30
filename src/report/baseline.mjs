@@ -12,7 +12,7 @@
 // Only run this to ACCEPT current counts (initial baseline, or after a
 // fix lowers them). Commit the result alongside the change that earned it.
 //
-//   aloud baseline <report-dir> [--baseline <file>] [--prune]
+//   aloud baseline <report-dir> [--baseline <file>] [--prune] [--allow-mixed]
 //     [--accept <screen>:<ruleId> --kind <kind> --summary "..." [--issue <ref>]]
 //
 // Accepted reasons (src/report/accepted.mjs) already in the baseline carry
@@ -20,6 +20,12 @@
 // the merge. --prune drops screens this run did not cover (renamed or
 // removed screens) instead of keeping them. The merge itself is
 // mergeBaseline in baseline-merge.mjs.
+//
+// Like `aloud report`, it refuses tree reports from different runs
+// (another commit, uncommitted changes, another aloud or CI run; see
+// src/provenance.mjs combineProvenance): a baseline drawn from two
+// versions of the app ratchets against counts nobody measured together.
+// --allow-mixed accepts them anyway, with a warning.
 //
 // With no args, the report dir and baseline come from the resolved
 // config (env ALOUD_CONFIG): <out>/android and baseline.android, or the
@@ -33,10 +39,11 @@ import { parseAcceptFlags } from "./accepted.mjs";
 import { mergeBaseline } from "./baseline-merge.mjs";
 import { platformForReportDir } from "./platform.mjs";
 import { readTreeReport } from "./tree-report.mjs";
-import { migrationNote } from "./validation.mjs";
+import { migrationNote, readEvidenceProvenance } from "./validation.mjs";
+import { combineProvenance } from "../provenance.mjs";
 
 const USAGE =
-  "usage: aloud baseline <report-dir> [--baseline <file>] [--prune] " +
+  "usage: aloud baseline <report-dir> [--baseline <file>] [--prune] [--allow-mixed] " +
   '[--accept <screen>:<ruleId> --kind <kind> --summary "..." [--issue <ref>]]';
 
 const { opt, flag, positionals } = cliArgs(
@@ -44,6 +51,7 @@ const { opt, flag, positionals } = cliArgs(
   {
     baseline: { type: "string" },
     prune: { type: "boolean" },
+    "allow-mixed": { type: "boolean" },
     accept: { type: "string" },
     kind: { type: "string" },
     summary: { type: "string" },
@@ -106,10 +114,14 @@ const files = readdirSync(reportDir)
   .filter((f) => f.endsWith(".tree.json"))
   .sort();
 
+// Each tree report's provenance, checked for one run after the loop.
+const sources = [];
 for (const file of files) {
   // The same reading `aloud report` uses: ATF reports are recomputed from
   // their native evidence, so their gate is the current one.
-  const report = readTreeReport(JSON.parse(readFileSync(join(reportDir, file), "utf8")), file, { isIos });
+  const raw = JSON.parse(readFileSync(join(reportDir, file), "utf8"));
+  sources.push({ file, provenance: readEvidenceProvenance(raw, file) });
+  const report = readTreeReport(raw, file, { isIos });
   // An ordinary report from before the touch-target reclassification
   // holds no evidence for the rule that now gates 2.5.8; accepting it
   // would bless counts nobody measured.
@@ -125,6 +137,18 @@ for (const file of files) {
 
 if (Object.keys(gates).length === 0) {
   console.error("No gate reports found — nothing written.");
+  process.exit(1);
+}
+
+// One baseline describes one version of the app: refuse tree reports from
+// different runs before writing anything, unless explicitly allowed.
+try {
+  const provenance = combineProvenance(sources, { allowMixed: flag("allow-mixed"), what: `report dir ${reportDir}` });
+  if (provenance?.mixed) {
+    console.warn(`warning: --allow-mixed: ${reportDir} combines evidence from ${provenance.mixed.length} different runs`);
+  }
+} catch (error) {
+  console.error(`aloud baseline: ${error.message}`);
   process.exit(1);
 }
 

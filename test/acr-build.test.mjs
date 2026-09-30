@@ -179,6 +179,9 @@ describe("buildAcr on a harness-shaped component", () => {
     assert.match(dirty.notes, /commit 0123abc plus uncommitted changes, run /);
     const clean = build({ ...button(), provenance: { ...button().provenance, workingTreeDirty: false } });
     assert.match(clean.notes, /commit 0123abc, run /);
+    // null is "could not tell", which must not read as clean.
+    const unknown = build({ ...button(), provenance: { ...button().provenance, workingTreeDirty: null } });
+    assert.match(unknown.notes, /commit 0123abc \(working tree state unknown\), run /);
     assert.throws(() => build({ ...button(), provenance: { ...button().provenance, workingTreeDirty: "yes" } }),
       /provenance\.workingTreeDirty/);
   });

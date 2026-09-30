@@ -37,16 +37,20 @@ differ. A trimmed or reordered catalog is rejected rather than producing a
 report that names one catalog and lists another's criteria.
 
 The draft says where its evidence came from. A report summary's
-provenance becomes the findings' `provenance` (commit, uncommitted
-changes, the CI run when every input shares one, and the aloud, Node.js,
-and tool versions), and the report notes state it per platform. Inputs
-from different code (another app commit, uncommitted changes on one
-side only, or another aloud) are refused, because a draft describes one
-version of the product; so is a summary written with `--allow-mixed`.
-Pass `--allow-mixed` to combine them anyway, and the notes say the draft
-does not describe a single version. Machines and CI runs may differ.
-Baselines, and summaries written before provenance, record none; they
-are accepted and the notes say so.
+provenance becomes the findings' `provenance`: the aloud, Node.js, and
+tool versions, and the commit (with its working tree state) and CI run
+when every input recorded provenance and they all agree. The report
+notes state that once for the whole draft, and each platform's note adds
+its machine (and its own commit or run when there is no shared one).
+Inputs from different code (another app commit, uncommitted changes on
+one side only, or another aloud) are refused, because a draft describes
+one version of the product, and the error says which of those differs;
+so is a summary written with `--allow-mixed`. Pass `--allow-mixed` to
+combine them anyway, and the notes say the draft does not describe a
+single version. Machines and CI runs may differ. Baselines, and
+summaries written before provenance, record none; they are accepted and
+the notes say so, and the draft then names no commit for the whole
+product, since that evidence could come from any build.
 
 The emitter turns the audit inputs into a findings document
 (`src/acr/from-aloud.mjs`) and builds the draft with the shared builder in
@@ -224,7 +228,8 @@ links. A note over `maxNoteLength` (default 1500) is cut at a word and
 ends with "(truncated; see evidence)". The title ends in "(draft)". The
 report date comes from `options.date` or `provenance.date`; one is
 required. The report notes state `provenance`: the commit (with "plus
-uncommitted changes" when `workingTreeDirty` is true), the run URL, the
+uncommitted changes" when `workingTreeDirty` is true, and "working tree
+state unknown" when it is `null`), the run URL, the
 date, and the tools. Without an author email, the draft uses a placeholder and says
 it must be replaced. `buildAcr` checks its own output with `validateAcr`,
 which runs the `@openacr/openacr` schema and catalog validators and checks

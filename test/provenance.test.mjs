@@ -15,8 +15,10 @@ import { describe, it } from "node:test";
 
 import {
   PROVENANCE_SCHEMA_VERSION,
+  cacheDir,
   collectProvenance,
   combineProvenance,
+  describeCode,
   describeProvenance,
   formatProvenance,
   formatTools,
@@ -101,8 +103,24 @@ describe("formatProvenance and validation", () => {
     assert.equal(value.commit, null);
     assert.equal(value.workingTreeDirty, null);
     assert.deepEqual(value.aloud, { version: "0.1.0", commit: null, workingTreeDirty: null });
-    assert.equal(value.github, null);
+    assert.equal(value.githubRunId, null);
+    assert.equal(value.githubRunAttempt, null);
+    assert.equal(value.githubRunUrl, null);
     assert.deepEqual(Object.entries(value.tools), [["a", "2"], ["z", "1"]]);
+  });
+
+  it("uses the harness evidence.json names for the fields both record", () => {
+    const value = record({ env: ACTIONS_ENV });
+    // testing/support/evidence-reporter.mjs in the USWDS accessibility harness.
+    for (const key of ["commit", "workingTreeDirty", "platform", "architecture", "osRelease", "node", "githubRunId", "githubRunAttempt"]) {
+      assert.ok(Object.hasOwn(value, key), key);
+    }
+    assert.equal(value.architecture, "arm64");
+    assert.equal(value.githubRunId, "123");
+    assert.equal(value.githubRunAttempt, "2");
+    assert.equal(value.githubRunUrl, "https://github.com/example/app/actions/runs/123/attempts/2");
+    assert.equal(Object.hasOwn(value, "arch"), false);
+    assert.equal(Object.hasOwn(value, "github"), false);
   });
 
   it("rejects malformed records", () => {
@@ -114,7 +132,9 @@ describe("formatProvenance and validation", () => {
       ["a missing platform", (r) => { delete r.platform; }, /platform/],
       ["a missing aloud version", (r) => { delete r.aloud.version; }, /aloud.version/],
       ["an unknown aloud field", (r) => { r.aloud.extra = true; }, /unknown field/],
-      ["a relative run URL", (r) => { r.github = { ...githubRun(ACTIONS_ENV), runUrl: "/runs/1" }; }, /runUrl/],
+      ["a relative run URL", (r) => { r.githubRunUrl = "/runs/1"; }, /githubRunUrl/],
+      ["a numeric run id", (r) => { r.githubRunId = 123; }, /githubRunId/],
+      ["the old nested github field", (r) => { r.github = null; }, /unknown field/],
       ["a blank tool version", (r) => { r.tools.talkback = " "; }, /tools/],
       ["an array of tools", (r) => { r.tools = []; }, /tools/],
     ];
@@ -143,6 +163,12 @@ describe("formatProvenance and validation", () => {
     assert.match(text, /tools: talkback abc123\.$/);
     assert.equal(describeProvenance(undefined), "No provenance recorded.");
   });
+
+  it("never describes an unreadable working tree as clean", () => {
+    const unknown = record({ app: { commit: APP_COMMIT, workingTreeDirty: null } });
+    assert.match(describeCode(unknown), /^commit aaaaaaaaaaaa \(working tree state unknown\), checked by/);
+    assert.match(describeCode(record()), /^commit aaaaaaaaaaaa, checked by/);
+  });
 });
 
 describe("collectProvenance with a fake exec", () => {
@@ -169,10 +195,11 @@ describe("collectProvenance with a fake exec", () => {
       });
       assert.equal(value.commit, APP_COMMIT);
       assert.equal(value.workingTreeDirty, true);
-      assert.equal(value.github.runUrl, "https://github.com/example/app/actions/runs/123/attempts/2");
+      assert.equal(value.githubRunUrl, "https://github.com/example/app/actions/runs/123/attempts/2");
       const status = calls.find((call) => call.cwd === app && call.args[0] === "status");
-      // The report dir inside the repo is excluded; one outside it is ignored.
-      assert.deepEqual(status.args.slice(-2), [":/", ":(top,exclude)aloud-report"]);
+      // The report dir inside the repo is excluded; one outside it is
+      // ignored; aloud's download cache is always excluded.
+      assert.deepEqual(status.args.slice(-3), [":/", ":(top,exclude)aloud-report", ":(top,exclude).aloud-cache"]);
     } finally {
       rmSync(app, { recursive: true, force: true });
     }
@@ -187,6 +214,36 @@ describe("collectProvenance with a fake exec", () => {
     const value = collectProvenance({ cwd: "/app", env: {}, exec, runtime: RUNTIME, aloudHome: ROOT });
     assert.equal(value.aloud.commit, null);
     assert.equal(value.aloud.workingTreeDirty, null);
+  });
+
+  it("excludes $ALOUD_CACHE instead of .aloud-cache when it is set", () => {
+    assert.equal(cacheDir({}), ".aloud-cache");
+    assert.equal(cacheDir({ ALOUD_CACHE: "/tmp/cache" }), "/tmp/cache");
+    const app = realpathSync(mkdtempSync(join(tmpdir(), "aloud-provenance-cache-")));
+    try {
+      const { exec, calls } = fakeExec({
+        [`${app}: git rev-parse --show-toplevel`]: `${app}\n`,
+        [`${app}: git rev-parse HEAD`]: `${APP_COMMIT}\n`,
+        [`${app}: git status`]: "",
+      });
+      collectProvenance({ cwd: app, env: { ALOUD_CACHE: "vendor/apks" }, exec, runtime: RUNTIME, aloudHome: ROOT });
+      const status = calls.find((call) => call.cwd === app && call.args[0] === "status");
+      assert.deepEqual(status.args.slice(-2), [":/", ":(top,exclude)vendor/apks"]);
+    } finally {
+      rmSync(app, { recursive: true, force: true });
+    }
+  });
+
+  it("records no app commit when requireRoot names another checkout (the demo under node_modules)", () => {
+    const home = join(dirname(ROOT), "project", "node_modules", "@irs-public", "aloud");
+    const { exec } = fakeExec({
+      [`${home}: git rev-parse --show-toplevel`]: `${join(dirname(ROOT), "project")}\n`,
+      [`${home}: git rev-parse HEAD`]: `${OTHER_COMMIT}\n`,
+      [`${home}: git status`]: " M src/app.js\n",
+    });
+    const value = collectProvenance({ cwd: home, requireRoot: home, env: {}, exec, runtime: RUNTIME, aloudHome: home });
+    assert.equal(value.commit, null);
+    assert.equal(value.workingTreeDirty, null);
   });
 
   it("reads aloud's own checkout when it is the repo's top level", () => {
@@ -223,6 +280,14 @@ describe("collectProvenance with a fake exec", () => {
   });
 });
 
+describe("the walkers' tool probes", () => {
+  it("probe the adb the Android walker runs, not whichever is first on PATH", () => {
+    const source = readFileSync(join(ROOT, "src/android/walk.mjs"), "utf8");
+    assert.match(source, /probes: \{ adb: \[ADB, "version"\] \}/);
+    assert.doesNotMatch(source, /\["adb", "version"\]/);
+  });
+});
+
 describe("readGitState in a real repo", () => {
   const hasGit = spawnSync("git", ["--version"]).status === 0;
 
@@ -242,6 +307,15 @@ describe("readGitState in a real repo", () => {
       assert.equal(excluded.commit, head);
       assert.equal(excluded.workingTreeDirty, false);
       assert.equal(readGitState(app).workingTreeDirty, true);
+
+      // aloud's download cache (`aloud talkback get`) is aloud's own
+      // output too: collectProvenance never counts it as an app change.
+      mkdirSync(join(app, ".aloud-cache"));
+      writeFileSync(join(app, ".aloud-cache", "talkback.apk"), "apk");
+      assert.equal(readGitState(app, { exclude: [join(app, "aloud-report")] }).workingTreeDirty, true);
+      const collected = collectProvenance({ cwd: app, exclude: [join(app, "aloud-report")], env: {}, runtime: RUNTIME, aloudHome: ROOT });
+      assert.equal(collected.commit, head);
+      assert.equal(collected.workingTreeDirty, false);
 
       writeFileSync(join(app, "app.js"), "console.log(2);\n");
       assert.equal(readGitState(app, { exclude: [join(app, "aloud-report")] }).workingTreeDirty, true);
@@ -330,8 +404,13 @@ describe("report summaries", () => {
       join(ROOT, "bin/aloud.mjs"), "report", "--dir", out,
       "--baseline", join(cwd, "baseline.json"), "--out", join(cwd, "config"), ...flags,
     ], { cwd, encoding: "utf8", env: { ...process.env, ALOUD_CONFIG: "" } });
+    const baseline = (...flags) => spawnSync(process.execPath, [
+      join(ROOT, "bin/aloud.mjs"), "baseline", out,
+      "--baseline", join(cwd, "baseline.json"), "--out", join(cwd, "config"), ...flags,
+    ], { cwd, encoding: "utf8", env: { ...process.env, ALOUD_CONFIG: "" } });
     const summary = () => JSON.parse(readFileSync(join(out, "summary.json"), "utf8"));
-    return { run, summary, out };
+    const baselineFile = () => JSON.parse(readFileSync(join(cwd, "baseline.json"), "utf8"));
+    return { run, baseline, summary, baselineFile, out };
   }
 
   it("states the run's provenance in summary.json and on the evidence page", (t) => {
@@ -372,6 +451,32 @@ describe("report summaries", () => {
     assert.doesNotThrow(() => normalizeAudit(f.summary()));
   });
 
+  it("refuses to baseline tree reports from different commits unless --allow-mixed", (t) => {
+    const f = reportDir(t, {
+      "home.tree.json": treeReport("home", record()),
+      "settings.tree.json": treeReport("settings", record({ app: { commit: OTHER_COMMIT, workingTreeDirty: false } })),
+    });
+    const refused = f.baseline();
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /aloud baseline: the report dir .* mixes evidence from different runs/);
+    assert.throws(() => f.baselineFile(), /ENOENT/);
+
+    const allowed = f.baseline("--allow-mixed");
+    assert.equal(allowed.status, 0, allowed.stderr);
+    assert.match(allowed.stderr, /warning: --allow-mixed/);
+    assert.deepEqual(Object.keys(f.baselineFile()).sort(), ["home", "settings"]);
+  });
+
+  it("baselines tree reports from one run, and ones written before provenance", (t) => {
+    const one = reportDir(t, {
+      "home.tree.json": treeReport("home", record()),
+      "settings.tree.json": treeReport("settings", record()),
+    });
+    assert.equal(one.baseline().status, 0);
+    const old = reportDir(t, { "home.tree.json": treeReport("home") });
+    assert.equal(old.baseline().status, 0);
+  });
+
   it("rejects malformed provenance in an evidence file", (t) => {
     const bad = { ...record(), commit: "not-a-commit" };
     const f = reportDir(t, { "home.tree.json": treeReport("home", bad) });
@@ -402,20 +507,47 @@ describe("OpenACR provenance", () => {
     assert.equal(doc.provenance.workingTreeDirty, false);
     assert.equal(doc.provenance.runUrl, "https://github.com/example/app/actions/runs/123/attempts/2");
     assert.deepEqual(doc.provenance.tools.map((tool) => tool.name), ["aloud", "Node.js", "talkback", "xcode"]);
-    assert.ok(doc.notes.some((note) => /^Android evidence provenance: commit aaaaaaaaaaaa/.test(note)));
+    // The builder states the shared commit, run, and tools once; each
+    // platform's note adds only its machine.
+    assert.ok(doc.notes.includes("Android evidence provenance: Node v22.12.0 on darwin arm64."));
 
     const acr = buildAloudAcr(inputs({ android, ios, date: "2026-09-30" }));
     assert.match(acr.notes, new RegExp(`The evidence comes from commit ${APP_COMMIT}, run https://github\\.com/example/app/actions/runs/123/attempts/2`));
     assert.match(acr.notes, /Tools: aloud 0\.1\.0 \(cccccccccccc\), Node\.js v22\.12\.0, talkback abc123, xcode Xcode 27\.0\./);
+    assert.equal(acr.notes.match(/cccccccccccc/g).length, 1);
+    assert.equal(acr.notes.match(/actions\/runs\/123/g).length, 1);
+  });
+
+  it("says when the working tree state could not be read, never implying clean", () => {
+    const android = summary(record({ app: { commit: APP_COMMIT, workingTreeDirty: null } }));
+    const doc = aloudFindings(inputs({ android }));
+    assert.doesNotThrow(() => validateFindings(doc));
+    assert.equal(doc.provenance.workingTreeDirty, null);
+    const acr = buildAloudAcr(inputs({ android, date: "2026-09-30" }));
+    assert.match(acr.notes, new RegExp(`The evidence comes from commit ${APP_COMMIT} \\(working tree state unknown\\)`));
   });
 
   it("refuses Android and iOS evidence from different commits unless allowMixed", () => {
     const android = summary(record());
     const ios = summary(record({ app: { commit: OTHER_COMMIT, workingTreeDirty: false } }));
-    assert.throws(() => aloudFindings(inputs({ android, ios })), /Android: commit aaaaaaaaaaaa.*iOS: commit bbbbbbbbbbbb.*--allow-mixed/);
+    assert.throws(() => aloudFindings(inputs({ android, ios })),
+      /Android: commit aaaaaaaaaaaa.*iOS: commit bbbbbbbbbbbb.*re-run the audits on one commit, or pass --allow-mixed/);
     const doc = aloudFindings(inputs({ android, ios, allowMixed: true }));
     assert.equal(doc.provenance.commit, undefined);
     assert.ok(doc.notes.some((note) => /combined with --allow-mixed/.test(note)));
+    // Without a draft-wide commit, each platform's note names its own.
+    assert.ok(doc.notes.some((note) => /^iOS evidence provenance: commit bbbbbbbbbbbb, checked by aloud/.test(note)));
+  });
+
+  it("advises on what actually differs when the commits match", () => {
+    const android = summary(record({ app: { commit: APP_COMMIT, workingTreeDirty: true } }));
+    const ios = summary(record());
+    assert.throws(() => aloudFindings(inputs({ android, ios })), (error) =>
+      /the commits match but the working tree state differs: commit or stash the changes/.test(error.message) &&
+        !/re-run the audits on one commit/.test(error.message));
+    const newerAloud = summary(record({ aloud: { version: "0.2.0", commit: ALOUD_COMMIT, workingTreeDirty: false } }));
+    assert.throws(() => aloudFindings(inputs({ android: ios, ios: newerAloud })), (error) =>
+      /re-run the audits with one version of aloud/.test(error.message) && !/one commit/.test(error.message));
   });
 
   it("allows different machines and CI runs for one commit", () => {
@@ -445,8 +577,27 @@ describe("OpenACR provenance", () => {
     const ios = summary(record());
     const doc = aloudFindings(inputs({ android, ios }));
     assert.ok(doc.notes.some((note) => /^Android evidence records no provenance/.test(note)));
-    assert.equal(doc.provenance.commit, APP_COMMIT);
+    // The baseline could come from any build, so the draft names no
+    // commit for the whole product; the iOS note names iOS's own.
+    assert.equal(doc.provenance.commit, undefined);
+    assert.equal(Object.hasOwn(doc.provenance, "workingTreeDirty"), false);
+    assert.ok(doc.notes.some((note) => /^iOS evidence provenance: commit aaaaaaaaaaaa/.test(note)));
+    const acr = buildAloudAcr(inputs({ android, ios, date: "2026-09-30" }));
+    assert.doesNotMatch(acr.notes, /The evidence comes from commit/);
     const baselinesOnly = aloudFindings(inputs({ android }));
     assert.equal(Object.hasOwn(baselinesOnly, "provenance"), false);
+  });
+
+  it("names no draft-wide commit or run for a mixed summary that includes files without provenance", () => {
+    const mixed = {
+      schemaVersion: 1,
+      mixed: [
+        { provenance: record({ env: ACTIONS_ENV }), files: ["home.tree.json"] },
+        { provenance: null, files: ["old.tree.json"] },
+      ],
+    };
+    const doc = aloudFindings(inputs({ android: summary(mixed), allowMixed: true }));
+    assert.equal(doc.provenance.commit, undefined);
+    assert.equal(doc.provenance.runUrl, undefined);
   });
 });

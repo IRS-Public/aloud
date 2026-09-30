@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 import { dedupeConsecutive, segmentTranscript } from "../android/transcript.mjs";
 import { parseUiDump, runChecks } from "../android/ui-tree.mjs";
 import { cliArgs } from "../cli-args.mjs";
-import { collectProvenance } from "../provenance.mjs";
+import { ALOUD_HOME, collectProvenance } from "../provenance.mjs";
 import { reconstructSpeech } from "./speak.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -109,8 +109,11 @@ if (
 }
 
 // ── write the per-screen artifacts in the walker's exact shapes ──
-// The sample ships inside aloud, so the "app" commit is aloud's own.
-const provenance = collectProvenance({ cwd: HERE, exclude: [OUT] });
+// The sample ships inside aloud, so the "app" commit is aloud's own: read
+// only from aloud's own checkout. Installed under a project's
+// node_modules, the enclosing repo is that project, not the sample, so
+// the commit is recorded as unknown rather than as the project's.
+const provenance = collectProvenance({ cwd: ALOUD_HOME, requireRoot: ALOUD_HOME, exclude: [OUT] });
 writeFileSync(
   join(OUT, `${SCREEN_ID}.tree.json`),
   JSON.stringify(

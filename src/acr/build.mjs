@@ -186,14 +186,21 @@ function policyChanges(policy) {
   return changes;
 }
 
+// A commit's working tree state in words. true and false are what the
+// producer read; null means it tried and could not tell, which must not
+// read as clean. A producer that says nothing (undefined) gets no words.
+function treeState(workingTreeDirty) {
+  if (workingTreeDirty === true) return " plus uncommitted changes";
+  if (workingTreeDirty === null) return " (working tree state unknown)";
+  return "";
+}
+
 // Where the evidence came from, for the report notes: the commit (and
 // whether it had uncommitted changes), the run, the date, and the tools.
 function provenanceNote(provenance) {
   if (!provenance) return "";
   const sources = [];
-  if (provenance.commit) {
-    sources.push(`commit ${provenance.commit}${provenance.workingTreeDirty ? " plus uncommitted changes" : ""}`);
-  }
+  if (provenance.commit) sources.push(`commit ${provenance.commit}${treeState(provenance.workingTreeDirty)}`);
   if (provenance.runUrl) sources.push(`run ${provenance.runUrl}`);
   const dated = provenance.date ? `dated ${provenance.date}` : "";
   let note = "";

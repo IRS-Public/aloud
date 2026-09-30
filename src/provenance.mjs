@@ -3,18 +3,27 @@
 // Every evidence file aloud writes (per-screen tree and transcript reports,
 // web-run.json) carries one of these records under `provenance`; report.mjs
 // copies it into summary.json, and the OpenACR drafts state it in their
-// notes. The shape follows the USWDS accessibility harness's evidence.json
-// provenance, so both evidence sources say the same things the same way:
+// notes.
 //
 //   {
 //     schemaVersion: 1,
 //     commit: "<40 hex>" | null,         the audited app's repo at cwd
 //     workingTreeDirty: true | false | null,
-//     platform: "darwin", arch: "arm64", osRelease: "25.6.0", node: "v22.12.0",
+//     platform: "darwin", architecture: "arm64", osRelease: "25.6.0", node: "v22.12.0",
+//     githubRunId: "123" | null, githubRunAttempt: "2" | null,
+//     githubRunUrl: "https://github.com/<repo>/actions/runs/123/attempts/2" | null,
 //     aloud: { version: "0.1.0", commit: "<40 hex>" | null, workingTreeDirty: ... },
-//     github: { server, repository, runId, runAttempt, runUrl } | null,
 //     tools: { "talkback": "<commit>", "xcode": "Xcode 27.0 Build version 18A1", ... },
 //   }
+//
+// The shared fields use the USWDS accessibility harness's evidence.json
+// provenance names (testing/support/evidence-reporter.mjs): commit,
+// workingTreeDirty, platform, architecture, osRelease, node, githubRunId,
+// and githubRunAttempt mean the same thing in both, so a reader can take
+// them from either source with the same keys. aloud adds githubRunUrl, its
+// own version and commit under `aloud`, and its tool versions under
+// `tools`: its set of tools varies by platform and pass, where the harness
+// writes its fixed ones (vitest, playwright) as top-level keys.
 //
 // null means "not known", never "clean": git may be missing, the app may
 // not be a git checkout, or aloud may be installed from npm. Collecting
@@ -34,7 +43,7 @@ import { fileURLToPath } from "node:url";
 export const PROVENANCE_SCHEMA_VERSION = 1;
 
 // aloud's own checkout (or installed package) root.
-const ALOUD_HOME = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+export const ALOUD_HOME = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isText = (value) => typeof value === "string" && value.trim().length > 0;
@@ -78,24 +87,27 @@ export function formatTools(tools = {}) {
 //
 //   app       { commit, workingTreeDirty } for the audited app (nulls when unknown)
 //   aloud     { version, commit, workingTreeDirty }
-//   runtime   { platform, arch, osRelease, node }
+//   runtime   { platform, arch, osRelease, node }, as process reports them
 //   env       environment variables (for the GitHub run)
 //   tools     { name: version }
 export function formatProvenance({ app = {}, aloud = {}, runtime = {}, env = {}, tools = {} } = {}) {
+  const run = githubRun(env);
   const record = {
     schemaVersion: PROVENANCE_SCHEMA_VERSION,
     commit: app.commit ?? null,
     workingTreeDirty: app.workingTreeDirty ?? null,
     platform: runtime.platform,
-    arch: runtime.arch,
+    architecture: runtime.arch,
     osRelease: runtime.osRelease,
     node: runtime.node,
+    githubRunId: run?.runId ?? null,
+    githubRunAttempt: run?.runAttempt ?? null,
+    githubRunUrl: run?.runUrl ?? null,
     aloud: {
       version: aloud.version,
       commit: aloud.commit ?? null,
       workingTreeDirty: aloud.workingTreeDirty ?? null,
     },
-    github: githubRun(env),
     tools: formatTools(tools),
   };
   return validateProvenance(record);
@@ -103,8 +115,20 @@ export function formatProvenance({ app = {}, aloud = {}, runtime = {}, env = {},
 
 // ── validation ──
 
-const RECORD_KEYS = ["schemaVersion", "commit", "workingTreeDirty", "platform", "arch", "osRelease", "node", "aloud", "github", "tools"];
-const GITHUB_KEYS = ["server", "repository", "runId", "runAttempt", "runUrl"];
+const RECORD_KEYS = [
+  "schemaVersion",
+  "commit",
+  "workingTreeDirty",
+  "platform",
+  "architecture",
+  "osRelease",
+  "node",
+  "githubRunId",
+  "githubRunAttempt",
+  "githubRunUrl",
+  "aloud",
+  "tools",
+];
 
 function checkKeys(value, allowed, field) {
   const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
@@ -130,7 +154,7 @@ export function validateProvenance(record, field = "provenance") {
     throw new Error(`${field}.schemaVersion must be ${PROVENANCE_SCHEMA_VERSION}`);
   }
   checkGitState(record, field);
-  for (const key of ["platform", "arch", "osRelease", "node"]) {
+  for (const key of ["platform", "architecture", "osRelease", "node"]) {
     if (!isText(record[key])) throw new Error(`${field}.${key} must be a non-empty string`);
   }
   const aloud = record.aloud;
@@ -138,17 +162,13 @@ export function validateProvenance(record, field = "provenance") {
   checkKeys(aloud, ["version", "commit", "workingTreeDirty"], `${field}.aloud`);
   if (!isText(aloud.version)) throw new Error(`${field}.aloud.version must be a non-empty string`);
   checkGitState(aloud, `${field}.aloud`);
-  if (record.github !== null) {
-    const github = record.github;
-    if (!isRecord(github)) throw new Error(`${field}.github must be an object or null`);
-    checkKeys(github, GITHUB_KEYS, `${field}.github`);
-    for (const key of GITHUB_KEYS) {
-      if (github[key] !== null && !isText(github[key])) throw new Error(`${field}.github.${key} must be a non-empty string or null`);
+  for (const key of ["githubRunId", "githubRunAttempt", "githubRunUrl"]) {
+    if (record[key] !== null && !isText(record[key])) {
+      throw new Error(`${field}.${key} must be a non-empty string or null`);
     }
-    if (!isText(github.server)) throw new Error(`${field}.github.server must be a non-empty string`);
-    if (github.runUrl !== null && !/^https?:\/\/\S+$/.test(github.runUrl)) {
-      throw new Error(`${field}.github.runUrl must be an absolute http(s) URL or null`);
-    }
+  }
+  if (record.githubRunUrl !== null && !/^https?:\/\/\S+$/.test(record.githubRunUrl)) {
+    throw new Error(`${field}.githubRunUrl must be an absolute http(s) URL or null`);
   }
   if (!isRecord(record.tools)) throw new Error(`${field}.tools must be an object of name -> version`);
   for (const [name, version] of Object.entries(record.tools)) {
@@ -199,12 +219,21 @@ export function codeIdentity(record) {
   };
 }
 
+// A commit and its working tree state in words: "commit X", "commit X plus
+// uncommitted changes", or, when the state could not be read, "commit X
+// (working tree state unknown)", never a plain "commit X" that reads as
+// clean. full keeps the whole hash.
+export function describeCommit(commit, workingTreeDirty, { full = false } = {}) {
+  const shown = full ? commit : commit.slice(0, 12);
+  if (workingTreeDirty === true) return `commit ${shown} plus uncommitted changes`;
+  if (workingTreeDirty === false) return `commit ${shown}`;
+  return `commit ${shown} (working tree state unknown)`;
+}
+
 // One line naming a record's code, for messages and notes.
 export function describeCode(record) {
   if (!record) return "no recorded provenance";
-  const commit = record.commit
-    ? `commit ${record.commit.slice(0, 12)}${record.workingTreeDirty ? " plus uncommitted changes" : ""}`
-    : "an unknown commit";
+  const commit = record.commit ? describeCommit(record.commit, record.workingTreeDirty) : "an unknown commit";
   const aloud = `aloud ${record.aloud.version}${record.aloud.commit ? ` (${record.aloud.commit.slice(0, 12)})` : ""}`;
   return `${commit}, checked by ${aloud}`;
 }
@@ -232,9 +261,9 @@ export function describeProvenance(value) {
   }
   const parts = [
     `Evidence from ${describeCode(value)}`,
-    `Node ${value.node} on ${value.platform} ${value.arch}`,
+    `Node ${value.node} on ${value.platform} ${value.architecture}`,
   ];
-  if (value.github?.runUrl) parts.push(`run ${value.github.runUrl}`);
+  if (value.githubRunUrl) parts.push(`run ${value.githubRunUrl}`);
   const tools = toolList(value);
   if (tools.length) parts.push(`tools: ${tools.join(", ")}`);
   return `${parts.join("; ")}.`;
@@ -284,7 +313,7 @@ export function combineProvenance(entries, { allowMixed = false, what = "report"
   }
   if (!allowMixed) {
     const detail = groups.size > 1
-      ? [...groups.values()].map((g) => `${describeCode(g.provenance)}${g.provenance?.github?.runUrl ? ` in ${g.provenance.github.runUrl}` : ""} ` +
+      ? [...groups.values()].map((g) => `${describeCode(g.provenance)}${g.provenance?.githubRunUrl ? ` in ${g.provenance.githubRunUrl}` : ""} ` +
           `(${g.files.slice(0, 3).join(", ")}${g.files.length > 3 ? `, and ${g.files.length - 3} more` : ""})`).join("; ")
       : `tool versions differ: ${conflicts.join("; ")}`;
     throw new Error(
@@ -378,25 +407,35 @@ export function probeTools(probes = {}, { exec = defaultExec } = {}) {
   }));
 }
 
+// aloud's download cache in the app's directory, where `aloud talkback get`
+// and `aloud tts build` put the APKs they fetch or build ($ALOUD_CACHE, else
+// .aloud-cache, as src/android/get-talkback.sh resolves it). Like the
+// report dir it is aloud's own output, not a change to the app.
+export const cacheDir = (env = {}) => env.ALOUD_CACHE || ".aloud-cache";
+
 // Gather this process's provenance. Never throws for missing git or tools;
 // throws only for malformed arguments.
 //
-//   cwd        the audited app's directory (default process.cwd())
-//   tools      { name: version } the caller already knows
-//   probes     { name: [command, ...args] } run to read a version
-//   exclude    paths whose changes do not count as app changes (report dirs)
+//   cwd          the audited app's directory (default process.cwd())
+//   tools        { name: version } the caller already knows
+//   probes       { name: [command, ...args] } run to read a version
+//   exclude      paths whose changes do not count as app changes (report
+//                dirs); aloud's download cache (cacheDir) always is
+//   requireRoot  record the app's git state only when cwd's checkout has
+//                exactly this top level (see readGitState), else nulls
 //   env, exec, runtime, aloudHome   injectable for tests
 export function collectProvenance({
   cwd = process.cwd(),
   tools = {},
   probes = {},
   exclude = [],
+  requireRoot,
   env = process.env,
   exec = defaultExec,
   runtime = { platform: process.platform, arch: process.arch, osRelease: release(), node: process.version },
   aloudHome = ALOUD_HOME,
 } = {}) {
-  const app = readGitState(cwd, { exec, exclude });
+  const app = readGitState(cwd, { exec, exclude: [...exclude, cacheDir(env)], requireRoot });
   const own = readGitState(aloudHome, { exec, requireRoot: aloudHome });
   return formatProvenance({
     app,
