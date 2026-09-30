@@ -149,9 +149,15 @@ test("actual capture lifecycle retains failed pairing and cleanup instead of pro
 test("web-only OpenACR selects web components and never grants conformance", () => {
   const { run, capture } = fixture();
   const web = webSummary({ run, screens: { home: capture } });
-  const acr = buildAcr({ appName: "Fixture", productVersion: "1", date: "2026-09-18", web,
-    catalog: { chapters: [{ id: "success_criteria_level_a", criteria: [{ id: "4.1.2", components: ["web", "software"] }] }] } });
-  assert.deepEqual(acr.chapters.success_criteria_level_a.criteria[0].components.map((c) => [c.name, c.adherence.level]), [["web", "not-evaluated"]]);
+  // The shared builder refuses a hand-trimmed catalog that claims the
+  // bundled catalog id, so this runs against the real catalog.
+  const acr = buildAcr({ appName: "Fixture", productVersion: "1", date: "2026-09-18", web });
+  const rows = Object.values(acr.chapters).flatMap((chapter) => chapter.criteria ?? []);
+  assert.deepEqual(rows.find((c) => c.num === "4.1.2").components.map((c) => [c.name, c.adherence.level]), [["web", "not-evaluated"]]);
+  assert.ok(rows.every((c) => c.components.every((row) => row.adherence.level === "not-evaluated")));
+  assert.match(rows.find((c) => c.num === "4.1.2").components[0].adherence.notes, /All web results are report-only/);
+  assert.throws(() => buildAcr({ appName: "Fixture", productVersion: "1", date: "2026-09-18", web,
+    catalog: { chapters: [{ id: "success_criteria_level_a", criteria: [{ id: "4.1.2", components: ["web", "software"] }] }] } }));
   assert.match(acr.notes, /no screen reader was run/);
   web.screens.home.web.coverage.fullTraversal = true;
   assert.throws(() => buildAcr({ appName: "Fixture", web, catalog: { chapters: [] } }), /invalid report-only/);

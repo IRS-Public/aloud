@@ -31,7 +31,8 @@ src/ios/walk.mjs                  iOS walker, one pass: `idb` dumps the
         v
 src/report/report.mjs             summary.json + index.html evidence page +
                                   ratchet gate against the baseline
-src/report/openacr.mjs            draft OpenACR (see docs/openacr.md)
+src/acr/                          draft OpenACR: audit results -> findings
+                                  -> shared builder (see docs/openacr.md)
 ```
 
 Android `--talkback focus` replaces the startup transcript pass with the

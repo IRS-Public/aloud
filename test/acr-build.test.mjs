@@ -425,6 +425,41 @@ describe("buildAcr input checks", () => {
   });
 });
 
+describe("producer notes and methods", () => {
+  it("states report-level notes after the builder's own sentences", () => {
+    const acr = build({ ...button(), notes: ["Tested in Chromium and WebKit", "Runs nightly."] });
+    assert.match(acr.notes, /dated 2026-09-30\. Tested in Chromium and WebKit\. Runs nightly\. Component rows by level/);
+  });
+
+  it("opens the evaluation methods with the producer's account and keeps the policy sentence", () => {
+    const acr = build({ ...button(), evaluationMethods: "Playwright drives each component story" });
+    assert.match(acr.evaluation_methods_used, /^Playwright drives each component story\. aloud's level policy/);
+    assert.match(acr.evaluation_methods_used, /Tools: Playwright/);
+    // options.evaluationMethods still replaces the whole section.
+    const replaced = build({ ...button(), evaluationMethods: "ignored" }, { evaluationMethods: "Only this." });
+    assert.equal(replaced.evaluation_methods_used, "Only this.");
+  });
+
+  it("reject blank report notes and methods", () => {
+    assert.throws(() => build({ ...button(), notes: [" "] }), /notes\[0\]/);
+    assert.throws(() => build({ ...button(), evaluationMethods: "" }), /evaluationMethods/);
+  });
+
+  it("says a date-only provenance plainly", () => {
+    const acr = build({ ...button(), provenance: { date: "2026-09-30" } });
+    assert.match(acr.notes, /The evidence is dated 2026-09-30\./);
+    assert.doesNotMatch(acr.notes, /comes from dated/);
+  });
+
+  it("ends a fragment that closes a bracket with a full stop", () => {
+    const findings = button();
+    findings.findings[0] = { criterion: "2.1.1", component: "web", status: "met", covers: "Tab order (desktop)",
+      notes: ["Checked by hand (see the log.)"] };
+    const notes = row(build(findings), "2.1.1").notes;
+    assert.match(notes, /covers Tab order \(desktop\)\. Checked by hand \(see the log\.\)$/);
+  });
+});
+
 describe("validateAcr", () => {
   const acr = build();
 

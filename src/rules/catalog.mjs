@@ -1,7 +1,7 @@
 // The one source of truth for aloud's tree rules and the WCAG criteria
 // they give evidence toward. The Android (src/android/ui-tree.mjs) and iOS
 // (src/ios/tree.mjs) rule engines take each finding's severity and criteria
-// from here, and the OpenACR draft (src/report/openacr.mjs) derives its
+// from here, and the OpenACR draft (src/acr/from-aloud.mjs) derives its
 // criterion mapping from here, so the three can no longer disagree.
 //
 // Rule ids are stable strings: they live in adopters' committed baselines.
@@ -172,7 +172,7 @@ export const CRITERIA = deepFreeze({
 // Rule ids whose classification changed after adopters had committed them
 // to baselines. Each entry records what the id used to count toward and
 // the rule that now carries that criterion. Readers of persisted evidence
-// (src/report/validation.mjs, src/report/openacr.mjs) use this to read old
+// (src/report/validation.mjs, src/acr/from-aloud.mjs) use this to read old
 // baselines, tree reports, and summaries without error and without
 // treating them as evidence they never were.
 //   was        the severity and criteria the id had before

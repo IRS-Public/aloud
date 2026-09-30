@@ -63,6 +63,16 @@
       "type": "array",
       "minItems": 1,
       "items": { "$ref": "#/definitions/finding" }
+    },
+    "notes": {
+      "description": "Report-level notes: what the evidence as a whole covers, such as screen counts or test environments. Stated in the report notes.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/text" }
+    },
+    "evaluationMethods": {
+      "description": "How the evidence was produced, in plain words. Opens the report's evaluation methods; the level policy sentence follows it.",
+      "$ref": "#/definitions/text"
     }
   },
   "definitions": {

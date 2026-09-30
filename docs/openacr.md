@@ -31,8 +31,12 @@ run's results instead, pass `--report <dir>` and/or `--report-ios <dir>`
 (they read the run's `summary.json`). `--date YYYY-MM-DD` pins the report
 date; `--version` overrides `app.version`.
 
-The emitter is `src/report/openacr.mjs`. Three properties make the output
-a draft you can trust, rather than a report you cannot:
+The emitter turns the audit inputs into a findings document
+(`src/acr/from-aloud.mjs`) and builds the draft with the shared builder in
+`src/acr/`, the same one other evidence sources use (see
+[below](#build-a-draft-from-findings-library)). `src/report/openacr.mjs`
+keeps its exported functions for existing callers. These properties make
+the output a draft you can trust, rather than a report you cannot:
 
 - **Only automated evidence gets a conformance level.** Criteria the
   audit's error rules map to (1.1.1, 1.3.1, 2.5.8, 4.1.2) get `supports` only
@@ -46,8 +50,11 @@ a draft you can trust, rather than a report you cannot:
   2.5.8's 24-unit minimum, so it leaves 2.5.8 `not-evaluated` on that
   screen until the tree pass is re-run. Notes state that automation covers
   part of the criterion only, and the 2.5.8 note names the targets
-  automation skips. Every other criterion is `not-evaluated` with a "needs human
-  review" note. A few `not-evaluated` rows carry related evidence in
+  automation skips. In findings terms, a clean criterion is `met`, a known
+  failure is `failing` with `failingShare: "some"` (the audit sees only the
+  screens it was given, so it never claims `does-not-support`), and missing
+  or stale checks are `incomplete`. Every other criterion is `not-evaluated`
+  with a "needs human review" note. A few `not-evaluated` rows carry related evidence in
   their notes (for example, the transcript coverage on 302.1, or the
   duplicate-label warnings on 2.4.6), still marked as needing human review.
 - **One mapping, shared with the rules.** Each rule's severity and criteria
@@ -68,6 +75,10 @@ a draft you can trust, rather than a report you cannot:
   platforms that implement the criterion's rules. For example, 1.3.1 has
   an Android-only check and stays `not-evaluated` in an iOS-only report.
   Transcript-only runs cannot establish support for tree criteria.
+
+Notes over 3000 characters are cut, and the cut is marked "(truncated; see
+evidence)". The failing screens are listed last in a note, so only that
+list is ever cut, never the coverage caveat.
 
 A filtered run describes only the screens supplied to the emitter. Within
 that input, a mix of completed and missing tree checks cannot produce a
@@ -91,8 +102,7 @@ The author block defaults to "Automated draft" with a placeholder email
 `src/acr/` is a reusable OpenACR builder for any evidence source, such as
 the USWDS accessibility harness or a manual review. The source writes a
 findings document: one finding per criterion and component, saying what
-its evidence shows. `aloud openacr` does not use it yet; the emitter above
-is unchanged.
+its evidence shows. `aloud openacr` builds its drafts this way too.
 
 ```js
 import { writeFileSync } from "node:fs";
@@ -122,7 +132,10 @@ component pairs; malformed evidence; `failingShare` on a status that is
 not a failure; a `known-defect` with no issue; and known issues on a
 passing or not-applicable finding (`met`, `human-reviewed`,
 `not-triggered`, `page-level`), since "supports" means met without known
-defects. It lists every problem at once. Components are the catalog's: `web`, `electronic-docs`,
+defects. It lists every problem at once. Two optional top-level fields
+describe the evidence as a whole: `notes` (a list of sentences added to the
+report notes) and `evaluationMethods` (how the evidence was produced; it
+opens the evaluation methods, followed by the level policy sentence). Components are the catalog's: `web`, `electronic-docs`,
 `software`, `authoring-tool`. Section 508 chapter provisions (302.1,
 502.2.1, 602.3, ...) have no product component in the catalog, so their
 findings omit `component` (or use `none`).

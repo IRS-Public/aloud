@@ -15,6 +15,8 @@
 //       issues?: [{ id, summary, kind?, url? }], notes?: [...],
 //       failingShare?: "some" | "all",
 //     }],
+//     notes?: ["report-level notes, such as what was tested where"],
+//     evaluationMethods?: "how the evidence was produced",
 //   }
 //
 // findings.schema.json checks the shape; validateFindings below also checks

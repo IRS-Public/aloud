@@ -343,7 +343,8 @@ describe("buildAcr on the fixture baselines", () => {
 
   it("disables the hardware chapter with a reason", () => {
     assert.equal(acr.chapters.hardware.disabled, true);
-    assert.ok(acr.chapters.hardware.notes.includes("software application"));
+    // The shared builder's wording: accurate for native and web products.
+    assert.equal(acr.chapters.hardware.notes, "Example App is not a hardware product. Hardware criteria do not apply.");
   });
 
   it("uses the report date it was given, not the wall clock", () => {
