@@ -68,6 +68,10 @@ const eachAdherence = (acr) => {
 };
 
 const findCriterion = (acr, num) => eachAdherence(acr).find((c) => c.num === num)?.adherence;
+// The policy notes that tell a clean-but-partial row from an incomplete one;
+// both are "not-evaluated".
+const PARTLY_TESTED = /^The automated tests passed but cover only part of this criterion\./;
+const INCOMPLETE = /^Some tests for this criterion did not run/;
 
 describe("real VoiceOver provenance", () => {
   const voiceOver = {
@@ -221,7 +225,8 @@ describe("rule mapping", () => {
     // No iOS rule judges image controls for 1.1.1 (an unlabeled iOS
     // Button reaches 4.1.2 only), so the note must not claim it does.
     const acr = build({ android: null, ios: normalizeAudit({ home: { errors: 1, ruleIds: ["ios-interactive-unlabeled"] } }) });
-    assert.equal(findCriterion(acr, "1.1.1").level, "supports");
+    assert.equal(findCriterion(acr, "1.1.1").level, "not-evaluated");
+    assert.match(findCriterion(acr, "1.1.1").notes, PARTLY_TESTED);
     assert.match(findCriterion(acr, "1.1.1").notes, /image controls \(Android\) and image-role elements \(iOS\)/);
     assert.equal(findCriterion(acr, "4.1.2").level, "partially-supports");
   });
@@ -291,7 +296,8 @@ describe("buildAcr on the fixture baselines", () => {
 
   it("caveats every automation result as partial coverage", () => {
     // A baseline may legitimately carry accepted errors (the ratchet
-    // workflow); expect "supports" only when the criterion is clean.
+    // workflow). A clean criterion is only partly tested: the rules
+    // check part of it, so it never reaches "supports".
     const audits = [
       { platform: "Android", screens: android.screens },
       { platform: "iOS", screens: ios.screens },
@@ -303,7 +309,8 @@ describe("buildAcr on the fixture baselines", () => {
       // for the two-platform app (1.3.1 is Android-only).
       const everyPlatform = new Set(rules.map((r) => RULES[r].platform)).size === 2;
       if (failures.length === 0) {
-        assert.equal(adherence.level, everyPlatform ? "supports" : "not-evaluated", num);
+        assert.equal(adherence.level, "not-evaluated", num);
+        assert.match(adherence.notes, everyPlatform ? PARTLY_TESTED : INCOMPLETE, num);
       } else {
         assert.equal(adherence.level, "partially-supports");
         assert.ok(adherence.notes.includes(failures[0].screen));
@@ -372,8 +379,10 @@ describe("buildAcr on evidence from before the target-size reclassification", ()
 
   it("still evaluates the other criteria on those screens", () => {
     const acr = build({ android: legacy, ios: null });
-    assert.equal(findCriterion(acr, "4.1.2").level, "supports");
-    assert.equal(findCriterion(acr, "1.3.1").level, "supports");
+    for (const num of ["4.1.2", "1.3.1"]) {
+      assert.equal(findCriterion(acr, num).level, "not-evaluated", num);
+      assert.match(findCriterion(acr, num).notes, PARTLY_TESTED, num);
+    }
     const mixed = normalizeAudit(readJson("fixtures/baseline-ios-legacy.json"));
     const ios = build({ android: null, ios: mixed });
     assert.equal(findCriterion(ios, "4.1.2").level, "partially-supports");
@@ -440,8 +449,9 @@ describe("buildAcr on a failing fixture", () => {
     assert.ok(adherence.notes.includes("native-target-size-minimum"));
   });
 
-  it("leaves unrelated automated criteria at supports", () => {
-    assert.equal(findCriterion(acr, "4.1.2").level, "supports");
+  it("leaves unrelated automated criteria partly tested, not failing", () => {
+    assert.equal(findCriterion(acr, "4.1.2").level, "not-evaluated");
+    assert.match(findCriterion(acr, "4.1.2").notes, PARTLY_TESTED);
   });
 
   it("still validates against schema and catalog", () => {
@@ -474,7 +484,8 @@ describe("OpenACR evidence coverage", () => {
     const adherence = findCriterion(acr, "1.3.1");
     assert.equal(adherence.level, "not-evaluated");
     assert.match(adherence.notes, /no applicable.*checks/i);
-    assert.equal(findCriterion(acr, "4.1.2").level, "supports");
+    assert.equal(findCriterion(acr, "4.1.2").level, "not-evaluated");
+    assert.match(findCriterion(acr, "4.1.2").notes, PARTLY_TESTED);
   });
 
   it("counts only applicable platforms as checked for a criterion", () => {
@@ -522,10 +533,13 @@ describe("OpenACR evidence coverage", () => {
 
   it("does not let a clean platform mask an incomplete applicable platform", () => {
     const acr = build({ android: summary({ home: completed }), ios: summary({ home: transcriptOnly }) });
-    assert.equal(findCriterion(acr, "4.1.2").level, "not-evaluated");
-    assert.equal(findCriterion(acr, "1.3.1").level, "not-evaluated");
-    // An Android-only audit is all the software component there is to check.
-    assert.equal(findCriterion(build({ android: summary({ home: completed }), ios: null }), "1.3.1").level, "supports");
+    assert.match(findCriterion(acr, "4.1.2").notes, INCOMPLETE);
+    assert.match(findCriterion(acr, "1.3.1").notes, INCOMPLETE);
+    // An Android-only audit is all the software component there is to
+    // check, so it is partly tested there rather than incomplete.
+    const androidOnly = findCriterion(build({ android: summary({ home: completed }), ios: null }), "1.3.1");
+    assert.equal(androidOnly.level, "not-evaluated");
+    assert.match(androidOnly.notes, PARTLY_TESTED);
   });
 
   it("keeps a known failure on the platform that has rules when the other has none", () => {

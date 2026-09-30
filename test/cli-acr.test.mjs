@@ -190,7 +190,7 @@ describe("aloud openacr", () => {
     const acr = readAcr(out);
     assert.deepEqual(validateAcr(acr), { valid: true, problems: [] });
     assert.equal(acr.product.version, "3.1.4");
-    assert.equal(row(acr, "success_criteria_level_a", "1.1.1").components[0].adherence.level, "supports");
+    assert.equal(row(acr, "success_criteria_level_a", "1.1.1").components[0].adherence.level, "not-evaluated");
     assert.equal(row(acr, "success_criteria_level_aa", "2.5.8").components[0].adherence.level, "partially-supports");
     assert.match(acr.notes, /replace the placeholder contact email/);
   });

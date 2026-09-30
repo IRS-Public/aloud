@@ -544,14 +544,18 @@ is the `software` component and web evidence the `web` component.
 `src/report/openacr.mjs` keeps its exported functions for existing
 callers. What the findings say:
 
-- **Only automated evidence gets a conformance level.** Criteria the
-  audit's error rules map to (1.1.1, 1.3.1, 2.5.8, 4.1.2) are `met`
-  (`supports`) only when applicable tree checks completed without mapped
-  failures on every supplied screen, and every supplied platform has rules
-  for the criterion. The Android and iOS app is one software component, so
-  1.3.1, which only Android rules check, stays `not-evaluated` whenever an
-  iOS audit is supplied. Notes state that automation covers part of the
-  criterion only, and the 2.5.8 note names the targets automation skips.
+- **Clean results are partly tested, never supported.** Criteria the
+  audit's error rules map to (1.1.1, 1.3.1, 2.5.8, 4.1.2) are
+  `partly-tested` (`not-evaluated`) when applicable tree checks completed
+  without mapped failures on every supplied screen, and every supplied
+  platform has rules for the criterion. The rules check part of each
+  criterion only (for 4.1.2, the accessible name, never the role or
+  value), so passing them cannot support the whole criterion; the notes
+  say which part, and a person completes the rest. aloud's native drafts
+  never emit `met` or `supports`. The Android and iOS app is one software
+  component, so 1.3.1, which only Android rules check, is `incomplete`
+  whenever an iOS audit is supplied. The 2.5.8 note names the targets
+  automation skips.
 - **Failures are partial.** A mapped failure is `failing` with
   `failingShare: "some"` (`partially-supports`), with the failing screens
   and rule ids in the notes: the audit sees only the screens it was given,

@@ -470,7 +470,7 @@ describe("OpenACR findings from accepted reasons", () => {
 
   it("ignores reasons for other criteria and never supports a criterion because of a reason", () => {
     const d = doc({ home: { errors: 1, ruleIds: [LABEL], accepted: [bug] } });
-    assert.equal(findingFor(d, "2.5.8").status, "met");
+    assert.equal(findingFor(d, "2.5.8").status, "partly-tested");
     assert.equal(findingFor(d, "2.5.8").issues, undefined);
     for (const f of d.findings) if (f.issues) assert.notEqual(f.status, "met");
   });

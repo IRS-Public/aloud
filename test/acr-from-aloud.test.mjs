@@ -76,9 +76,12 @@ describe("aloudFindings", () => {
     assert.deepEqual(saved, buildAloudAcr(inputs({ date: "2026-08-26" })));
   });
 
-  it("marks clean, complete criteria met and mapped failures failing with a partial share", () => {
+  it("marks clean, complete criteria partly tested and mapped failures failing with a partial share", () => {
     const doc = aloudFindings(inputs());
-    assert.equal(finding(doc, "1.1.1").status, "met");
+    // The rules check part of each criterion only, so a clean result is
+    // never met.
+    assert.equal(finding(doc, "1.1.1").status, "partly-tested");
+    assert.ok(doc.findings.every((f) => f.status !== "met"));
     const targets = finding(doc, "2.5.8");
     assert.equal(targets.status, "failing");
     assert.equal(targets.failingShare, "some");
@@ -101,12 +104,12 @@ describe("aloudFindings", () => {
     for (const num of Object.keys(AUTOMATED_CRITERIA)) assert.equal(finding(partial, num).status, "incomplete", num);
     const iosOnly = aloudFindings(inputs({ android: null, ios: summary({ home: clean }) }));
     assert.equal(finding(iosOnly, "1.3.1").status, "untested");
-    assert.equal(finding(iosOnly, "4.1.2").status, "met");
+    assert.equal(finding(iosOnly, "4.1.2").status, "partly-tested");
     // Android clean, iOS present but without 1.3.1 rules: the one software
-    // component is only half checked, so it is incomplete, not met.
+    // component is only half checked, so it is incomplete.
     const both = aloudFindings(inputs({ android: summary({ home: clean }), ios: summary({ home: clean }) }));
     assert.equal(finding(both, "1.3.1").status, "incomplete");
-    assert.equal(finding(both, "4.1.2").status, "met");
+    assert.equal(finding(both, "4.1.2").status, "partly-tested");
   });
 
   it("never says nothing ran on rows where related checks did run", () => {
@@ -144,7 +147,7 @@ describe("aloudFindings", () => {
     assert.match(webFindings[0].notes[0], /no screen reader was run/);
     const acr = buildAloudAcr(inputs({ web, date: "2026-09-18" }));
     const row412 = acr.chapters.success_criteria_level_a.criteria.find((c) => c.num === "4.1.2");
-    assert.deepEqual(row412.components.map((c) => [c.name, c.adherence.level]), [["software", "supports"], ["web", "not-evaluated"]]);
+    assert.deepEqual(row412.components.map((c) => [c.name, c.adherence.level]), [["software", "not-evaluated"], ["web", "not-evaluated"]]);
   });
 
   it("describes a web-only product as an application", () => {

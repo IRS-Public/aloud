@@ -37,9 +37,14 @@ build drafts through one findings contract and one level policy.
   apply."; the default untested note says no automated test establishes
   whether the criterion is met. Notes also state provenance and any
   accepted baseline reasons.
-- **Fewer criteria reach "supports".** A criterion only one platform's
-  rules check (1.3.1, Android-only) is `not-evaluated` for the single
-  software component when an iOS audit is also supplied.
+- **Native drafts no longer claim "supports".** A criterion aloud's
+  error rules map to (1.1.1, 1.3.1, 2.5.8, 4.1.2) with clean, complete
+  tree checks is `partly-tested` (`not-evaluated`) instead of `met`
+  (`supports`): the rules check part of each criterion only, so a person
+  must review the rest. A criterion only one platform's rules check
+  (1.3.1, Android-only) is `incomplete` for the single software component
+  when an iOS audit is also supplied. Failures still read as
+  `partially-supports`.
 - **Rule mapping.** `native-image-button-unlabeled` and
   `native-edittext-unlabeled` declare the 1.1.1 and 1.3.1 criteria they
   already drove; the duplicate-label warnings declare 2.4.6. Findings gain

@@ -10,8 +10,11 @@
 // decides which criterion each rule counts toward.
 //
 // The findings say only what automation can prove:
-//   - A criterion aloud's error rules map to is "met" only when every
-//     applicable screen completed tree checks with no mapped failures.
+//   - A criterion aloud's error rules map to is "partly-tested" when every
+//     applicable screen completed tree checks with no mapped failures:
+//     the rules check part of each criterion only (the catalog's covers
+//     text), so a clean result cannot support the whole criterion. Never
+//     "met": no rule set covers a whole criterion.
 //   - A mapped failure is "failing" with failingShare "some": the audit
 //     sees the screens it was given, so it cannot prove the failure affects
 //     all of the product.
@@ -702,7 +705,9 @@ function automatedFinding(num, audits) {
   } else {
     // A platform with no rules for this criterion is part of the same
     // software component, so a clean result elsewhere cannot support it.
-    status = missing.length || unsupported.length ? "incomplete" : "met";
+    // Even a clean result on every platform checks only part of the
+    // criterion (auto.covers), so it is partly tested, never met.
+    status = missing.length || unsupported.length ? "incomplete" : "partly-tested";
     result = `The automated tree checks found no violations on ${checked}`;
   }
 
