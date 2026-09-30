@@ -222,6 +222,12 @@ It checks the findings first and exits non-zero, listing every problem,
 on an unknown criterion, component, or status or on an unsafe `--policy`.
 See [docs/openacr.md](docs/openacr.md#build-a-draft-from-findings).
 
+In code, the same engine is the package's main entry:
+`import { buildAcr, toYaml } from "@irs-public/aloud"`. The package also
+exports `@irs-public/aloud/rules` (the rule catalog) and the web drivers
+(`/web/nvda`, `/web/voiceover`, `/web/dependencies`); deep `src/`, `bin/`,
+and `examples/` paths keep working. See [docs/openacr.md](docs/openacr.md#package-entry-points).
+
 For mobile apps, aloud audits whatever screen is currently open
 (`--nav current-screen`, the default). Give it a screens manifest
 (`examples/screens-deeplinks.example.json`) to walk your whole app by deep
@@ -242,6 +248,21 @@ aloud runs fine on GitHub-hosted runners. Copy the templates in
   the audit, uploads the evidence page.
 
 Both templates use only GitHub-owned actions. See [docs/ci.md](docs/ci.md).
+
+To draft an OpenACR from a findings file in any repository's workflow, use
+the `aloud acr` action in this repository, pinned to a commit:
+
+```yaml
+- id: acr
+  uses: IRS-Public/aloud@<full commit sha>
+  with:
+    findings: findings.json   # required
+    out: acr.yaml             # default
+- run: echo "Draft at ${{ steps.acr.outputs.acr }}"
+```
+
+It adds a count of the draft's conformance levels to the job summary. See
+[docs/ci.md](docs/ci.md#draft-an-openacr-with-the-github-action).
 
 The repository's [browser acceptance workflow](.github/workflows/web.yml)
 runs Chromium fixtures on relevant pull requests. Manual dispatch adds the

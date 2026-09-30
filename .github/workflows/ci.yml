@@ -22,5 +22,37 @@ jobs:
       - name: Syntax-check every script
         run: |
           set -e
-          for f in bin/*.mjs $(find src -name '*.mjs'); do node --check "$f"; done
+          # test/ too: the device smoke scripts are not run by npm test.
+          for f in bin/*.mjs $(find src test -name '*.mjs' -not -path '*/node_modules/*'); do node --check "$f"; done
           for f in $(find src -name '*.sh'); do bash -n "$f"; done
+
+  # Run the "aloud acr" GitHub Action (action.yml) from this checkout the way
+  # another repository would, then check the draft it wrote.
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - id: acr
+        uses: ./
+        with:
+          findings: test/fixtures/acr/valid.json
+          out: action-out/acr.yaml
+          policy: test/fixtures/acr/policy.json
+          date: "2026-09-30"
+      - name: Check the draft validates
+        env:
+          ACR: ${{ steps.acr.outputs.acr }}
+        run: |
+          set -euo pipefail
+          test "$ACR" = "$GITHUB_WORKSPACE/action-out/acr.yaml"
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { load } from "js-yaml";
+            import { validateAcr } from "./src/acr/index.mjs";
+            const acr = load(readFileSync(process.env.ACR, "utf8"));
+            const { valid, problems } = validateAcr(acr);
+            if (!valid) throw new Error(problems.join("\n"));
+            if (acr.report_date !== "2026-09-30") throw new Error(`report_date ${acr.report_date}`);
+            console.log(`valid draft: ${process.env.ACR}`);
+          '
+          grep -q "| supports | 1 |" "$GITHUB_STEP_SUMMARY"

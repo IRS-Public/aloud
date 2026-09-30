@@ -78,6 +78,7 @@ const OPTIONS = {
     policy: { type: "string" },
     catalog: { type: "string" },
     date: { type: "string" },
+    "step-summary": { type: "string" },
   },
 };
 
@@ -106,6 +107,7 @@ Commands:
                from different commits]
   acr          Build a draft OpenACR from any findings JSON: aloud acr --findings <file.json>
                [--out acr-draft.yaml] [--policy <file.json>] [--catalog <file>] [--date YYYY-MM-DD]
+               [--step-summary <file>: append a Markdown level count, e.g. $GITHUB_STEP_SUMMARY]
 
 Global flags:
   --config <file>   Config file (default: ./aloud.config.json if present)

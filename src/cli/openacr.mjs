@@ -28,12 +28,15 @@
 //     --catalog <file>      OpenACR catalog YAML instead of the bundled one the
 //                           findings name (see resolveCatalog in src/acr/catalog.mjs)
 //     --date <YYYY-MM-DD>   report date (defaults to provenance.date, else today)
+//     --step-summary <file> append a Markdown count of the levels to <file>
+//                           (the GitHub Action passes $GITHUB_STEP_SUMMARY)
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildAcr, toYaml } from "../acr/build.mjs";
 import { loadCatalog } from "../acr/catalog.mjs";
 import { isCalendarDate } from "../acr/findings.mjs";
+import { summaryMarkdown } from "../acr/summary.mjs";
 import { buildAloudAcr, normalizeAudit } from "../acr/from-aloud.mjs";
 import { readWebReport, webSummary } from "../web/evidence.mjs";
 
@@ -136,5 +139,8 @@ export function acr(values) {
   });
   const out = values.out ?? "acr-draft.yaml";
   writeFileSync(out, toYaml(draft));
+  // The summary is appended, never overwritten: a job summary file
+  // collects every step's output.
+  if (values["step-summary"]) appendFileSync(values["step-summary"], summaryMarkdown(draft, { file: out }));
   return { out, date: draft.report_date };
 }

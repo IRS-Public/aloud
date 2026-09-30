@@ -144,23 +144,27 @@ From the command line:
 
 ```bash
 npx aloud acr --findings findings.json [--out acr-draft.yaml] \
-  [--policy policy.json] [--catalog catalog.yaml] [--date YYYY-MM-DD]
+  [--policy policy.json] [--catalog catalog.yaml] [--date YYYY-MM-DD] \
+  [--step-summary summary.md]
 ```
 
 `--findings` is required. `--out` defaults to `acr-draft.yaml`. `--policy`
 is a JSON object of per-status overrides, the same as the `policy` option
 below. `--catalog` is a catalog YAML file, the same as `catalogPath`.
 `--date` defaults to `provenance.date`, else today; either must be a real
-calendar date. `aloud acr` reads no
+calendar date. `--step-summary` appends a Markdown table of how many rows
+the draft puts at each conformance level to a file, such as
+`$GITHUB_STEP_SUMMARY`. `aloud acr` reads no
 aloud config. On a missing or malformed file, invalid findings, or an
 unsafe policy, it prints every problem, writes nothing, and exits
-non-zero.
+non-zero. In GitHub Actions, the `aloud acr` action runs this command; see
+[ci.md](ci.md#draft-an-openacr-with-the-github-action).
 
 As a library:
 
 ```js
 import { writeFileSync } from "node:fs";
-import { buildAcr, toYaml } from "@irs-public/aloud/src/acr/index.mjs";
+import { buildAcr, toYaml } from "@irs-public/aloud";
 
 const acr = buildAcr({
   product: { name: "USWDS Button", version: "3.13.0" },
@@ -177,6 +181,27 @@ const acr = buildAcr({
 });
 writeFileSync("acr-draft.yaml", toYaml(acr));
 ```
+
+### Package entry points
+
+The package's `exports` map names these entries:
+
+| Import | Module |
+|---|---|
+| `@irs-public/aloud` | The OpenACR engine (`src/index.mjs`, re-exporting `src/acr/index.mjs`) |
+| `@irs-public/aloud/acr` | The same engine, by name |
+| `@irs-public/aloud/findings.schema.json` | The findings JSON Schema |
+| `@irs-public/aloud/rules` | The tree rule catalog (`src/rules/catalog.mjs`) |
+| `@irs-public/aloud/web/nvda` | The experimental NVDA driver |
+| `@irs-public/aloud/web/voiceover` | The experimental Safari + VoiceOver driver |
+| `@irs-public/aloud/web/dependencies` | Pinned web peer loading |
+| `@irs-public/aloud/src/...`, `/bin/...`, `/examples/*.json` | Any shipped file, as before 0.2.0 |
+
+Importing a driver starts nothing; the optional peers (Playwright,
+Guidepup, axe-core) load only when a driver runs. `levelCounts(acr)` and
+`summaryMarkdown(acr)` give the level counts `--step-summary` writes.
+
+### The findings contract
 
 The contract is `src/acr/findings.schema.json`. `validateFindings` checks
 the shape, then checks every criterion and component against the catalog

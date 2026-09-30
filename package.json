@@ -1,6 +1,6 @@
 {
   "name": "@irs-public/aloud",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publishConfig": {
     "access": "public"
   },
@@ -18,13 +18,30 @@
   "bin": {
     "aloud": "bin/aloud.mjs"
   },
+  "main": "./src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./acr": "./src/acr/index.mjs",
+    "./findings.schema.json": "./src/acr/findings.schema.json",
+    "./rules": "./src/rules/catalog.mjs",
+    "./web/nvda": "./src/web/nvda.mjs",
+    "./web/voiceover": "./src/web/voiceover.mjs",
+    "./web/dependencies": "./src/web/dependencies.mjs",
+    "./src/*": "./src/*",
+    "./bin/*": "./bin/*",
+    "./examples/*.json": "./examples/*.json",
+    "./package.json": "./package.json"
+  },
   "engines": {
     "node": ">=22"
   },
   "files": [
     "bin/",
     "src/",
-    "examples/*.json"
+    "src/acr/findings.schema.json",
+    "examples/*.json",
+    "action.yml",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",

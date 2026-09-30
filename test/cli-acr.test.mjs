@@ -80,6 +80,27 @@ describe("aloud acr", () => {
     assert.deepEqual(validateAcr(acr), { valid: true, problems: [] });
   });
 
+  it("appends a level count to --step-summary without overwriting it", () => {
+    const out = join(dir, "summary.yaml");
+    const summary = join(dir, "step-summary.md");
+    writeFileSync(summary, "earlier step\n");
+    const result = aloud("acr", "--findings", fixture("valid.json"), "--out", out, "--step-summary", summary);
+    assert.equal(result.status, 0, result.stderr);
+    const text = readFileSync(summary, "utf8");
+    assert.match(text, /^earlier step\n### Draft OpenACR: Fixture Site 2\.0\.0\n/);
+    assert.match(text, /\| supports \| 1 \|/);
+    assert.match(text, /\| partially-supports \| 1 \|/);
+    assert.match(text, /\| not-evaluated \| 125 \|/);
+    assert.match(text, /\| \*\*Total\*\* \| \*\*127\*\* \|/);
+  });
+
+  it("writes no summary when the findings are invalid", () => {
+    const summary = join(dir, "bad-step-summary.md");
+    const result = aloud("acr", "--findings", fixture("invalid-criterion.json"), "--out", join(dir, "x.yaml"), "--step-summary", summary);
+    assert.notEqual(result.status, 0);
+    assert.equal(existsSync(summary), false);
+  });
+
   it("defaults the output to acr-draft.yaml in the working directory", () => {
     const result = aloud("acr", "--findings", fixture("valid.json"));
     assert.equal(result.status, 0, result.stderr);
