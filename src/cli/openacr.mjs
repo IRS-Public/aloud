@@ -16,14 +16,16 @@
 //     --catalog <file>      replacement for the bundled 2.5-edition-wcag-2.2-508-en
 //                           catalog YAML; it must have the same chapters and
 //                           criteria (only labels and components may differ)
-//     --out <file>          output path (config openacr.out, default acr-draft.yaml)
+//     --out <file>          output path (config openacr.out, default acr-draft.yaml);
+//                           missing parent directories are created
 //     --allow-mixed         combine inputs whose provenance names different code
 //                           (refused otherwise; see src/provenance.mjs)
 //   Inputs default to the baselines named in the config.
 //
 //   aloud acr       any findings document -> draft OpenACR
 //     --findings <file>     findings JSON (src/acr/findings.schema.json); required
-//     --out <file>          output path (default acr-draft.yaml)
+//     --out <file>          output path (default acr-draft.yaml); missing parent
+//                           directories are created once the draft is valid
 //     --policy <file>       JSON object of per-status level overrides
 //     --catalog <file>      OpenACR catalog YAML instead of the bundled one the
 //                           findings name (see resolveCatalog in src/acr/catalog.mjs)
@@ -31,8 +33,8 @@
 //     --step-summary <file> append a Markdown count of the levels to <file>
 //                           (the GitHub Action passes $GITHUB_STEP_SUMMARY)
 
-import { closeSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
-import { join } from "node:path";
+import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { buildAcr, toYaml } from "../acr/build.mjs";
 import { loadCatalog } from "../acr/catalog.mjs";
 import { isCalendarDate } from "../acr/findings.mjs";
@@ -82,6 +84,25 @@ function loadAudit(reportDir, flagPath, configPath) {
   }
 }
 
+// Write the draft to out, creating any missing parent directories first.
+// Callers only get here once the draft has been built and validated, so a
+// run that fails its checks creates no directories either. Returns a
+// function that undoes the write (the file and any directories made for
+// it), for a caller whose later step fails.
+function writeDraft(out, yaml) {
+  const made = mkdirSync(dirname(out), { recursive: true });
+  try {
+    writeFileSync(out, yaml);
+  } catch (error) {
+    if (made) rmSync(made, { recursive: true, force: true });
+    throw error;
+  }
+  return () => {
+    rmSync(out, { force: true });
+    if (made) rmSync(made, { recursive: true, force: true });
+  };
+}
+
 // `aloud openacr`. values are the parsed flags; cfg is the resolved config
 // (src/config.mjs loadConfig). Returns { out, date }.
 export function openacr(values, cfg) {
@@ -118,7 +139,7 @@ export function openacr(values, cfg) {
     allowMixed: values["allow-mixed"] === true,
   });
   const out = values.out ?? cfg?.openacr?.out ?? "acr-draft.yaml";
-  writeFileSync(out, toYaml(acr));
+  writeDraft(out, toYaml(acr));
   return { out, date: acr.report_date };
 }
 
@@ -140,7 +161,7 @@ export function acr(values) {
   const out = values.out ?? "acr-draft.yaml";
   const yaml = toYaml(draft);
   if (!values["step-summary"]) {
-    writeFileSync(out, yaml);
+    writeDraft(out, yaml);
     return { out, date: draft.report_date };
   }
 
@@ -151,13 +172,14 @@ export function acr(values) {
   const markdown = summaryMarkdown(draft, { file: out });
   const summaryFd = openSync(values["step-summary"], "a");
   try {
-    writeFileSync(out, yaml);
+    const undo = writeDraft(out, yaml);
     try {
       writeSync(summaryFd, markdown);
     } catch (error) {
-      // The draft was written but the run failed: remove it, so a failed
-      // run never leaves a draft for a later step to pick up.
-      rmSync(out, { force: true });
+      // The draft was written but the run failed: remove it (and any
+      // directories made for it), so a failed run never leaves a draft for
+      // a later step to pick up.
+      undo();
       throw error;
     }
   } finally {

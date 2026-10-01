@@ -43,7 +43,7 @@ npx aloud acr --findings findings.json [--out acr-draft.yaml] \
 | Flag | Default | Meaning |
 |---|---|---|
 | `--findings` | required | The findings JSON |
-| `--out` | `acr-draft.yaml` | Where to write the draft |
+| `--out` | `acr-draft.yaml` | Where to write the draft; missing parent directories are created once the draft is valid |
 | `--policy` | the default policy | JSON object of per-status overrides ([overriding the policy](#overriding-the-policy)) |
 | `--catalog` | the bundled catalog the findings name | OpenACR catalog YAML ([catalogs](#catalogs)) |
 | `--date` | `provenance.date`, else today | Report date; must be a real calendar date |
@@ -51,7 +51,8 @@ npx aloud acr --findings findings.json [--out acr-draft.yaml] \
 
 `aloud acr` reads no aloud config. On a missing or malformed file, invalid
 findings, an unsafe policy, or a `--step-summary` file that cannot be
-written, it prints every problem, writes nothing, and exits non-zero. The
+written, it prints every problem, writes nothing (not even the `--out`
+parent directories), and exits non-zero. The
 step summary says every row needs human review, supports rows included,
 since a supports level can rest on automated checks alone.
 

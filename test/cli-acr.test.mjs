@@ -110,6 +110,27 @@ describe("aloud acr", () => {
     assert.equal(existsSync(out), false);
   });
 
+  it("creates missing parent directories for --out once the draft is valid", () => {
+    const out = join(dir, "made", "for", "it", "acr.yaml");
+    const result = aloud("acr", "--findings", fixture("valid.json"), "--out", out);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(validateAcr(readAcr(out)).valid, true);
+  });
+
+  it("creates no parent directories when the findings are invalid", () => {
+    const result = aloud("acr", "--findings", fixture("invalid-criterion.json"), "--out", join(dir, "never-made", "sub", "acr.yaml"));
+    assert.notEqual(result.status, 0);
+    assert.equal(existsSync(join(dir, "never-made")), false);
+  });
+
+  it("creates no parent directories when the --step-summary file cannot be opened", () => {
+    const out = join(dir, "never-made-summary", "acr.yaml");
+    const summary = join(dir, "missing-dir", "step-summary.md");
+    const result = aloud("acr", "--findings", fixture("valid.json"), "--out", out, "--step-summary", summary);
+    assert.notEqual(result.status, 0);
+    assert.equal(existsSync(join(dir, "never-made-summary")), false);
+  });
+
   it("defaults the output to acr-draft.yaml in the working directory", () => {
     const result = aloud("acr", "--findings", fixture("valid.json"));
     assert.equal(result.status, 0, result.stderr);

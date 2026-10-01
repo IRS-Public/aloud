@@ -96,7 +96,9 @@ build drafts through one findings contract and one level policy.
 - **`aloud acr --findings <file.json>`** builds a draft from any findings
   document, with `--out`, `--policy`, `--catalog`, `--date`, and
   `--step-summary <file>` (append a Markdown count of conformance levels).
-  `aloud openacr` now builds its drafts through the same engine.
+  `aloud openacr` now builds its drafts through the same engine. Both
+  commands create missing `--out` parent directories once the draft is
+  valid.
 - **GitHub Action** (`action.yml`, "aloud acr"): runs `aloud acr` in any
   repository with Node 24, outputs the draft's path, and adds the level
   count to the job summary. See docs/ci.md.
