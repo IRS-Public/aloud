@@ -1,13 +1,24 @@
 name: Experimental web VoiceOver evidence
 # Safari + VoiceOver on a disposable GitHub-hosted macOS runner, dispatched
-# by hand only. Guidepup setup changes the runner's accessibility settings,
-# which is why aloud refuses to start VoiceOver anywhere else: it requires
+# by hand or run when a pull request touches the driver. Guidepup setup
+# changes the runner's accessibility settings, which is why aloud refuses to
+# start VoiceOver anywhere else: it requires
 # GITHUB_ACTIONS=true, RUNNER_ENVIRONMENT=github-hosted and the explicit
 # ALOUD_ALLOW_NATIVE_DESKTOP opt-in set below.
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/web/voiceover.mjs'
+      - 'src/web/safari.mjs'
+      - 'test/web-voiceover-smoke.mjs'
+      - 'test/web-fixture/**'
+      - '.github/workflows/web-voiceover.yml'
 permissions:
   contents: read
+concurrency:
+  group: web-voiceover-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   voiceover:
     runs-on: macos-15

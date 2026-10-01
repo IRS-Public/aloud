@@ -246,7 +246,8 @@ assertions, evidence regeneration, and conservative OpenACR output. The
 separate unit suite exercises malformed artifacts and command-log handling.
 
 Run `npm run test:web:voiceover` only through the **Experimental web
-VoiceOver evidence** workflow (manual dispatch). It repeats the NVDA fixture
+VoiceOver evidence** workflow (manual dispatch, or pull requests that touch
+the Safari driver). It repeats the NVDA fixture
 scenarios in Safari, plus VoiceOver cursor commands, and retains raw
 artifacts. The unit suite `test/web-voiceover.test.mjs` covers the driver
 and its wiring with fakes; it never starts Safari or VoiceOver.

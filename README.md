@@ -320,7 +320,8 @@ The repository's [browser acceptance workflow](.github/workflows/web.yml)
 runs Chromium fixtures on relevant pull requests. Manual dispatch adds the
 external web-app scenarios and can enable Windows NVDA validation. The
 [VoiceOver workflow](.github/workflows/web-voiceover.yml) runs the Safari +
-VoiceOver fixtures on manual dispatch only.
+VoiceOver fixtures on manual dispatch and on pull requests that touch the
+Safari driver.
 
 ## How it works
 
