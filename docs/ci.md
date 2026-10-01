@@ -70,7 +70,11 @@ an unsafe policy, or a missing file fail the step with every problem
 listed; no draft or directory is written and the output is not set.
 
 This repository's `ci.yml` runs the action from its own checkout
-(`uses: ./`) on a fixture and checks that the draft validates.
+(`uses: ./`) on a fixture and checks that the draft validates and that the
+`acr` output names it. It does not check the job summary table, because
+GitHub gives each step its own summary file and a later step cannot read
+the action's; `test/action.test.mjs` checks that table by running the
+action's build step locally.
 
 For a complete workflow (convert a test report into one findings file per
 component, draft each in a matrix job, and attach every draft to a GitHub

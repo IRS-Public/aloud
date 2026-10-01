@@ -59,4 +59,7 @@ jobs:
             if (acr.report_date !== "2026-09-30") throw new Error(`report_date ${acr.report_date}`);
             console.log(`valid draft: ${process.env.ACR}`);
           '
-          grep -q "| supports | 1 |" "$GITHUB_STEP_SUMMARY"
+          # The level table the action appends to the job summary is not
+          # checked here: GitHub gives every step its own summary file, so
+          # this step cannot read what the action's step wrote.
+          # test/action.test.mjs checks that table by running the build step.
