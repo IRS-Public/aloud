@@ -386,11 +386,17 @@ export function sameDocumentUrl(current, target) {
 // is not needed and is cancelled.
 export async function preflightRequest(io, url, timeoutMs) {
   let response;
+  // A held timer, not AbortSignal.timeout: Node 22 unrefs that timer, so a
+  // request that holds nothing open could let the process exit before it fires.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException("timed out", "TimeoutError")), timeoutMs);
   try {
-    response = await io.fetch(url, { signal: AbortSignal.timeout(timeoutMs), redirect: "follow" });
+    response = await io.fetch(url, { signal: controller.signal, redirect: "follow" });
   } catch (error) {
     const reason = error?.name === "TimeoutError" ? `no response within ${timeoutMs}ms` : error?.message ?? String(error);
     throw new Error(`Safari capture could not request ${url} from Node to check its status: ${reason}`, { cause: error });
+  } finally {
+    clearTimeout(timer);
   }
   await response.body?.cancel().catch(() => {});
   return { ok: response.ok, status: response.status };
