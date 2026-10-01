@@ -97,8 +97,13 @@ draft OpenACR. Write a findings document (see
 [`examples/findings.example.json`](examples/findings.example.json)), then:
 
 ```bash
-npx aloud acr --findings examples/findings.example.json --out acr-draft.yaml
+npx aloud acr --findings node_modules/@irs-public/aloud/examples/findings.example.json --out acr-draft.yaml
 ```
+
+The package ships the example, so that command works in any project that
+has `@irs-public/aloud` installed. From a checkout of this repository, run
+`node bin/aloud.mjs acr --findings examples/findings.example.json --out acr-draft.yaml`
+instead. For your own evidence, pass your findings file.
 
 The draft lists every criterion in the WCAG 2.2 / Section 508 catalog.
 Findings set levels through a conservative policy: only passing evidence

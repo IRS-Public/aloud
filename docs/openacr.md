@@ -28,11 +28,13 @@ at the end says what a person must do before publishing it.
 ## Build a draft from findings
 
 ```bash
-npx aloud acr --findings examples/findings.example.json --out acr-draft.yaml
+npx aloud acr --findings node_modules/@irs-public/aloud/examples/findings.example.json --out acr-draft.yaml
 ```
 
 That builds a draft from the [example findings](../examples/findings.example.json),
-shown in full [below](#a-full-example). The flags:
+shown in full [below](#a-full-example). The package ships the example, so
+the path above works in any project that installed `@irs-public/aloud`;
+from a checkout of this repository, use `examples/findings.example.json`. The flags:
 
 ```bash
 npx aloud acr --findings findings.json [--out acr-draft.yaml] \
