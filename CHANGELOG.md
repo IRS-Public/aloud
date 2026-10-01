@@ -53,7 +53,16 @@ build drafts through one findings contract and one level policy.
   web capture, and demo scripts stop on an unknown, value-less, or
   repeated flag instead of ignoring it.
 - **`node src/report/openacr.mjs` no longer runs a command.** Use
-  `aloud openacr`; the module's exports are unchanged.
+  `aloud openacr`. The module exports the same names, but two changed
+  contents: `RULES` and `AUTOMATED_CRITERIA` are now frozen views of the
+  rule catalog, so adding or changing a key throws in strict mode.
+  `RULES` lists the error rules only, so `native-touch-target-small` and
+  `ios-touch-target-small` are gone (reading `.what` on them throws) and
+  `native-target-size-minimum` and `ios-target-size-minimum` are new; each
+  entry gains `severity` and `criteria` beside `platform` and `what`.
+  In `AUTOMATED_CRITERIA`, 2.5.8 now lists the two target-size-minimum
+  rules and checks the 24-unit minimum, every `covers` text is reworded,
+  and 4.1.2 gains an `extra` field naming related report-only warnings.
 - **`aloud openacr --catalog`** must keep the bundled catalog's chapters
   and criteria, since the draft names that catalog.
 - **Mixed evidence is refused.** Reports, baselines, and drafts refuse to
