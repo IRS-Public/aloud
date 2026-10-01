@@ -31,7 +31,10 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci
-      - run: npx --yes @guidepup/setup@0.25.3 setup --ci
+      # Hosted macOS machines sometimes fail Guidepup's TCC or Do Not Disturb
+      # writes on the first try; the USWDS harness allows a second attempt.
+      - name: Set up VoiceOver
+        run: npx --yes @guidepup/setup@0.25.3 setup --ci || npx --yes @guidepup/setup@0.25.3 setup --ci
       - run: npx --yes @guidepup/setup@0.25.3 install
       # Aloud observes its Safari window through Apple Events. Full keyboard
       # access lets Tab reach buttons and checkboxes; Safari's tab-to-links
