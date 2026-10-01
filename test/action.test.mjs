@@ -167,11 +167,11 @@ describe("action build step", () => {
     assert.equal(result.summary, null);
   });
 
-  it("fails the step on invalid findings, writing no draft and no output", () => {
+  it("fails the step on invalid findings, writing no draft, directory, or output", () => {
     const result = runBuild({ findings: join(FIXTURES, "invalid-criterion.json"), out: "bad/acr.yaml" });
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /aloud acr: invalid findings:/);
-    assert.equal(existsSync(join(dir, "bad/acr.yaml")), false);
+    assert.equal(existsSync(join(dir, "bad")), false);
     assert.equal(result.outputs, "");
     assert.equal(result.summary, null);
   });

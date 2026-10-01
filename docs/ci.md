@@ -51,7 +51,7 @@ accessibility harness, writes the findings:
 | Input | Required | Default | Meaning |
 |---|---|---|---|
 | `findings` | yes | | Findings JSON (`src/acr/findings.schema.json`) |
-| `out` | no | `acr.yaml` | Output YAML; missing parent directories are created |
+| `out` | no | `acr.yaml` | Output YAML; missing parent directories are created once the draft is valid. Must not contain a line break. |
 | `policy` | no | | JSON file of per-status level overrides |
 | `catalog` | no | | OpenACR catalog YAML instead of the bundled one |
 | `date` | no | `provenance.date`, else today | Report date as YYYY-MM-DD |
@@ -67,7 +67,7 @@ directory, and runs `bin/aloud.mjs acr`. It never touches the caller's
 conformance level to the job summary (`--step-summary`), with a note that
 every row, supports included, still needs human review. Invalid findings,
 an unsafe policy, or a missing file fail the step with every problem
-listed; no draft is written and the output is not set.
+listed; no draft or directory is written and the output is not set.
 
 This repository's `ci.yml` runs the action from its own checkout
 (`uses: ./`) on a fixture and checks that the draft validates.
