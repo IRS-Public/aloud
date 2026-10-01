@@ -42,7 +42,9 @@ export async function captureWeb(cfg, { flow = [], screenId = "current", depende
   validateWebConfig(web);
   const manifest = web.screens ? JSON.parse(readFileSync(web.screens, "utf8")) : null;
   const screens = webScreens(web, manifest, flow, screenId);
-  if (web.screenReader === "nvda" && process.platform !== "win32" && !dependencies.startReader) throw new Error("NVDA capture requires Windows; no computed speech fallback is available");
+  // Tests that fake the reader also fake the host OS the evidence records.
+  const os = dependencies.platform ?? process.platform;
+  if (web.screenReader === "nvda" && os !== "win32" && !dependencies.startReader) throw new Error("NVDA capture requires Windows; no computed speech fallback is available");
   // VoiceOver refuses a developer desktop before any output is touched.
   if (web.screenReader === "voiceover" && !dependencies.startReader) assertNativeDesktop();
   const readerKit = READERS[web.screenReader];
@@ -62,7 +64,7 @@ export async function captureWeb(cfg, { flow = [], screenId = "current", depende
   mkdirSync(join(out, "shots"), { recursive: true });
   const run = { schemaVersion: 1, platform: "web", runId: randomUUID(), generated: new Date().toISOString(),
     status: "running", cleanupComplete: false, reportOnly: true, screens, receipts: {},
-    environment: { os: process.platform, osVersion: release(), browser: browserName,
+    environment: { os, osVersion: release(), browser: browserName,
       ...(safari ? { axeInjection: "apple-events" } : { playwright: WEB_VERSIONS.playwright, axeAdapter: WEB_VERSIONS["@axe-core/playwright"] }),
       screenReader: web.screenReader, headless: web.screenReader === "none" && !web.headed,
       locale: web.locale, viewport: web.viewport },

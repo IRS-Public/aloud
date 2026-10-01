@@ -558,6 +558,7 @@ test("a VoiceOver capture drives Safari and VoiceOver end to end with fakes and 
   try {
     const cfg = loadConfig(undefined, { out: dir, web: { screens, screenReader: "voiceover", timeoutMs: 1000 } });
     const out = await captureWeb(cfg, { flow: ["voiceover"], dependencies: {
+      platform: "darwin",
       safari: createSafari(safariIo),
       startReader: () => startVoiceOver({ env: HOSTED, platform: "darwin", io, guidepup: guidepup(voiceOver) }),
     } });
