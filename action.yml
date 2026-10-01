@@ -73,6 +73,13 @@ runs:
       run: |
         set -euo pipefail
         out="${ACR_OUT:-acr.yaml}"
+        # The out path ends up in $GITHUB_OUTPUT, which is read line by
+        # line, so a line break in it could forge another output. Refuse it
+        # before anything runs.
+        if [[ "$out" == *$'\n'* || "$out" == *$'\r'* ]]; then
+          echo "aloud acr: the out input must not contain a line break" >&2
+          exit 1
+        fi
         mkdir -p -- "$(dirname -- "$out")"
         # --flag=value, so a path that starts with "-" is not read as a flag.
         args=(acr "--findings=$ACR_FINDINGS" "--out=$out")
@@ -81,5 +88,9 @@ runs:
         if [[ -n "${ACR_DATE:-}" ]]; then args+=("--date=$ACR_DATE"); fi
         if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then args+=("--step-summary=$GITHUB_STEP_SUMMARY"); fi
         node "$GITHUB_ACTION_PATH/bin/aloud.mjs" "${args[@]}"
-        # Node resolves the path, so it is native on every runner OS.
-        echo "acr=$(node -p 'require("node:path").resolve(process.argv[1])' -- "$out")" >> "$GITHUB_OUTPUT"
+        # Node resolves the path, so it is native on every runner OS. The
+        # output uses a random heredoc delimiter, GitHub's form for values
+        # that are not fixed text, so the path can never end the value early.
+        acr="$(node -p 'require("node:path").resolve(process.argv[1])' -- "$out")"
+        delimiter="ALOUD_ACR_$(node -p 'require("node:crypto").randomUUID()')"
+        printf 'acr<<%s\n%s\n%s\n' "$delimiter" "$acr" "$delimiter" >> "$GITHUB_OUTPUT"

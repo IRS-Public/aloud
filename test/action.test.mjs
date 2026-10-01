@@ -50,6 +50,28 @@ function runBuild(inputs, { summary = true } = {}) {
   };
 }
 
+// Read a GITHUB_OUTPUT file the way the runner does: name=value lines and
+// name<<DELIMITER blocks. Returns { name: value }; throws on anything else.
+function parseOutputs(text) {
+  const outputs = {};
+  const lines = text.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  for (let i = 0; i < lines.length; i++) {
+    const block = lines[i].match(/^([\w-]+)<<(.+)$/);
+    if (block) {
+      const end = lines.indexOf(block[2], i + 1);
+      assert.ok(end > i, `unterminated ${block[1]} block`);
+      outputs[block[1]] = lines.slice(i + 1, end).join("\n");
+      i = end;
+      continue;
+    }
+    const pair = lines[i].match(/^([\w-]+)=(.*)$/);
+    assert.ok(pair, `unexpected output line ${JSON.stringify(lines[i])}`);
+    outputs[pair[1]] = pair[2];
+  }
+  return outputs;
+}
+
 describe("action.yml", () => {
   it("is a composite action with the documented inputs and an acr output", () => {
     assert.equal(action.name, "aloud acr");
@@ -87,7 +109,7 @@ describe("action build step", () => {
     const result = runBuild({ findings: join(FIXTURES, "valid.json"), out: "reports/acr.yaml" });
     assert.equal(result.status, 0, result.stderr);
     const file = join(dir, "reports/acr.yaml");
-    assert.equal(result.outputs, `acr=${file}\n`);
+    assert.deepEqual(parseOutputs(result.outputs), { acr: file });
     const acr = load(readFileSync(file, "utf8"));
     assert.deepEqual(validateAcr(acr), { valid: true, problems: [] });
     assert.equal(acr.report_date, "2026-09-01");
@@ -104,7 +126,7 @@ describe("action build step", () => {
       date: "2026-09-30",
     });
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.outputs, `acr=${join(dir, "acr.yaml")}\n`);
+    assert.deepEqual(parseOutputs(result.outputs), { acr: join(dir, "acr.yaml") });
     const acr = load(readFileSync(join(dir, "acr.yaml"), "utf8"));
     assert.equal(acr.report_date, "2026-09-30");
     const untested = acr.chapters.success_criteria_level_aa.criteria.find((c) => c.num === "1.4.3");
@@ -117,7 +139,26 @@ describe("action build step", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.ok(existsSync(join(dir, out)));
     assert.equal(existsSync(join(dir, "pwned")), false);
-    assert.equal(result.outputs, `acr=${join(dir, out)}\n`);
+    assert.deepEqual(parseOutputs(result.outputs), { acr: join(dir, out) });
+  });
+
+  it("writes the acr output with a random heredoc delimiter", () => {
+    const first = runBuild({ findings: join(FIXTURES, "valid.json"), out: "delim.yaml" });
+    const second = runBuild({ findings: join(FIXTURES, "valid.json"), out: "delim.yaml" });
+    assert.equal(first.status, 0, first.stderr);
+    assert.match(first.outputs, /^acr<<ALOUD_ACR_[0-9a-f-]{36}\n/);
+    assert.notEqual(first.outputs.split("\n")[0], second.outputs.split("\n")[0]);
+  });
+
+  it("refuses an out path with a line break, writing nothing", () => {
+    for (const out of ["forged.yaml\nevil=1", "forged.yaml\r"]) {
+      const result = runBuild({ findings: join(FIXTURES, "valid.json"), out });
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /must not contain a line break/);
+      assert.equal(result.outputs, "");
+      assert.equal(result.summary, null);
+      assert.equal(existsSync(join(dir, "forged.yaml")), false);
+    }
   });
 
   it("runs without a step summary outside GitHub Actions", () => {
