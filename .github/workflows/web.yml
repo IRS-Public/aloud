@@ -24,7 +24,7 @@ jobs:
       - run: npm run test:web
       - run: npm run test:web:external
         if: github.event_name == 'workflow_dispatch'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always() && github.event_name == 'workflow_dispatch'
         with:
           name: web-external-chromium-evidence
@@ -47,7 +47,7 @@ jobs:
       - run: npm run test:web:external
         env:
           ALOUD_WEB_READER: nvda
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: web-nvda-evidence
