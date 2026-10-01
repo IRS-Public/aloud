@@ -5,7 +5,7 @@
   },
   "orders-list": {
     "errors": 1,
-    "ruleIds": ["native-touch-target-small"]
+    "ruleIds": ["native-target-size-minimum"]
   },
   "settings": {
     "errors": 0,

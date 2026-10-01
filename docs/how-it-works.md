@@ -31,7 +31,10 @@ src/ios/walk.mjs                  iOS walker, one pass: `idb` dumps the
         v
 src/report/report.mjs             summary.json + index.html evidence page +
                                   ratchet gate against the baseline
-src/report/openacr.mjs            draft OpenACR (see docs/openacr.md)
+src/provenance.mjs                where each evidence file came from (commit,
+                                  machine, CI run, tools); see below
+src/acr/                          draft OpenACR: audit results -> findings
+                                  -> shared builder (see docs/openacr.md)
 ```
 
 Android `--talkback focus` replaces the startup transcript pass with the
@@ -41,13 +44,47 @@ scrolling. See [the protocol](talkback-focus.md).
 
 `aloud android` and `aloud ios` run the whole leg: install the build
 (`--apk` / `--app`), walk, report, gate. `aloud report` re-aggregates an
-existing report dir. `aloud baseline` accepts current counts. `aloud
-openacr` emits the draft conformance report.
+existing report dir. `aloud baseline` accepts current counts, and records
+why an error is accepted (`--accept`). `aloud openacr` emits the draft conformance report, and `aloud acr` builds one from
+any findings document (see [docs/openacr.md](openacr.md)). Both run in the
+`aloud` process through `src/cli/openacr.mjs`.
+
+The scripts under `src/` can also be run directly with `node`. The walkers
+(`src/android/walk.mjs`, `src/ios/walk.mjs`), `src/report/report.mjs`,
+`src/report/baseline.mjs`, `src/demo/demo.mjs`, and
+`src/web/run.mjs` parse flags as strictly as the `aloud` command: an unknown
+flag, a flag missing its value, or a flag given twice stops the script instead
+of being ignored. The low-level helpers (`src/android/talkback.mjs`,
+`atf-capture.mjs`, `tts-capture.mjs`) still read their arguments loosely, so
+check flag spelling when calling them by hand.
 
 Reports land under the report root (`--out`, default `aloud-report`):
 `aloud-report/android/` and `aloud-report/ios/`. Each dir holds per-screen
 `*.tree.json` and `*.transcript.json` files, `shots/` screenshots,
 `summary.json`, and `index.html`.
+
+Every evidence file records where it came from under `provenance`
+(`src/provenance.mjs`): the audited app's git commit and whether its
+working tree had uncommitted changes (aloud's own output does not count:
+the report dir, the config's baseline files and `openacr.out` draft, and
+the `.aloud-cache` download dir or `$ALOUD_CACHE`; a baseline written to
+another path with `--baseline` does count, so commit or ignore it),
+aloud's version and commit, the OS, architecture, and Node.js version,
+the GitHub Actions run id, attempt, and URL when there is one, and tool
+versions (the TalkBack build, the Accessibility Test Framework, the `adb`
+the walker runs, Xcode). The shared fields use the USWDS accessibility
+harness's `evidence.json` names (`commit`, `workingTreeDirty`,
+`platform`, `architecture`, `osRelease`, `node`, `githubRunId`,
+`githubRunAttempt`); aloud adds `githubRunUrl`, `aloud`, and `tools`.
+Anything that cannot be read, such as a directory that is not a git
+checkout, is `null`, never "clean". `summary.json` states the run's
+provenance, and the evidence page shows it. A report dir must hold one
+run: `aloud report` and `aloud baseline` refuse to combine files from
+another commit, a dirty tree, another aloud, machine, or CI run, or
+files written before provenance next to newer ones. Re-run into a fresh
+report dir, or pass `--allow-mixed`; the summary then lists every source
+and the files it covers. Report dirs written before provenance still
+aggregate unchanged.
 
 A missing accessibility capture fails the walk before it writes that screen's
 tree report or screenshot. Android requires a complete XML hierarchy with
@@ -123,18 +160,50 @@ Requires a `google_apis` (userdebug) emulator image; see
 ### Android rules
 
 `uiautomator dump` exposes a high-confidence subset of the accessibility
-tree. The rules live in `src/android/ui-tree.mjs`:
+tree. The rules live in `src/android/ui-tree.mjs`. Each rule's severity and
+WCAG criteria come from the rule catalog, `src/rules/catalog.mjs`, which the
+OpenACR draft also reads (primary criterion first):
 
 | Rule id | WCAG | Severity |
 | --- | --- | --- |
 | `native-interactive-unlabeled` | 4.1.2 | error |
-| `native-image-button-unlabeled` | 4.1.2 | error |
-| `native-edittext-unlabeled` | 4.1.2 | error |
-| `native-touch-target-small` (48dp platform bar) | 2.5.8 | error |
-| `native-duplicate-speakable` | 4.1.2 | warn (report-only) |
+| `native-image-button-unlabeled` | 4.1.2, 1.1.1 | error |
+| `native-edittext-unlabeled` | 4.1.2, 1.3.1 | error |
+| `native-target-size-minimum` (under 24dp, spacing circle overlaps another target) | 2.5.8 | error |
+| `native-touch-target-small` (48dp Android guideline) | none | warn (report-only) |
+| `native-duplicate-speakable` | 4.1.2, 2.4.6 | warn (report-only) |
 
-Errors count toward the gate; warns appear in the report only. The dump
-format omits `stateDescription`, `roleDescription`, hints, and `paneTitle`.
+Errors count toward the gate; warns appear in the report only.
+
+WCAG 2.5.8 needs a target to be at least 24x24 CSS px. aloud reads that as
+24dp on Android and 24pt on iOS. It also applies the spacing exception: an
+undersized target still passes if a 24-unit circle centred on it does not
+overlap any other target, or another undersized target's circle. A circle
+that only touches another target or circle at a single point does not
+count as an overlap. aloud cannot judge the inline, user-agent-control,
+essential and equivalent-control exceptions, so those still need a human.
+It also skips some targets entirely: disabled ones, ones with no on-screen
+area, switch-family controls on iOS, and, on Android, targets clipped at a
+scroll edge or nested inside a labeled clickable ancestor of at least 24dp.
+Review those by hand. The 48dp and 44pt platform guidelines stay in the
+report as warnings.
+
+Reports and baselines written before this split still load. A baseline
+entry that accepted the old 48dp/44pt ids as errors drops those ids and
+one error for each of them. Each dropped id accounted for at least one
+error, so what remains is the most the other rules could have had, which
+is also what the old entry already allowed them. An unchanged app that
+passed before still passes. A new 24-unit violation still fails the gate. `aloud
+baseline` keeps old entries for screens it did not re-run exactly as
+written, and the OpenACR draft reads such an entry as leaving 2.5.8
+unchecked on that screen. An old tree report that gated on the 48dp/44pt
+rule cannot show whether 2.5.8 is met. So `aloud report` fails that screen,
+`aloud baseline` refuses it, and the OpenACR draft leaves 2.5.8
+`not-evaluated` until the tree pass is re-run. ATF reports carry the
+native evidence, so both commands recompute them in the current
+classification.
+
+The dump format omits `stateDescription`, `roleDescription`, hints, and `paneTitle`.
 Opt-in `--atf` uses the companion's `AccessibilityNodeInfo` snapshot for both
 tree rules and six pinned Google Accessibility Test Framework checks. It
 captures those missing properties, retains exact node identities, and verifies
@@ -147,21 +216,25 @@ One pass. `src/ios/run.sh` boots a simulator if none is booted, installs
 the app, and per screen dumps the accessibility tree with
 `idb ui describe-all`. From each dump aloud computes the VoiceOver
 utterance for each element (label, value, trait, hint, in VoiceOver's
-order) and runs the iOS rules (`src/ios/tree.mjs`):
+order) and runs the iOS rules (`src/ios/tree.mjs`), with severity and
+criteria from the same catalog:
 
 | Rule id | WCAG | Severity |
 | --- | --- | --- |
 | `ios-interactive-unlabeled` | 4.1.2 | error |
-| `ios-image-unlabeled` | 4.1.2 | error |
-| `ios-touch-target-small` (44pt Apple bar) | 2.5.8 | error |
+| `ios-image-unlabeled` | 1.1.1, 4.1.2 | error |
+| `ios-target-size-minimum` (under 24pt, spacing circle overlaps another target) | 2.5.8 | error |
+| `ios-touch-target-small` (44pt Apple guideline) | none | warn (report-only) |
 | `ios-toggle-raw-value` (non-switch control speaking "1"/"0") | 4.1.2 | warn (report-only) |
 | `ios-list-row-not-interactive` (static row among interactive siblings) | 4.1.2 | warn (report-only) |
-| `ios-duplicate-speakable` | 4.1.2 | warn (report-only) |
+| `ios-duplicate-speakable` | 4.1.2, 2.4.6 | warn (report-only) |
 
 Errors count toward the gate; warns appear in the report only. Switch-family
 roles (`Switch`, `Toggle`, and `CheckBox`, which is how a UISwitch reaches
-the mac-AX dump) speak numeric state as on/off and are exempt from the
-44pt rule: Apple's own UISwitch is 51x31pt and Apple's audit passes it.
+the mac-AX dump) speak numeric state as on/off and are exempt from
+both target-size rules: Apple's own UISwitch is 51x31pt and Apple's audit
+passes it. A switch still counts as a neighbour when aloud checks another
+target's spacing.
 
 Each dump is taken twice or more: the walker re-dumps every half second
 until two consecutive dumps agree (up to six), because a dump can race the
@@ -191,14 +264,18 @@ reader can.
 
 The baseline file (default `aloud-baseline-android.json` /
 `aloud-baseline-ios.json`, or `baseline.android` / `baseline.ios` in the
-config) records per screen `{ errors, ruleIds }`. The gate is a ratchet:
+config) records per screen `{ errors, ruleIds }`, plus optional accepted
+reasons (see [below](#accepted-findings)). The gate is a ratchet:
 
 - A screen fails if its error count rises above the baseline.
 - A rule id the baseline has never seen fails even under the count.
 - A screen not in the baseline fails until you accept it.
 
 `aloud baseline <report-dir>` is the only sanctioned way to change the
-baseline. Run it to accept an initial baseline or after a fix lowers the
+baseline. Without `--baseline`, a report dir named `ios` or ending in `-ios`
+(for example `aloud-report/ios` or `shop-ios`) uses the iOS baseline, and any
+other dir uses the Android one; `aloud report` picks its baseline the same
+way. Run it to accept an initial baseline or after a fix lowers the
 counts, and commit the result with the change that earned it. The gate
 summary is computed once, in the walker, and embedded in each report as
 `.gate`. The report and baseline tools validate that summary against the
@@ -209,11 +286,75 @@ leaves the baseline unchanged. Valid filtered runs still preserve untouched
 screens. `--no-gate` on a leg skips the ratchet comparison, not validation of
 the supplied tree evidence.
 
+A screen this run did not cover is kept as written, with a note. When a
+screen was renamed or removed, pass `--prune` to drop every screen the run
+did not cover instead of editing the file by hand.
+
+### Accepted findings
+
+A baselined error can carry the reason it is allowed to stand:
+
+```bash
+aloud baseline aloud-report/android \
+  --accept checkout:native-target-size-minimum --kind platform-gap \
+  --summary "The system date picker draws 20dp arrows" \
+  --issue https://tracker.example.com/APP-7
+```
+
+This writes an `accepted` list on the screen's entry:
+
+```json
+"checkout": {
+  "errors": 2,
+  "ruleIds": ["native-target-size-minimum"],
+  "accepted": [{
+    "ruleId": "native-target-size-minimum",
+    "kind": "platform-gap",
+    "summary": "The system date picker draws 20dp arrows",
+    "issue": "https://tracker.example.com/APP-7"
+  }]
+}
+```
+
+- `kind` is `product-bug` (a defect in the app, not fixed yet),
+  `platform-gap` (the OS, screen reader, or a system control causes it), or
+  `accepted-risk` (a known defect the team chose to ship).
+- `summary` is one sentence of at most 140 characters. `issue` is optional:
+  an http(s) URL or a tracker id with no spaces.
+- The rule id must be one the screen's entry gates, and a rule in
+  `src/rules/catalog.mjs`. An invalid entry stops `aloud report --gate` and
+  `aloud baseline` without writing anything, like any other invalid baseline.
+  A report without `--gate` (including the report step of a leg run with
+  `--no-gate`) warns instead and writes its evidence without accepted
+  reasons.
+- One `--accept` per run adds or replaces the reason for that rule id; the
+  command still merges the report dir first.
+- Re-baselining keeps each reason while its rule still fires on the screen,
+  and drops it (with a note) once the finding is gone.
+- `aloud baseline` warns about baselined rule ids with no reason. It is a
+  warning, not a failure: baselines written before accepted reasons stay
+  valid as they are.
+
+A reason explains a failure; it does not excuse it. The ratchet is
+unchanged, and the screen keeps its failing badge. The reasons for the
+errors a run still finds appear in `summary.json` (per screen, `accepted`),
+on the evidence page, and in the OpenACR draft's notes (see
+[docs/openacr.md](openacr.md)).
+
 ## Draft OpenACR
 
 `aloud openacr` converts the audit results into a draft machine-readable
-conformance report in the GSA OpenACR format. What the draft claims, and
-what a human must still do, is in [docs/openacr.md](openacr.md).
+conformance report in the GSA OpenACR format. It does so in two steps:
+`src/acr/from-aloud.mjs` turns the audit results into a findings document,
+one status per criterion and component, and the shared builder
+(`src/acr/build.mjs`) turns findings into the draft through a conservative
+level policy. `aloud acr` runs only the second step, on findings from any
+source, so aloud's drafts and another tool's drafts follow the same rules:
+every catalog row is listed, only passing evidence reaches `supports`, and
+anything unproven is `not-evaluated`. What the draft claims, and what a
+human must still do, is in [docs/openacr.md](openacr.md);
+[docs/harness-integration.md](harness-integration.md) shows another tool's
+report feeding the same builder.
 
 ## Running in CI
 

@@ -7,6 +7,14 @@
 // opt-in AccessibilityNodeInfo/ATF companion, whose adapter also uses these rules.
 // These rules are the high-confidence subset that the dump can prove.
 
+import {
+  TARGET_SIZE_MINIMUM,
+  createFindings,
+  hasArea,
+  repeatedAnnouncements,
+  spacingConflict,
+} from "../rules/shared.mjs";
+
 // ── parser ──
 // uiautomator XML is flat-attribute <node> elements, nested or self-closing.
 // A tiny stack parser is enough; no XML library needed for this format.
@@ -88,15 +96,16 @@ const truthy = (v) => v === "true";
 // bigger clickable ancestor; mirror it. A display-only control (native
 // Switch behind a Pressable row with pointerEvents="none") dumps as
 // clickable, but the row is the real target — if a labeled, enabled,
-// clickable ancestor meets the 48dp bar, the descendant is not judged.
-const insideLargeClickableAncestor = (n, px2dp) => {
+// clickable ancestor meets the size bar being checked (48dp for the
+// guideline, 24dp for 2.5.8), the descendant is not judged against it.
+const insideLargeClickableAncestor = (n, px2dp, minDp) => {
   for (let a = n.parent; a; a = a.parent) {
     if (
       truthy(a.clickable) &&
       truthy(a.enabled) &&
       a.bounds &&
-      px2dp(a.bounds.w) >= 48 &&
-      px2dp(a.bounds.h) >= 48 &&
+      px2dp(a.bounds.w) >= minDp &&
+      px2dp(a.bounds.h) >= minDp &&
       speakableDeep(a)
     ) {
       return true;
@@ -113,6 +122,10 @@ const clippedByScroll = (n) => {
   }
   return false;
 };
+const isDescendantOf = (n, ancestor) => {
+  for (let a = n.parent; a; a = a.parent) if (a === ancestor) return true;
+  return false;
+};
 const speakableSelf = (n) => Boolean((n.text || "").trim() || (n["content-desc"] || "").trim() || (n.hint || "").trim());
 const speakableDeep = (n) => speakableSelf(n) || n.children.some(speakableDeep);
 
@@ -123,13 +136,15 @@ export function validateUiCapture(nodes, appPackage) {
   const app = nodes.filter((n) => n.package === appPackage);
   if (!app.length) throw new Error(`no nodes from target app ${appPackage}; check the foreground app`);
   const usable = app.some((n) =>
-    n.class?.trim() && n.bounds && n.bounds.w > 0 && n.bounds.h > 0 &&
+    n.class?.trim() && hasArea(n.bounds) &&
     (speakableSelf(n) || ["focusable", "clickable", "long-clickable", "checkable"].some((key) => truthy(n[key]))),
   );
   if (!usable) {
     throw new Error(`no visible accessibility content from target app ${appPackage}; check that the screen has rendered`);
   }
 }
+
+const oneDecimal = (value) => Number(value.toFixed(1));
 
 const describe = (n) =>
   `${(n.class || "?").replace(/^android\.widget\./, "")}` +
@@ -138,29 +153,55 @@ const describe = (n) =>
 
 // ── rules ──
 // Rule ids are stable strings (they live in the user's committed baseline,
-// like axe rule ids do in a web ratchet gate). Mapped WCAG SC per rule.
+// like axe rule ids do in a web ratchet gate). Each rule's severity and
+// WCAG criteria live in src/rules/catalog.mjs; the comments here explain
+// why a rule fires, the catalog decides what it counts toward.
 
 export function runChecks(nodes, { densityDpi, appPackage }) {
   if (!appPackage) {
     throw new Error("runChecks: appPackage is required (config app.android.package)");
   }
+  // Without a real density every dp comparison is NaN, and NaN comparisons
+  // are false: the size rules would pass everything. Refuse instead.
+  if (!(Number.isFinite(densityDpi) && densityDpi > 0)) {
+    throw new Error(`runChecks: densityDpi must be a positive number, got ${densityDpi}`);
+  }
   const px2dp = (px) => (px * 160) / densityDpi;
   const app = nodes.filter((n) => n.package === appPackage);
-  const violations = [];
+  const interactiveNode = (n) => truthy(n.clickable) || truthy(n["long-clickable"]) || truthy(n.checkable);
+
+  // WCAG 2.5.8 in device pixels. Android lays views out in whole pixels,
+  // rounding dp x density to the nearest one, so a 24dp view is exactly
+  // this many pixels wide. Comparing pixels keeps rasterization from
+  // turning a real 24dp view into 23.8dp, without letting 23dp pass.
+  const minimumPx = Math.round((TARGET_SIZE_MINIMUM * densityDpi) / 160);
+  const undersized = (n) => n.bounds.w < minimumPx || n.bounds.h < minimumPx;
+  // Every enabled target on screen, in dp, for the spacing exception.
+  const targets = app
+    .filter((n) => interactiveNode(n) && truthy(n.enabled) && hasArea(n.bounds))
+    .map((n) => ({
+      node: n,
+      undersized: undersized(n),
+      box: {
+        x1: px2dp(n.bounds.x1),
+        y1: px2dp(n.bounds.y1),
+        x2: px2dp(n.bounds.x2),
+        y2: px2dp(n.bounds.y2),
+      },
+    }));
   // severity "error" counts toward the ratchet gate; "warn" is report-only
   // (duplicate labels are genuinely ambiguous but list-heavy screens repeat
-  // labels legitimately — a warn keeps the signal without gating on it).
-  const add = (ruleId, wcag, node, detail, severity = "error") =>
-    violations.push({ ruleId, wcag, severity, element: describe(node), detail,
-      ...(node.nativeId !== undefined ? { nativeId: node.nativeId, source: "accessibility-node-info" } : {}) });
+  // labels legitimately — the catalog marks that rule warn to keep the
+  // signal without gating on it). Nodes from the ATF companion keep their native id on each finding.
+  const { violations, add } = createFindings("Android", describe, (node) =>
+    node.nativeId !== undefined ? { nativeId: node.nativeId, source: "accessibility-node-info" } : {});
 
   for (const n of app) {
-    const interactive = truthy(n.clickable) || truthy(n["long-clickable"]) || truthy(n.checkable);
+    const interactive = interactiveNode(n);
     // Nodes with non-positive bounds are clipped/offscreen (observed live:
     // scrolled-out list rows dump with negative heights) — a screen reader
     // can't reach them here, so no rule should judge them.
-    const visible = n.bounds && n.bounds.w > 0 && n.bounds.h > 0;
-    if (!visible) continue;
+    if (!hasArea(n.bounds)) continue;
 
     // 4.1.2 Name, Role, Value — an interactive element with no speakable text
     // anywhere in its subtree is announced as just "button"/"unlabeled".
@@ -173,17 +214,16 @@ export function runChecks(nodes, { densityDpi, appPackage }) {
       truthy(n.enabled) &&
       truthy(n.focusable) &&
       !speakableDeep(n) &&
-      !insideLargeClickableAncestor(n, px2dp)
+      !insideLargeClickableAncestor(n, px2dp, 48)
     ) {
       add(
         "native-interactive-unlabeled",
-        "4.1.2",
         n,
         "clickable element with no text or content-desc in its subtree",
       );
     }
 
-    // 4.1.2 — image-only controls need an explicit label; text can't save
+    // 4.1.2 / 1.1.1 — image-only controls need an explicit label; text can't save
     // them because there is none to inherit.
     if (
       /Image(Button|View)$/.test(n.class || "") &&
@@ -191,19 +231,48 @@ export function runChecks(nodes, { densityDpi, appPackage }) {
       !speakableSelf(n) &&
       !n.children.length
     ) {
-      add("native-image-button-unlabeled", "4.1.2", n, "image control without content-desc");
+      add("native-image-button-unlabeled", n, "image control without content-desc");
     }
 
-    // Target size — 48x48dp is the Android platform minimum (ATF's
-    // TouchTargetSizeCheck; WCAG 2.5.8 AA is 24dp, 2.5.5 AAA is 44dp — we
-    // hold the platform bar). Skip elements clipped at a scrollable
-    // ancestor's edge: the dump reports only the visible slice, so the
-    // "small" height is the viewport cut, not the element's real size.
+    // 2.5.8 Target Size (Minimum) — a target under 24x24dp fails unless
+    // the spacing exception covers it: its 24dp circle must stay clear of
+    // every other target and every other undersized target's circle. The
+    // target's own descendants are part of its hit area, not neighbours.
+    // Skip elements clipped at a scrollable ancestor's edge: the dump
+    // reports only the visible slice, so the "small" height is the
+    // viewport cut, not the element's real size. The inline, essential,
+    // user-agent, and equivalent-control exceptions need a human.
+    if (
+      interactive &&
+      truthy(n.enabled) &&
+      undersized(n) &&
+      !clippedByScroll(n) &&
+      !insideLargeClickableAncestor(n, px2dp, TARGET_SIZE_MINIMUM)
+    ) {
+      const self = targets.find((t) => t.node === n);
+      const neighbours = targets.filter((t) => t !== self && !isDescendantOf(t.node, n));
+      const conflict = spacingConflict(self, neighbours);
+      if (conflict) {
+        const overlap = conflict.with === "target"
+          ? `overlaps ${describe(conflict.other.node)}`
+          : `overlaps the spacing circle of ${describe(conflict.other.node)}`;
+        add(
+          "native-target-size-minimum",
+          n,
+          `touch target ${oneDecimal(px2dp(n.bounds.w))}x${oneDecimal(px2dp(n.bounds.h))}dp ` +
+            `(minimum 24x24dp) and its 24dp spacing circle ${overlap}`,
+        );
+      }
+    }
+
+    // Platform guideline, report-only — Material Design (and ATF's
+    // TouchTargetSizeCheck) ask for 48x48dp. No WCAG AA criterion requires
+    // it, so the catalog maps it to none. Same clipping skip as above.
     if (
       interactive &&
       truthy(n.enabled) &&
       !clippedByScroll(n) &&
-      !insideLargeClickableAncestor(n, px2dp)
+      !insideLargeClickableAncestor(n, px2dp, 48)
     ) {
       // Round before comparing: a minHeight:48 view renders 125px at 420dpi
       // (47.62dp) — sub-pixel rasterization, not a real size deficit.
@@ -212,7 +281,6 @@ export function runChecks(nodes, { densityDpi, appPackage }) {
       if (w < 48 || h < 48) {
         add(
           "native-touch-target-small",
-          "2.5.8",
           n,
           `touch target ${Math.round(w)}x${Math.round(h)}dp (minimum 48x48dp)`,
         );
@@ -229,38 +297,22 @@ export function runChecks(nodes, { densityDpi, appPackage }) {
     ) {
       add(
         "native-edittext-unlabeled",
-        "4.1.2",
         n,
         "editable field with no label, hint, or content-desc",
       );
     }
   }
 
-  // 4.1.2 — two interactive elements announcing identically are
+  // 4.1.2 / 2.4.6 — two interactive elements announcing identically are
   // indistinguishable to a screen-reader user (ATF DuplicateSpeakableText).
-  const spoken = new Map();
-  for (const n of app) {
-    if (!(truthy(n.clickable) && truthy(n.enabled))) continue;
-    if (!(n.bounds && n.bounds.w > 0 && n.bounds.h > 0)) continue;
-    const label = ((n.text || "").trim() || (n["content-desc"] || "").trim()).toLowerCase();
-    if (!label) continue;
-    if (spoken.has(label)) {
-      const first = spoken.get(label);
-      if (first.flagged !== true) {
-        add(
-          "native-duplicate-speakable",
-          "4.1.2",
-          n,
-          `same announcement as ${describe(first.node)}: "${label}"`,
-          "warn",
-        );
-        first.flagged = true;
-      } else {
-        add("native-duplicate-speakable", "4.1.2", n, `same announcement: "${label}"`, "warn");
-      }
-    } else {
-      spoken.set(label, { node: n, flagged: false });
-    }
+  // The first repeat of a label names the node it duplicates.
+  const tappable = app.filter((n) => truthy(n.clickable) && truthy(n.enabled) && hasArea(n.bounds));
+  const labelOf = (n) => ((n.text || "").trim() || (n["content-desc"] || "").trim()).toLowerCase();
+  for (const { element, announcement, first, occurrence } of repeatedAnnouncements(tappable, labelOf)) {
+    const detail = occurrence === 1
+      ? `same announcement as ${describe(first)}: "${announcement}"`
+      : `same announcement: "${announcement}"`;
+    add("native-duplicate-speakable", element, detail);
   }
 
   return violations;

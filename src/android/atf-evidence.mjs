@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { TALKBACK_COMMIT } from "./talkback-companion/patch.mjs";
 import { validateUiCapture } from "./ui-tree.mjs";
+import { ruleSpec } from "../rules/catalog.mjs";
 
 export const ATF_VERSION = "4.1.1";
 export const ATF_ARTIFACT = "com.google.android.apps.common.testing.accessibility.framework:accessibility-test-framework";
@@ -10,11 +11,15 @@ const prefix = "com.google.android.apps.common.testing.accessibility.framework.c
 export const ATF_CHECKS = [
   ["atf-speakable-text-present", "SpeakableTextPresentCheck", ["native-interactive-unlabeled", "native-image-button-unlabeled", "native-edittext-unlabeled"]],
   ["atf-editable-content-desc", "EditableContentDescCheck", []],
-  ["atf-touch-target-size", "TouchTargetSizeCheck", ["native-touch-target-small"]],
+  ["atf-touch-target-size", "TouchTargetSizeCheck", ["native-target-size-minimum", "native-touch-target-small"]],
   ["atf-duplicate-speakable-text", "DuplicateSpeakableTextCheck", ["native-duplicate-speakable"]],
   ["atf-redundant-description", "RedundantDescriptionCheck", []],
   ["atf-class-name", "ClassNameCheck", []],
 ].map(([ruleId, name, overlaps]) => ({ ruleId, className: prefix + name, overlaps }));
+// Each overlap names an Android tree rule an ATF result may duplicate. Check
+// them against the rule catalog on load: a renamed or unknown id would
+// otherwise match no tree finding and quietly drop the cross-reference.
+for (const { overlaps } of ATF_CHECKS) for (const id of overlaps) ruleSpec(id, "Android");
 export const ATF_UNSELECTED = ["ClickableSpanCheck", "DuplicateClickableBoundsCheck", "TextContrastCheck",
   "ImageContrastCheck", "TraversalOrderCheck", "LinkPurposeUnclearCheck", "TextSizeCheck"].map((name) => ({
   className: prefix + name, status: "not-selected", reason: "Outside the fixture-validated aloud-node-v1 suite",

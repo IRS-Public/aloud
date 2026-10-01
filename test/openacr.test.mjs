@@ -68,6 +68,10 @@ const eachAdherence = (acr) => {
 };
 
 const findCriterion = (acr, num) => eachAdherence(acr).find((c) => c.num === num)?.adherence;
+// The policy notes that tell a clean-but-partial row from an incomplete one;
+// both are "not-evaluated".
+const PARTLY_TESTED = /^The automated tests passed but cover only part of this criterion\./;
+const INCOMPLETE = /^Some tests for this criterion did not run/;
 
 describe("real VoiceOver provenance", () => {
   const voiceOver = {
@@ -137,9 +141,17 @@ describe("report-only Apple audit evidence", () => {
 
 describe("normalizeAudit", () => {
   it("accepts the flat baseline map", () => {
-    const a = normalizeAudit({ home: { errors: 1, ruleIds: ["native-touch-target-small"] } });
+    const a = normalizeAudit({ home: { errors: 1, ruleIds: ["native-target-size-minimum"] } });
     assert.equal(a.screens.home.errors, 1);
     assert.equal(a.generated, null);
+  });
+
+  it("returns a baseline written before the target-size reclassification as written", () => {
+    // buildAcr checks the old ids against the platform they are filed
+    // under before it reads them in the current classification.
+    const raw = readJson("fixtures/baseline-ios-legacy.json");
+    const a = normalizeAudit(raw);
+    assert.deepEqual(a.screens, raw);
   });
 
   it("accepts report.mjs summary.json", () => {
@@ -162,7 +174,67 @@ describe("rule mapping", () => {
 
   it("rejects a baseline rule id the emitter does not know", () => {
     const bad = normalizeAudit({ home: { errors: 1, ruleIds: ["native-new-rule"] } });
-    assert.throws(() => build({ android: bad }), /native-new-rule/);
+    assert.throws(() => build({ android: bad }), /native-new-rule.*src\/rules\/catalog\.mjs/);
+  });
+
+  it("rejects a report-only warning filed as a gating baseline error", () => {
+    const bad = normalizeAudit({ home: { errors: 1, ruleIds: ["native-duplicate-speakable"] } });
+    assert.throws(() => build({ android: bad }), /native-duplicate-speakable.*report-only warning/);
+  });
+
+  it("derives the criterion mapping from the rule catalog", () => {
+    // A deliberate snapshot: changing what a rule counts toward changes
+    // conformance levels, so it should change this test too.
+    const mapping = Object.fromEntries(
+      Object.entries(AUTOMATED_CRITERIA).map(([num, { rules }]) => [num, [...rules].sort()]),
+    );
+    assert.deepEqual(mapping, {
+      "1.1.1": ["ios-image-unlabeled", "native-image-button-unlabeled"],
+      "1.3.1": ["native-edittext-unlabeled"],
+      "2.5.8": ["ios-target-size-minimum", "native-target-size-minimum"],
+      "4.1.2": [
+        "ios-image-unlabeled",
+        "ios-interactive-unlabeled",
+        "native-edittext-unlabeled",
+        "native-image-button-unlabeled",
+        "native-interactive-unlabeled",
+      ],
+    });
+    assert.deepEqual(Object.keys(RULES).sort(), [
+      "ios-image-unlabeled",
+      "ios-interactive-unlabeled",
+      "ios-target-size-minimum",
+      "native-edittext-unlabeled",
+      "native-image-button-unlabeled",
+      "native-interactive-unlabeled",
+      "native-target-size-minimum",
+    ]);
+  });
+
+  it("counts an unlabeled iOS image against 1.1.1 and, conservatively, 4.1.2", () => {
+    // The dump cannot tell a static image from a tappable one with no
+    // button trait, so an iOS image failure must not leave 4.1.2 at supports.
+    const acr = build({ android: null, ios: normalizeAudit({ home: { errors: 1, ruleIds: ["ios-image-unlabeled"] } }) });
+    assert.equal(findCriterion(acr, "1.1.1").level, "partially-supports");
+    assert.match(findCriterion(acr, "1.1.1").notes, /iOS home: ios-image-unlabeled/);
+    assert.equal(findCriterion(acr, "4.1.2").level, "partially-supports");
+    assert.match(findCriterion(acr, "4.1.2").notes, /iOS home: ios-image-unlabeled/);
+  });
+
+  it("scopes each covers note to the platform whose rules check it", () => {
+    // No iOS rule judges image controls for 1.1.1 (an unlabeled iOS
+    // Button reaches 4.1.2 only), so the note must not claim it does.
+    const acr = build({ android: null, ios: normalizeAudit({ home: { errors: 1, ruleIds: ["ios-interactive-unlabeled"] } }) });
+    assert.equal(findCriterion(acr, "1.1.1").level, "not-evaluated");
+    assert.match(findCriterion(acr, "1.1.1").notes, PARTLY_TESTED);
+    assert.match(findCriterion(acr, "1.1.1").notes, /image controls \(Android\) and image-role elements \(iOS\)/);
+    assert.equal(findCriterion(acr, "4.1.2").level, "partially-supports");
+  });
+
+  it("points warning-only criteria at their related evidence without a level", () => {
+    const adherence = findCriterion(build(), "2.4.6");
+    assert.equal(adherence.level, "not-evaluated");
+    assert.match(adherence.notes, /\(native-duplicate-speakable, ios-duplicate-speakable\) as warnings/);
   });
 });
 
@@ -172,14 +244,14 @@ describe("findFailures", () => {
       {
         platform: "Android",
         screens: {
-          "pay-tab": { errors: 1, ruleIds: ["native-touch-target-small"] },
+          "pay-tab": { errors: 1, ruleIds: ["native-target-size-minimum"] },
           home: { errors: 0, ruleIds: [] },
         },
       },
     ];
-    const failures = findFailures(["native-touch-target-small", "ios-touch-target-small"], audits);
+    const failures = findFailures(["native-target-size-minimum", "ios-target-size-minimum"], audits);
     assert.deepEqual(failures, [
-      { platform: "Android", screen: "pay-tab", ruleIds: ["native-touch-target-small"] },
+      { platform: "Android", screen: "pay-tab", ruleIds: ["native-target-size-minimum"] },
     ]);
   });
 });
@@ -224,7 +296,8 @@ describe("buildAcr on the fixture baselines", () => {
 
   it("caveats every automation result as partial coverage", () => {
     // A baseline may legitimately carry accepted errors (the ratchet
-    // workflow); expect "supports" only when the criterion is clean.
+    // workflow). A clean criterion is only partly tested: the rules
+    // check part of it, so it never reaches "supports".
     const audits = [
       { platform: "Android", screens: android.screens },
       { platform: "iOS", screens: ios.screens },
@@ -232,8 +305,12 @@ describe("buildAcr on the fixture baselines", () => {
     for (const [num, { rules }] of Object.entries(AUTOMATED_CRITERIA)) {
       const adherence = findCriterion(acr, num);
       const failures = findFailures(rules, audits);
+      // A criterion only one platform's rules check cannot be supported
+      // for the two-platform app (1.3.1 is Android-only).
+      const everyPlatform = new Set(rules.map((r) => RULES[r].platform)).size === 2;
       if (failures.length === 0) {
-        assert.equal(adherence.level, "supports");
+        assert.equal(adherence.level, "not-evaluated", num);
+        assert.match(adherence.notes, everyPlatform ? PARTLY_TESTED : INCOMPLETE, num);
       } else {
         assert.equal(adherence.level, "partially-supports");
         assert.ok(adherence.notes.includes(failures[0].screen));
@@ -276,7 +353,8 @@ describe("buildAcr on the fixture baselines", () => {
 
   it("disables the hardware chapter with a reason", () => {
     assert.equal(acr.chapters.hardware.disabled, true);
-    assert.ok(acr.chapters.hardware.notes.includes("software application"));
+    // The shared builder's wording: accurate for native and web products.
+    assert.equal(acr.chapters.hardware.notes, "Example App is not a hardware product. Hardware criteria do not apply.");
   });
 
   it("uses the report date it was given, not the wall clock", () => {
@@ -284,9 +362,82 @@ describe("buildAcr on the fixture baselines", () => {
   });
 });
 
+describe("buildAcr on evidence from before the target-size reclassification", () => {
+  const legacy = normalizeAudit(readJson("fixtures/baseline-android-legacy.json"));
+
+  it("leaves 2.5.8 unevaluated instead of failing it on the old 48dp findings", () => {
+    // orders-list failed the old 48dp rule. That says nothing about the
+    // 24dp minimum, so the screen neither fails nor passes 2.5.8.
+    const adherence = findCriterion(build({ android: legacy, ios: null }), "2.5.8");
+    assert.equal(adherence.level, "not-evaluated");
+    assert.match(adherence.notes, /no violations on 2 Android screens/);
+    assert.match(adherence.notes, /Evidence on 1 Android screens predates the current rules for this criterion/);
+    assert.match(adherence.notes, /native-touch-target-small as errors/);
+    assert.match(adherence.notes, /24x24dp/);
+    assert.doesNotMatch(adherence.notes, /Missing tree checks/);
+  });
+
+  it("still evaluates the other criteria on those screens", () => {
+    const acr = build({ android: legacy, ios: null });
+    for (const num of ["4.1.2", "1.3.1"]) {
+      assert.equal(findCriterion(acr, num).level, "not-evaluated", num);
+      assert.match(findCriterion(acr, num).notes, PARTLY_TESTED, num);
+    }
+    const mixed = normalizeAudit(readJson("fixtures/baseline-ios-legacy.json"));
+    const ios = build({ android: null, ios: mixed });
+    assert.equal(findCriterion(ios, "4.1.2").level, "partially-supports");
+    assert.equal(findCriterion(ios, "2.5.8").level, "not-evaluated");
+  });
+
+  it("reads a mixed old entry's other rules as failing and leaves 2.5.8 unchecked", () => {
+    const acr = build({ android: null, ios: normalizeAudit(readJson("fixtures/baseline-ios-legacy.json")) });
+    const adherence = findCriterion(acr, "4.1.2");
+    assert.match(adherence.notes, /iOS pay: ios-interactive-unlabeled/);
+    assert.doesNotMatch(adherence.notes, /ios-touch-target-small/);
+  });
+
+  it("rejects an old id filed under the other platform instead of dropping it", () => {
+    // An iOS baseline passed as Android: its only errors were the old 44pt
+    // id. Dropping it first would count iOS screens as clean Android ones.
+    for (const android of [
+      normalizeAudit({ pay: { errors: 1, ruleIds: ["ios-touch-target-small"] } }),
+      { screens: { pay: { errors: 1, ruleIds: ["ios-touch-target-small"] } } },
+    ]) {
+      assert.throws(() => build({ android, ios: null }), /"ios-touch-target-small" \(Android pay\): this rule runs on iOS/);
+    }
+    assert.throws(
+      () => build({ android: null, ios: normalizeAudit({ pay: { errors: 1, ruleIds: ["native-touch-target-small"] } }) }),
+      /"native-touch-target-small" \(iOS pay\): this rule runs on Android/,
+    );
+  });
+
+  it("migrates screens passed to buildAcr without normalizeAudit too", () => {
+    const acr = build({ android: { screens: readJson("fixtures/baseline-android-legacy.json") }, ios: null });
+    assert.equal(findCriterion(acr, "2.5.8").level, "not-evaluated");
+  });
+
+  it("accepts summaries that already mark a criterion unchecked, and rejects malformed marks", () => {
+    const summary = normalizeAudit({ screens: { home: { errors: 0, ruleIds: [], uncheckedCriteria: ["2.5.8"] } } });
+    assert.equal(findCriterion(build({ android: summary, ios: null }), "2.5.8").level, "not-evaluated");
+    // Only a criterion a reclassified rule used to count toward can be
+    // unchecked on completed evidence; 1.1.1 was never reclassified.
+    for (const uncheckedCriteria of [[], ["2.5.8", "2.5.8"], ["9.9.9"], ["2.4.6"], ["1.1.1"], ["4.1.2"], "2.5.8"]) {
+      assert.throws(() => normalizeAudit({ home: { errors: 0, ruleIds: [], uncheckedCriteria } }), /uncheckedCriteria/);
+    }
+    assert.throws(() => normalizeAudit({ home: { errors: null, ruleIds: [], uncheckedCriteria: ["2.5.8"] } }),
+      /needs completed tree checks/);
+  });
+
+  it("still validates against schema and catalog", () => {
+    const acr = build({ android: legacy });
+    assert.equal(validateOpenACR(acr, "openacr-0.1.0.json").result, true);
+    assert.equal(validateOpenACRCatalogValues(acr, catalog).result, true);
+  });
+});
+
 describe("buildAcr on a failing fixture", () => {
   const failing = normalizeAudit({
-    "pay-tab": { errors: 2, ruleIds: ["native-touch-target-small"] },
+    "pay-tab": { errors: 2, ruleIds: ["native-target-size-minimum"] },
     home: { errors: 0, ruleIds: [] },
   });
   const acr = build({ android: failing });
@@ -295,11 +446,12 @@ describe("buildAcr on a failing fixture", () => {
     const adherence = findCriterion(acr, "2.5.8");
     assert.equal(adherence.level, "partially-supports");
     assert.ok(adherence.notes.includes("pay-tab"));
-    assert.ok(adherence.notes.includes("native-touch-target-small"));
+    assert.ok(adherence.notes.includes("native-target-size-minimum"));
   });
 
-  it("leaves unrelated automated criteria at supports", () => {
-    assert.equal(findCriterion(acr, "4.1.2").level, "supports");
+  it("leaves unrelated automated criteria partly tested, not failing", () => {
+    assert.equal(findCriterion(acr, "4.1.2").level, "not-evaluated");
+    assert.match(findCriterion(acr, "4.1.2").notes, PARTLY_TESTED);
   });
 
   it("still validates against schema and catalog", () => {
@@ -332,7 +484,8 @@ describe("OpenACR evidence coverage", () => {
     const adherence = findCriterion(acr, "1.3.1");
     assert.equal(adherence.level, "not-evaluated");
     assert.match(adherence.notes, /no applicable.*checks/i);
-    assert.equal(findCriterion(acr, "4.1.2").level, "supports");
+    assert.equal(findCriterion(acr, "4.1.2").level, "not-evaluated");
+    assert.match(findCriterion(acr, "4.1.2").notes, PARTLY_TESTED);
   });
 
   it("counts only applicable platforms as checked for a criterion", () => {
@@ -341,7 +494,9 @@ describe("OpenACR evidence coverage", () => {
       ios: summary({ home: completed, settings: completed }),
     });
     const adherence = findCriterion(acr, "1.3.1");
-    assert.equal(adherence.level, "supports");
+    // The iOS half of the software component was never checked for 1.3.1,
+    // so a clean Android result cannot support the row.
+    assert.equal(adherence.level, "not-evaluated");
     assert.match(adherence.notes, /no violations on 1 Android screens/);
     assert.doesNotMatch(adherence.notes, /no violations on .*iOS screens/);
     assert.match(adherence.notes, /no applicable.*iOS/i);
@@ -378,8 +533,23 @@ describe("OpenACR evidence coverage", () => {
 
   it("does not let a clean platform mask an incomplete applicable platform", () => {
     const acr = build({ android: summary({ home: completed }), ios: summary({ home: transcriptOnly }) });
-    assert.equal(findCriterion(acr, "4.1.2").level, "not-evaluated");
-    assert.equal(findCriterion(acr, "1.3.1").level, "supports");
+    assert.match(findCriterion(acr, "4.1.2").notes, INCOMPLETE);
+    assert.match(findCriterion(acr, "1.3.1").notes, INCOMPLETE);
+    // An Android-only audit is all the software component there is to
+    // check, so it is partly tested there rather than incomplete.
+    const androidOnly = findCriterion(build({ android: summary({ home: completed }), ios: null }), "1.3.1");
+    assert.equal(androidOnly.level, "not-evaluated");
+    assert.match(androidOnly.notes, PARTLY_TESTED);
+  });
+
+  it("keeps a known failure on the platform that has rules when the other has none", () => {
+    const acr = build({
+      android: summary({ home: { errors: 1, ruleIds: ["native-edittext-unlabeled"], utterances: null } }),
+      ios: summary({ home: completed }),
+    });
+    const adherence = findCriterion(acr, "1.3.1");
+    assert.equal(adherence.level, "partially-supports");
+    assert.match(adherence.notes, /no applicable.*iOS/i);
   });
 
   it("counts captured speech separately from absent or empty transcripts", () => {
@@ -467,9 +637,9 @@ describe("OpenACR CLI evidence validation", () => {
         baseline: { android: androidPath, ios: iosPath },
         openacr: { out: outputPath },
       }));
-      const result = spawnSync(process.execPath, [join(HERE, "../src/report/openacr.mjs")], {
+      const result = spawnSync(process.execPath, [join(HERE, "../bin/aloud.mjs"), "openacr", "--config", configPath], {
+        cwd: dir,
         encoding: "utf8",
-        env: { ...process.env, ALOUD_CONFIG: configPath },
       });
       assert.notEqual(result.status, 0);
       assert.match(result.stderr, /JSON|invalid audit/i);

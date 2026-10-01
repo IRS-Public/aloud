@@ -15,8 +15,11 @@ installs the app, walks the screens, and per screen dumps the
 accessibility tree with `idb ui describe-all --json`. From each element
 (label, value, trait, hint) it composes the utterance in the order
 VoiceOver composes speech (`src/ios/voiceover.mjs`) and runs the iOS rules
-(`src/ios/tree.mjs`), including the 44x44pt touch-target rule (the Apple
-platform bar; WCAG 2.5.8 asks less, aloud holds the platform bar).
+(`src/ios/tree.mjs`), including two touch-target rules.
+`ios-target-size-minimum` is the WCAG 2.5.8 check: an error when a target
+is under 24x24pt and its 24pt spacing circle overlaps another target or
+another undersized target's circle. `ios-touch-target-small` is Apple's 44x44pt
+guideline, and it is a report-only warning with no WCAG criterion.
 
 Honesty rule: every computed transcript carries
 `source: "computed-voiceover"` and the evidence page labels it

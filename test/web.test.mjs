@@ -10,6 +10,7 @@ import { renderWebReport, reportWeb } from "../src/web/report.mjs";
 import { nvdaCommand } from "../src/web/nvda.mjs";
 import { buildAcr, normalizeAudit } from "../src/report/openacr.mjs";
 import { captureWeb } from "../src/web/run.mjs";
+import { formatProvenance, validateProvenance } from "../src/provenance.mjs";
 
 function fixture() {
   const screen = { id: "home", url: "https://example.test/", expectedUrl: "https://example.test/", steps: [] };
@@ -103,6 +104,16 @@ test("persisted web evidence checks inventory, receipts, cleanup, and refuses ga
     assert.ok(html.includes("&lt;script&gt;"));
     assert.ok(!html.includes("<script>alert"));
     assert.throws(() => reportWeb(dir, { gate: true }), /report-only/);
+    // Provenance is optional (older runs have none), validated when present,
+    // and carried into the summary the OpenACR draft reads.
+    assert.equal(Object.hasOwn(webSummary(evidence), "provenance"), false);
+    run.provenance = formatProvenance({ aloud: { version: "0.1.0" }, runtime: { platform: "linux", arch: "x64", osRelease: "6.1", node: "v22.12.0" }, tools: { playwright: "1.63.0" } });
+    write();
+    assert.deepEqual(webSummary(readWebReport(dir)).provenance, run.provenance);
+    assert.match(renderWebReport(readWebReport(dir)), /Evidence from an unknown commit/);
+    run.provenance = { ...run.provenance, commit: "short" }; write();
+    assert.throws(() => readWebReport(dir), /web-run\.json provenance\.commit/);
+    delete run.provenance;
     run.cleanupComplete = false; write(); assert.throws(() => readWebReport(dir), /did not complete/);
     run.cleanupComplete = true; run.screens.push({ ...run.screens[0], id: "missing" }); write(); assert.throws(() => readWebReport(dir), /missing or unexpected/);
     run.screens.pop(); run.receipts.home.capture = "changed"; write(); assert.throws(() => readWebReport(dir), /receipt mismatch/);
@@ -140,7 +151,11 @@ test("actual capture lifecycle retains failed pairing and cleanup instead of pro
         axe: { default: class { async analyze() { return mode === "scan-timeout" ? new Promise(() => {}) : capture.axe; } } },
       } }), mode === "cleanup" ? /cleanup failed/ : mode === "scan-timeout" ? /axe scan timed out/ : /page changed/);
       assert.equal(browserClosed, true);
-      assert.equal(JSON.parse(readFileSync(join(dir, "web", "web-run.json"))).status, "failed");
+      const persisted = JSON.parse(readFileSync(join(dir, "web", "web-run.json")));
+      assert.equal(persisted.status, "failed");
+      // Even a failed run says where it came from, browser version included.
+      assert.doesNotThrow(() => validateProvenance(persisted.provenance));
+      assert.equal(persisted.provenance.tools.chromium, "fixture");
       assert.throws(() => readWebReport(join(dir, "web")), /did not complete/);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   }
@@ -149,9 +164,15 @@ test("actual capture lifecycle retains failed pairing and cleanup instead of pro
 test("web-only OpenACR selects web components and never grants conformance", () => {
   const { run, capture } = fixture();
   const web = webSummary({ run, screens: { home: capture } });
-  const acr = buildAcr({ appName: "Fixture", productVersion: "1", date: "2026-09-18", web,
-    catalog: { chapters: [{ id: "success_criteria_level_a", criteria: [{ id: "4.1.2", components: ["web", "software"] }] }] } });
-  assert.deepEqual(acr.chapters.success_criteria_level_a.criteria[0].components.map((c) => [c.name, c.adherence.level]), [["web", "not-evaluated"]]);
+  // The shared builder refuses a hand-trimmed catalog that claims the
+  // bundled catalog id, so this runs against the real catalog.
+  const acr = buildAcr({ appName: "Fixture", productVersion: "1", date: "2026-09-18", web });
+  const rows = Object.values(acr.chapters).flatMap((chapter) => chapter.criteria ?? []);
+  assert.deepEqual(rows.find((c) => c.num === "4.1.2").components.map((c) => [c.name, c.adherence.level]), [["web", "not-evaluated"]]);
+  assert.ok(rows.every((c) => c.components.every((row) => row.adherence.level === "not-evaluated")));
+  assert.match(rows.find((c) => c.num === "4.1.2").components[0].adherence.notes, /All web results are report-only/);
+  assert.throws(() => buildAcr({ appName: "Fixture", productVersion: "1", date: "2026-09-18", web,
+    catalog: { chapters: [{ id: "success_criteria_level_a", criteria: [{ id: "4.1.2", components: ["web", "software"] }] }] } }));
   assert.match(acr.notes, /no screen reader was run/);
   web.screens.home.web.coverage.fullTraversal = true;
   assert.throws(() => buildAcr({ appName: "Fixture", web, catalog: { chapters: [] } }), /invalid report-only/);

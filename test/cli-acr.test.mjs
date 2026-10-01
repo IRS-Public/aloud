@@ -1,0 +1,310 @@
+/**
+ * Command-line tests for the two OpenACR commands in bin/aloud.mjs:
+ * `aloud acr` (any findings document) and `aloud openacr` (aloud's own
+ * audit results). Each test runs the real CLI in a child process against
+ * fixtures and checks the exit code, the message, and the YAML written.
+ * Device-free.
+ */
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { after, before, describe, it } from "node:test";
+import { dump, load } from "js-yaml";
+
+import { validateAcr } from "../src/acr/index.mjs";
+import { formatProvenance } from "../src/provenance.mjs";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const BIN = join(HERE, "../bin/aloud.mjs");
+const FIXTURES = join(HERE, "fixtures/acr");
+const fixture = (name) => join(FIXTURES, name);
+const BUNDLED_CATALOG = join(
+  dirname(createRequire(import.meta.url).resolve("@openacr/openacr/package.json")),
+  "catalog/2.5-edition-wcag-2.2-508-en.yaml",
+);
+
+let dir;
+before(() => {
+  dir = mkdtempSync(join(tmpdir(), "aloud-cli-acr-"));
+});
+after(() => rmSync(dir, { recursive: true, force: true }));
+
+// Run `aloud <args>` in the temp dir, so nothing lands in the repo.
+function aloud(...args) {
+  return spawnSync(process.execPath, [BIN, ...args], { cwd: dir, encoding: "utf8" });
+}
+
+function readAcr(file) {
+  return load(readFileSync(file, "utf8"));
+}
+
+function row(acr, chapter, num) {
+  return acr.chapters[chapter].criteria.find((c) => c.num === num);
+}
+
+describe("aloud acr", () => {
+  it("writes a valid OpenACR from a valid findings file", () => {
+    const out = join(dir, "valid.yaml");
+    const result = aloud("acr", "--findings", fixture("valid.json"), "--out", out);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /draft OpenACR → .*valid\.yaml \(report_date 2026-09-01\)/);
+    const acr = readAcr(out);
+    assert.deepEqual(validateAcr(acr), { valid: true, problems: [] });
+    assert.equal(acr.product.name, "Fixture Site");
+    assert.equal(acr.report_date, "2026-09-01");
+    assert.equal(row(acr, "success_criteria_level_a", "1.1.1").components[0].adherence.level, "supports");
+    assert.equal(row(acr, "success_criteria_level_a", "2.1.1").components[0].adherence.level, "partially-supports");
+    assert.equal(row(acr, "success_criteria_level_aa", "1.4.3").components[0].adherence.level, "not-evaluated");
+  });
+
+  it("applies --policy, --catalog, and --date", () => {
+    const out = join(dir, "policy.yaml");
+    const result = aloud(
+      "acr",
+      "--findings", fixture("valid.json"),
+      "--policy", fixture("policy.json"),
+      "--catalog", BUNDLED_CATALOG,
+      "--date", "2026-09-30",
+      "--out", out,
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const acr = readAcr(out);
+    assert.equal(acr.report_date, "2026-09-30");
+    assert.equal(acr.catalog, "2.5-edition-wcag-2.2-508-en");
+    const untested = row(acr, "success_criteria_level_aa", "1.4.3").components[0].adherence;
+    assert.equal(untested.notes, "Fixture policy: this criterion was not tested.");
+    assert.deepEqual(validateAcr(acr), { valid: true, problems: [] });
+  });
+
+  it("appends a level count to --step-summary without overwriting it", () => {
+    const out = join(dir, "summary.yaml");
+    const summary = join(dir, "step-summary.md");
+    writeFileSync(summary, "earlier step\n");
+    const result = aloud("acr", "--findings", fixture("valid.json"), "--out", out, "--step-summary", summary);
+    assert.equal(result.status, 0, result.stderr);
+    const text = readFileSync(summary, "utf8");
+    assert.match(text, /^earlier step\n### Draft OpenACR: Fixture Site 2\.0\.0\n/);
+    assert.match(text, /\| supports \| 1 \|/);
+    assert.match(text, /\| partially-supports \| 1 \|/);
+    assert.match(text, /\| not-evaluated \| 125 \|/);
+    assert.match(text, /\| \*\*Total\*\* \| \*\*127\*\* \|/);
+  });
+
+  it("writes no summary when the findings are invalid", () => {
+    const summary = join(dir, "bad-step-summary.md");
+    const result = aloud("acr", "--findings", fixture("invalid-criterion.json"), "--out", join(dir, "x.yaml"), "--step-summary", summary);
+    assert.notEqual(result.status, 0);
+    assert.equal(existsSync(summary), false);
+  });
+
+  it("writes no draft when the --step-summary file cannot be opened", () => {
+    const out = join(dir, "no-summary-dir.yaml");
+    const summary = join(dir, "missing-dir", "step-summary.md");
+    const result = aloud("acr", "--findings", fixture("valid.json"), "--out", out, "--step-summary", summary);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /^aloud acr: .*ENOENT/m);
+    assert.equal(existsSync(out), false);
+  });
+
+  it("creates missing parent directories for --out once the draft is valid", () => {
+    const out = join(dir, "made", "for", "it", "acr.yaml");
+    const result = aloud("acr", "--findings", fixture("valid.json"), "--out", out);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(validateAcr(readAcr(out)).valid, true);
+  });
+
+  it("creates no parent directories when the findings are invalid", () => {
+    const result = aloud("acr", "--findings", fixture("invalid-criterion.json"), "--out", join(dir, "never-made", "sub", "acr.yaml"));
+    assert.notEqual(result.status, 0);
+    assert.equal(existsSync(join(dir, "never-made")), false);
+  });
+
+  it("creates no parent directories when the --step-summary file cannot be opened", () => {
+    const out = join(dir, "never-made-summary", "acr.yaml");
+    const summary = join(dir, "missing-dir", "step-summary.md");
+    const result = aloud("acr", "--findings", fixture("valid.json"), "--out", out, "--step-summary", summary);
+    assert.notEqual(result.status, 0);
+    assert.equal(existsSync(join(dir, "never-made-summary")), false);
+  });
+
+  it("defaults the output to acr-draft.yaml in the working directory", () => {
+    const result = aloud("acr", "--findings", fixture("valid.json"));
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(validateAcr(readAcr(join(dir, "acr-draft.yaml"))).valid, true);
+  });
+
+  it("exits non-zero and names an unknown criterion, writing nothing", () => {
+    const out = join(dir, "bad-criterion.yaml");
+    const result = aloud("acr", "--findings", fixture("invalid-criterion.json"), "--out", out);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /^aloud acr: invalid findings:/m);
+    assert.match(result.stderr, /findings\[1\]\.criterion: "9\.9\.9" is not a criterion in catalog 2\.5-edition-wcag-2\.2-508-en/);
+    assert.equal(existsSync(out), false);
+  });
+
+  it("exits non-zero on a policy that would claim more than the evidence shows", () => {
+    const out = join(dir, "bad-policy.yaml");
+    const result = aloud("acr", "--findings", fixture("valid.json"), "--policy", fixture("invalid-policy.json"), "--out", out);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /aloud acr: invalid policy for "untested".*may not map to "supports"/);
+    assert.equal(existsSync(out), false);
+  });
+
+  it("explains a missing --findings flag, a missing file, and malformed JSON", () => {
+    const missingFlag = aloud("acr");
+    assert.notEqual(missingFlag.status, 0);
+    assert.match(missingFlag.stderr, /aloud acr: --findings <file\.json> is required/);
+
+    const missingFile = aloud("acr", "--findings", join(dir, "nope.json"));
+    assert.notEqual(missingFile.status, 0);
+    assert.match(missingFile.stderr, /aloud acr: findings file not found: .*nope\.json/);
+
+    const broken = join(dir, "broken.json");
+    writeFileSync(broken, '{"product":');
+    const badJson = aloud("acr", "--findings", broken);
+    assert.notEqual(badJson.status, 0);
+    assert.match(badJson.stderr, /aloud acr: findings file .*broken\.json is not valid JSON/);
+
+    const unknownFlag = aloud("acr", "--findings", fixture("valid.json"), "--nope");
+    assert.notEqual(unknownFlag.status, 0);
+  });
+
+  it("rejects a --date or provenance.date that is not on the calendar", () => {
+    const out = join(dir, "bad-date.yaml");
+    for (const date of ["2026-02-31", "2026-13-45", "2026-00-10"]) {
+      const result = aloud("acr", "--findings", fixture("valid.json"), "--date", date, "--out", out);
+      assert.notEqual(result.status, 0, date);
+      assert.match(result.stderr, /aloud acr: --date must be a real calendar date as YYYY-MM-DD/, date);
+    }
+    const findings = JSON.parse(readFileSync(fixture("valid.json"), "utf8"));
+    findings.provenance = { ...findings.provenance, date: "2026-02-30" };
+    const file = join(dir, "bad-provenance-date.json");
+    writeFileSync(file, JSON.stringify(findings));
+    const result = aloud("acr", "--findings", file, "--out", out);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /provenance\.date: "2026-02-30" is not a real calendar date/);
+    assert.equal(existsSync(out), false);
+  });
+});
+
+describe("aloud openacr", () => {
+  it("keeps its flags and writes a valid draft from a baseline", () => {
+    const configPath = join(dir, "openacr.config.json");
+    writeFileSync(configPath, JSON.stringify({ app: { name: "Fixture App", version: "1.0.0" } }));
+    const out = join(dir, "openacr.yaml");
+    const result = aloud(
+      "openacr",
+      "--config", configPath,
+      "--android", join(HERE, "fixtures/baseline-android.json"),
+      "--ios", join(HERE, "fixtures/baseline-ios.json"),
+      "--date", "2026-08-26",
+      "--version", "3.1.4",
+      "--catalog", BUNDLED_CATALOG,
+      "--out", out,
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /draft OpenACR → .*openacr\.yaml \(report_date 2026-08-26\)/);
+    const acr = readAcr(out);
+    assert.deepEqual(validateAcr(acr), { valid: true, problems: [] });
+    assert.equal(acr.product.version, "3.1.4");
+    assert.equal(row(acr, "success_criteria_level_a", "1.1.1").components[0].adherence.level, "not-evaluated");
+    assert.equal(row(acr, "success_criteria_level_aa", "2.5.8").components[0].adherence.level, "partially-supports");
+    assert.match(acr.notes, /replace the placeholder contact email/);
+  });
+
+  it("rejects an impossible --date", () => {
+    const configPath = join(dir, "date.config.json");
+    writeFileSync(configPath, JSON.stringify({ app: { name: "Fixture App", version: "1.0.0" } }));
+    const out = join(dir, "bad-date-openacr.yaml");
+    const result = aloud(
+      "openacr",
+      "--config", configPath,
+      "--android", join(HERE, "fixtures/baseline-android.json"),
+      "--date", "2026-02-31",
+      "--out", out,
+    );
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /aloud openacr: --date must be a real calendar date as YYYY-MM-DD; got "2026-02-31"/);
+    assert.equal(existsSync(out), false);
+  });
+
+  it("explains in its own terms a --catalog that differs from the bundled catalog", () => {
+    const configPath = join(dir, "catalog.config.json");
+    writeFileSync(configPath, JSON.stringify({ app: { name: "Fixture App", version: "1.0.0" } }));
+    // The bundled catalog with one criterion removed.
+    const catalog = load(readFileSync(BUNDLED_CATALOG, "utf8"));
+    const chapter = catalog.chapters.find((c) => c.id === "success_criteria_level_a");
+    chapter.criteria = chapter.criteria.filter((c) => c.id !== "1.2.1");
+    const trimmed = join(dir, "trimmed.yaml");
+    writeFileSync(trimmed, dump(catalog));
+    const out = join(dir, "trimmed-openacr.yaml");
+    const result = aloud(
+      "openacr",
+      "--config", configPath,
+      "--android", join(HERE, "fixtures/baseline-android.json"),
+      "--catalog", trimmed,
+      "--out", out,
+    );
+    assert.notEqual(result.status, 0);
+    assert.match(
+      result.stderr,
+      /aloud openacr: the replacement catalog must have the same chapters and criteria, in the same order, as the bundled 2\.5-edition-wcag-2\.2-508-en catalog/,
+    );
+    assert.doesNotMatch(result.stderr, /findings/);
+    assert.equal(existsSync(out), false);
+  });
+
+  it("refuses summaries from different commits unless --allow-mixed", () => {
+    const configPath = join(dir, "mixed.config.json");
+    writeFileSync(configPath, JSON.stringify({ app: { name: "Fixture App", version: "1.0.0" } }));
+    const summary = (name, commit) => {
+      const path = join(dir, `${name}-summary.json`);
+      const provenance = formatProvenance({
+        app: { commit, workingTreeDirty: false },
+        aloud: { version: "0.1.0" },
+        runtime: { platform: "darwin", arch: "arm64", osRelease: "25.6.0", node: "v22.12.0" },
+      });
+      writeFileSync(path, JSON.stringify({
+        generated: "2026-09-30T00:00:00.000Z",
+        provenance,
+        screens: { home: { errors: 0, ruleIds: [], utterances: 2 } },
+      }));
+      return path;
+    };
+    const args = [
+      "openacr",
+      "--config", configPath,
+      "--android", summary("android", "a".repeat(40)),
+      "--ios", summary("ios", "b".repeat(40)),
+      "--date", "2026-09-30",
+    ];
+    const refusedOut = join(dir, "mixed-refused.yaml");
+    const refused = aloud(...args, "--out", refusedOut);
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stderr, /aloud openacr: the audit inputs come from different code/);
+    assert.equal(existsSync(refusedOut), false);
+
+    const allowedOut = join(dir, "mixed-allowed.yaml");
+    const allowed = aloud(...args, "--allow-mixed", "--out", allowedOut);
+    assert.equal(allowed.status, 0, allowed.stderr);
+    const acr = readAcr(allowedOut);
+    assert.deepEqual(validateAcr(acr), { valid: true, problems: [] });
+    assert.match(acr.notes, /combined with --allow-mixed/);
+    assert.match(acr.notes, /Android evidence provenance: commit aaaaaaaaaaaa/);
+  });
+
+  it("exits non-zero with a clear message when there is no audit input", () => {
+    const configPath = join(dir, "empty.config.json");
+    writeFileSync(configPath, JSON.stringify({
+      app: { name: "Fixture App", version: "1.0.0" },
+      baseline: { android: join(dir, "absent-android.json"), ios: join(dir, "absent-ios.json") },
+    }));
+    const result = aloud("openacr", "--config", configPath, "--out", join(dir, "none.yaml"));
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /aloud openacr: no audit input/);
+  });
+});

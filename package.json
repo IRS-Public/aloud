@@ -1,6 +1,6 @@
 {
   "name": "@irs-public/aloud",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publishConfig": {
     "access": "public"
   },
@@ -13,10 +13,24 @@
   "contributors": [
     "Sahil Lavingia"
   ],
-  "description": "508 mobile screen-reader audit: drive TalkBack and VoiceOver across an app's screens, capture what they speak, and emit evidence transcripts plus a draft OpenACR.",
+  "description": "Shared Section 508 evidence -> OpenACR engine: turn findings from any tool into a draft OpenACR (library, `aloud acr` CLI, GitHub Action), plus mobile screen-reader audits that drive TalkBack and VoiceOver and experimental web screen-reader drivers.",
   "type": "module",
   "bin": {
     "aloud": "bin/aloud.mjs"
+  },
+  "main": "./src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./acr": "./src/acr/index.mjs",
+    "./findings.schema.json": "./src/acr/findings.schema.json",
+    "./rules": "./src/rules/catalog.mjs",
+    "./web/nvda": "./src/web/nvda.mjs",
+    "./web/voiceover": "./src/web/voiceover.mjs",
+    "./web/dependencies": "./src/web/dependencies.mjs",
+    "./src/*": "./src/*",
+    "./bin/*": "./bin/*",
+    "./examples/*.json": "./examples/*.json",
+    "./package.json": "./package.json"
   },
   "engines": {
     "node": ">=22"
@@ -24,12 +38,16 @@
   "files": [
     "bin/",
     "src/",
-    "examples/*.json"
+    "src/acr/findings.schema.json",
+    "examples/*.json",
+    "action.yml",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "test:web": "node --test test/web-smoke.mjs",
     "test:web:nvda": "node test/web-nvda-smoke.mjs",
+    "test:web:voiceover": "node test/web-voiceover-smoke.mjs",
     "test:web:external": "node test/real-app/web.mjs",
     "prepublishOnly": "npm test"
   },

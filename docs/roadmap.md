@@ -129,3 +129,31 @@ Next acceptance steps:
   gating. Baselines must identify the browser/reader/OS/locale/viewport and rule suite.
 - Validate additional browser and screen-reader combinations independently. A
   Playwright WebKit run must not be labeled as Safari coverage.
+- Run the Safari + VoiceOver fixtures (`web-voiceover.yml`) on a hosted macOS
+  runner, review the retained command logs, screenshots, and DOM outlines, and
+  record the environment before describing that adapter as validated.
+
+## 7. Shared OpenACR engine
+
+One builder turns a findings document from any source into a draft
+OpenACR: `aloud acr`, the `@irs-public/aloud/acr` library, and the
+"aloud acr" GitHub Action. `aloud openacr` uses it for aloud's own audits.
+The findings contract (`src/acr/findings.schema.json`) is versioned,
+closed, and validated before anything is written; a conservative default
+policy keeps unproven rows at `not-evaluated`, and overrides are limited by
+status kind so nothing can turn a failure or a gap into `supports`. See
+[OpenACR drafts](openacr.md).
+
+The [harness integration guide](harness-integration.md) documents an
+adapter from the USWDS accessibility harness's requirements report,
+tested against a fixture and a real report, and a release workflow that
+drafts one ACR per component.
+
+Next steps:
+
+- Have the harness adopt the adapter in its own repository and pin the
+  action by commit; keep the status mapping in step with its report.
+- Add web findings from `aloud web` once web evidence is validated and has
+  a gating policy; until then web components stay `not-evaluated`.
+- Support more OpenACR catalogs (for example, the EN 301 549 editions)
+  when a consumer needs them, each with its own fixture.

@@ -1,0 +1,96 @@
+# aloud acr as a GitHub Action: build a draft OpenACR from a findings
+# document in any repository's workflow, with the same engine and checks
+# as `aloud acr` on the command line (docs/openacr.md).
+#
+#   - id: acr
+#     uses: IRS-Public/aloud@<full commit sha>
+#     with:
+#       findings: requirements-report/findings.json
+#       out: acr.yaml
+#   - run: echo "Draft at ${{ steps.acr.outputs.acr }}"
+#
+# The action installs only aloud's runtime dependencies (no Playwright, no
+# screen readers) in its own directory and never touches the caller's
+# node_modules. It sets up Node.js 24, which stays on PATH for the steps
+# after it. Invalid findings, an unsafe policy, or a missing file fail the
+# step with every problem listed, and nothing is written: no draft, no
+# output, and no parent directories for `out`.
+name: aloud acr
+description: Build a draft Section 508 / WCAG 2.2 OpenACR from an aloud findings JSON file.
+author: IRS-Public
+
+inputs:
+  findings:
+    description: Path to the findings JSON (src/acr/findings.schema.json), relative to the workspace.
+    required: true
+  out:
+    description: Path for the draft OpenACR YAML. Missing parent directories are created once the draft is valid.
+    required: false
+    default: acr.yaml
+  policy:
+    description: Optional JSON file of per-status level overrides (docs/openacr.md).
+    required: false
+    default: ""
+  catalog:
+    description: Optional OpenACR catalog YAML to use instead of the bundled catalog the findings name.
+    required: false
+    default: ""
+  date:
+    description: Optional report date as YYYY-MM-DD (defaults to provenance.date in the findings, else today).
+    required: false
+    default: ""
+
+outputs:
+  acr:
+    description: Absolute path of the draft OpenACR YAML.
+    value: ${{ steps.build.outputs.acr }}
+
+runs:
+  using: composite
+  steps:
+    # Pinned by commit, like every action a third-party workflow runs.
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: 24
+
+    - name: Install aloud runtime dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd "$GITHUB_ACTION_PATH"
+        npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+
+    # Inputs arrive as environment variables, never pasted into the script,
+    # so a path with quotes or $(...) in it is only ever a path.
+    - id: build
+      name: Build the draft OpenACR
+      shell: bash
+      env:
+        ACR_FINDINGS: ${{ inputs.findings }}
+        ACR_OUT: ${{ inputs.out }}
+        ACR_POLICY: ${{ inputs.policy }}
+        ACR_CATALOG: ${{ inputs.catalog }}
+        ACR_DATE: ${{ inputs.date }}
+      run: |
+        set -euo pipefail
+        out="${ACR_OUT:-acr.yaml}"
+        # The out path ends up in $GITHUB_OUTPUT, which is read line by
+        # line, so a line break in it could forge another output. Refuse it
+        # before anything runs.
+        if [[ "$out" == *$'\n'* || "$out" == *$'\r'* ]]; then
+          echo "aloud acr: the out input must not contain a line break" >&2
+          exit 1
+        fi
+        # --flag=value, so a path that starts with "-" is not read as a flag.
+        args=(acr "--findings=$ACR_FINDINGS" "--out=$out")
+        if [[ -n "${ACR_POLICY:-}" ]]; then args+=("--policy=$ACR_POLICY"); fi
+        if [[ -n "${ACR_CATALOG:-}" ]]; then args+=("--catalog=$ACR_CATALOG"); fi
+        if [[ -n "${ACR_DATE:-}" ]]; then args+=("--date=$ACR_DATE"); fi
+        if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then args+=("--step-summary=$GITHUB_STEP_SUMMARY"); fi
+        node "$GITHUB_ACTION_PATH/bin/aloud.mjs" "${args[@]}"
+        # Node resolves the path, so it is native on every runner OS. The
+        # output uses a random heredoc delimiter, GitHub's form for values
+        # that are not fixed text, so the path can never end the value early.
+        acr="$(node -p 'require("node:path").resolve(process.argv[1])' -- "$out")"
+        delimiter="ALOUD_ACR_$(node -p 'require("node:crypto").randomUUID()')"
+        printf 'acr<<%s\n%s\n%s\n' "$delimiter" "$acr" "$delimiter" >> "$GITHUB_OUTPUT"

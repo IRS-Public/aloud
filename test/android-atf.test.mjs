@@ -141,6 +141,67 @@ test("persisted report revalidates native checks, overlaps, raw hashes, and expe
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("persisted ATF reports written before findings carried criteria still revalidate", () => {
+  const dir = mkdtempSync(join(tmpdir(), "aloud-atf-legacy-")), e = fixture(), t = tree(e);
+  const report = () => execFileSync(process.execPath, ["src/report/report.mjs", "--dir", dir], { env: { ...process.env, ALOUD_CONFIG: "" }, stdio: "pipe" });
+  const write = () => writeFileSync(join(dir, `${e.screen}.tree.json`), JSON.stringify(t));
+  const current = t.violations;
+  try {
+    // The shape an older aloud wrote: the same findings, no `criteria` key.
+    t.violations = current.map(({ criteria, ...v }) => v);
+    assert.ok(t.violations.length > 0);
+    write(); writeFileSync(join(dir, "capture-requirements.json"), JSON.stringify({ schemaVersion: 1, androidAtf: true, atfScreens: [e.screen] }));
+    report();
+    const html = readFileSync(join(dir, "index.html"), "utf8");
+    assert.match(html, /WCAG 4\.1\.2, 1\.1\.1/, "recomputed findings carry their catalog criteria");
+    // Mixing old and new finding shapes is not a legacy report: fail closed.
+    t.violations = current.map((v, i) => i === 0 ? v : (({ criteria, ...rest }) => rest)(v));
+    write(); assert.throws(report, /differ from native evidence/);
+    // Legacy findings still have to match the evidence in every other field.
+    t.violations = current.map(({ criteria, ...v }) => v);
+    t.violations[0] = { ...t.violations[0], detail: "edited" };
+    write(); assert.throws(report, /differ from native evidence/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("persisted ATF reports from before the target-size reclassification revalidate in the current classification", () => {
+  const dir = mkdtempSync(join(tmpdir(), "aloud-atf-reclassified-")), e = fixture(), t = tree(e);
+  const report = () => execFileSync(process.execPath, ["src/report/report.mjs", "--dir", dir], { env: { ...process.env, ALOUD_CONFIG: "" }, stdio: "pipe" });
+  const write = () => writeFileSync(join(dir, `${e.screen}.tree.json`), JSON.stringify(t));
+  const current = t.violations, currentGate = t.gate;
+  // An older aloud wrote the 48dp finding as a WCAG 2.5.8 error and gated on it.
+  const small = current.find((v) => v.ruleId === "native-touch-target-small");
+  assert.equal(small.severity, "warn");
+  assert.ok(!current.some((v) => v.ruleId === "native-target-size-minimum"), "the 24dp target meets 2.5.8");
+  const old = current.map((v) => v === small ? { ...v, severity: "error", wcag: "2.5.8", criteria: ["2.5.8"] } : v);
+  const oldGate = { errors: currentGate.errors + 1, ruleIds: [...currentGate.ruleIds, small.ruleId].sort() };
+  try {
+    writeFileSync(join(dir, "capture-requirements.json"), JSON.stringify({ schemaVersion: 1, androidAtf: true, atfScreens: [e.screen] }));
+    for (const violations of [old, old.map(({ criteria, ...v }) => v)]) {
+      t.violations = violations; t.gate = oldGate; write();
+      report();
+      const summary = JSON.parse(readFileSync(join(dir, "summary.json"))).screens[e.screen];
+      assert.equal(summary.errors, currentGate.errors, "recomputed in the current classification");
+      assert.deepEqual(summary.ruleIds, currentGate.ruleIds);
+      assert.equal(summary.uncheckedCriteria, undefined, "native evidence lets 2.5.8 be recomputed");
+      const html = readFileSync(join(dir, "index.html"), "utf8");
+      assert.match(html, /Platform guideline · no WCAG criterion/);
+      // `aloud baseline` reads the same evidence the same way: it accepts
+      // the recomputed gate instead of refusing the old report.
+      const baselinePath = join(dir, "..", `${e.screen}-baseline-${Date.now()}.json`);
+      try {
+        execFileSync(process.execPath, ["src/report/baseline.mjs", dir, "--baseline", baselinePath], { env: { ...process.env, ALOUD_CONFIG: "" }, stdio: "pipe" });
+        assert.deepEqual(JSON.parse(readFileSync(baselinePath, "utf8")), { [e.screen]: currentGate });
+      } finally { rmSync(baselinePath, { force: true }); }
+    }
+    // The old shape still has to match the native evidence exactly.
+    t.violations = old.map((v) => v.ruleId === small.ruleId ? { ...v, detail: "edited" } : v); t.gate = oldGate; write();
+    assert.throws(report, /differ from native evidence/);
+    t.violations = old; t.gate = currentGate; write();
+    assert.throws(report, /gate does not match the error findings/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("ATF summaries preserve skipped checks and cannot add OpenACR conformance coverage", () => {
   const s = atfSummary(fixture()); validateAtfSummary(s);
   const base = { catalog, appName: "Fixture", productVersion: "1", date: "2026-09-15", android: { screens: {

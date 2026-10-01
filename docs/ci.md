@@ -29,6 +29,58 @@ raw ATF snapshots, per-check results, failures, and restoration evidence in
 `atf-smoke/`. Its cache key includes all companion sources, so ATF changes
 cannot reuse an older companion APK.
 
+## Draft an OpenACR with the GitHub Action
+
+`action.yml` at the repository root is a composite action, "aloud acr",
+that runs `aloud acr` (see [openacr.md](openacr.md#build-a-draft-from-findings))
+in any repository. Use it when another tool, such as the USWDS
+accessibility harness, writes the findings:
+
+```yaml
+- id: acr
+  uses: IRS-Public/aloud@<full commit sha>
+  with:
+    findings: requirements-report/findings.json
+    out: acr.yaml
+- uses: actions/upload-artifact@v7
+  with:
+    name: acr
+    path: ${{ steps.acr.outputs.acr }}
+```
+
+| Input | Required | Default | Meaning |
+|---|---|---|---|
+| `findings` | yes | | Findings JSON (`src/acr/findings.schema.json`) |
+| `out` | no | `acr.yaml` | Output YAML; missing parent directories are created once the draft is valid. Must not contain a line break. |
+| `policy` | no | | JSON file of per-status level overrides |
+| `catalog` | no | | OpenACR catalog YAML instead of the bundled one |
+| `date` | no | `provenance.date`, else today | Report date as YYYY-MM-DD |
+
+The `acr` output is the absolute path of the draft. Paths are relative to
+the workspace.
+
+The action sets up Node.js 24 with `actions/setup-node` pinned by commit
+(Node 24 stays on `PATH` for later steps), installs aloud's runtime
+dependencies with `npm ci --omit=dev --ignore-scripts` in the action's own
+directory, and runs `bin/aloud.mjs acr`. It never touches the caller's
+`node_modules`. It appends a table of how many rows the draft puts at each
+conformance level to the job summary (`--step-summary`), with a note that
+every row, supports included, still needs human review. Invalid findings,
+an unsafe policy, or a missing file fail the step with every problem
+listed; no draft or directory is written and the output is not set.
+
+This repository's `ci.yml` runs the action from its own checkout
+(`uses: ./`) on a fixture and checks that the draft validates and that the
+`acr` output names it. It does not check the job summary table, because
+GitHub gives each step its own summary file and a later step cannot read
+the action's; `test/action.test.mjs` checks that table by running the
+action's build step locally.
+
+For a complete workflow (convert a test report into one findings file per
+component, draft each in a matrix job, and attach every draft to a GitHub
+release), see the
+[harness integration guide](harness-integration.md#github-actions).
+
 ## Schedule triggers only fire from the default branch
 
 A `schedule:` cron in a workflow that exists only on a feature branch
@@ -115,6 +167,11 @@ echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
   [docs/talkback.md](talkback.md).
 - **idb from the pinned tarball.** The brew formula breaks on runner
   image updates. See [docs/ios.md](ios.md).
+- **One run per report dir.** Evidence records its commit and CI run,
+  and `aloud report` and `aloud baseline` refuse a dir that mixes runs
+  (for example a cached or restored report dir from an earlier commit).
+  Start each job with a fresh report dir; `--allow-mixed` exists for
+  deliberate combinations.
 - **Keep the gate advisory at first.** Both templates run
   `npx aloud report --dir ... --gate` with `continue-on-error: true`.
   While the baselines burn in, you want the evidence without red builds.

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "product": { "name": "Fixture Site", "version": "2.0.0", "description": "A fixture web site." },
+  "author": { "name": "Fixture Team", "email": "a11y@example.gov" },
+  "provenance": { "date": "2026-09-01", "tools": [{ "name": "fixture-harness", "version": "1.0.0" }] },
+  "components": ["web"],
+  "findings": [
+    { "criterion": "1.1.1", "component": "web", "status": "met", "covers": "Every image in the tested pages has a text alternative." },
+    { "criterion": "2.1.1", "component": "web", "status": "failing", "failingShare": "some",
+      "issues": [{ "id": "ISSUE-1", "summary": "The date picker cannot be opened from the keyboard." }] },
+    { "criterion": "1.4.3", "component": "web", "status": "untested" },
+    { "criterion": "302.1", "status": "untested", "notes": ["Not covered by this fixture."] }
+  ]
+}

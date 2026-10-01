@@ -13,16 +13,28 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { cliArgs } from "../cli-args.mjs";
 import { loadNavigator } from "../nav/index.mjs";
 import { computeTranscript, normalizeElements, runIosChecks, validateIosCapture } from "./tree.mjs";
 import { createAppleAuditor } from "./apple-audit.mjs";
 import { createVoiceOverCapturer } from "./voiceover-capture.mjs";
+import { collectProvenance } from "../provenance.mjs";
+import { aloudOutputPaths } from "../config.mjs";
 
-const args = process.argv.slice(2);
-const opt = (name, fallback) => {
-  const i = args.indexOf(`--${name}`);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
-};
+const { opt } = cliArgs("ios/walk.mjs", {
+  nav: { type: "string" },
+  port: { type: "string" },
+  "screen-id": { type: "string" },
+  out: { type: "string" },
+  flow: { type: "string" },
+  // iOS has one combined pass. --pass is accepted so callers can drive both
+  // walkers with the same flags, but only its Android "tree" value fits.
+  pass: { type: "string" },
+});
+if (opt("pass", "tree") !== "tree") {
+  console.error(`ios/walk.mjs: unknown --pass ${opt("pass")} (the iOS walker has a single tree pass)`);
+  process.exit(1);
+}
 
 // Legs read the merged config bin/aloud.mjs wrote; flags override it.
 const cfgPath = process.env.ALOUD_CONFIG;
@@ -74,6 +86,13 @@ async function walk() {
   mkdirSync(SHOTS_DIR, { recursive: true });
   mkdirSync(TREES_DIR, { recursive: true });
   const udid = bootedUdid();
+  // Where this run's evidence came from, stamped on every file it writes
+  // (see src/provenance.mjs). The report root, baselines, and draft hold
+  // aloud's own output, so they are excluded from the app's dirty check.
+  const provenance = collectProvenance({
+    exclude: [OUT, ...aloudOutputPaths(cfg)],
+    probes: { xcode: { command: ["xcodebuild", "-version"], lines: 2 } },
+  });
   const appleAuditor = cfg.ios?.appleAudit
     ? createAppleAuditor({ out: OUT, udid, bundleId: BUNDLE_ID }) : null;
   const voiceOverCapturer = cfg.ios?.voiceOver === "real"
@@ -167,6 +186,7 @@ async function walk() {
               errors: errors.length,
               ruleIds: [...new Set(errors.map((v) => v.ruleId))].sort(),
             },
+            provenance,
           },
           null,
           2,
@@ -176,6 +196,7 @@ async function walk() {
         join(OUT, `${screen.id}.transcript.json`),
         JSON.stringify({ screen: screen.id, source: voiceOver ? "voiceover" : "computed-voiceover", transcript,
           ...(voiceOver ? { voiceOver } : {}),
+          provenance,
         }, null, 2),
       );
       console.log(

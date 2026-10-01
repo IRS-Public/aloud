@@ -19,8 +19,31 @@ web checks run without a screen reader by default.
   through Xcode 27's `XCUIVoiceOverService` uses
   `--voiceover real --no-gate` and labels traversal as partial.
 - **Web (experimental)**: Chromium page checks, screenshots, and structural
-  snapshots, with an opt-in NVDA command-capture adapter for Windows. Web
-  evidence is report-only. [Setup and validation status](docs/web.md).
+  snapshots, with an opt-in NVDA command-capture adapter for Windows and an
+  unvalidated Safari + VoiceOver adapter for disposable GitHub-hosted macOS
+  runners. Web evidence is report-only. [Setup and validation status](docs/web.md).
+
+Around the capture:
+
+- **One rule catalog.** Every tree rule's platform, severity, WCAG criteria,
+  and a plain statement of what it checks live in `src/rules/catalog.mjs`
+  (`@irs-public/aloud/rules`). The rule engines and the OpenACR draft both
+  read it, so they cannot disagree.
+- **WCAG 2.5.8 at its real minimum.** Target size fails under 24dp/24pt,
+  with the spacing exception; Android's 48dp and Apple's 44pt guidelines
+  are warnings, not failures.
+- **Baselines with reasons.** A ratchet gate: per-screen error counts can
+  only go down. Each accepted error can record why it stands (a product
+  bug, a platform gap, or an accepted risk) and the reason carries into
+  the report and the draft.
+- **Provenance.** Every evidence file records the commit, machine, CI run,
+  and tool versions it came from; reports refuse to combine evidence from
+  different runs unless told to (`--allow-mixed`).
+- **OpenACR from any findings.** One engine turns a findings document from
+  any source (aloud's audits, the [USWDS accessibility harness](docs/harness-integration.md),
+  a manual review) into a draft OpenACR that lists every criterion and
+  never shows a silent pass: `aloud acr`, a library, and a
+  [GitHub Action](docs/ci.md#draft-an-openacr-with-the-github-action).
 
 Both mobile audit legs have passed real CI runs on the IRS mobile app project
 it was built for. Browser validation covers Chromium fixtures and the public
@@ -60,11 +83,48 @@ Cancel order, button
 
 Line four is the audit. A static scanner logs "missing contentDescription"
 in a table. aloud shows you the moment a blind user reaches a share button
-and hears the word "Unlabeled". The demo report fails that screen on two
-real findings: the unlabeled control, and a cancel button smaller than the
-touch-target minimum. If your machine has a text-to-speech voice, the
-report also reconstructs the transcript as playable audio, labeled as a
-reconstruction.
+and hears the word "Unlabeled". The demo report fails that screen on one
+real finding, the unlabeled control. It also warns that the 32dp cancel
+button is under Android's 48dp touch-target guideline. That is a warning,
+not a failure, because the button meets WCAG 2.5.8's 24dp minimum. If
+your machine has a text-to-speech voice, the report also reconstructs
+the transcript as playable audio, labeled as a reconstruction.
+
+## Draft an ACR from findings
+
+Any tool that can say, per criterion, what its evidence shows can get a
+draft OpenACR. Write a findings document (see
+[`examples/findings.example.json`](examples/findings.example.json)), then:
+
+```bash
+npx aloud acr --findings node_modules/@irs-public/aloud/examples/findings.example.json --out acr-draft.yaml
+```
+
+The package ships the example, so that command works in any project that
+has `@irs-public/aloud` installed. From a checkout of this repository, run
+`node bin/aloud.mjs acr --findings examples/findings.example.json --out acr-draft.yaml`
+instead. For your own evidence, pass your findings file.
+
+The draft lists every criterion in the WCAG 2.2 / Section 508 catalog.
+Findings set levels through a conservative policy: only passing evidence
+can reach `supports`, a failure is `partially-supports` or
+`does-not-support`, and anything unproven, or not covered by a finding,
+is `not-evaluated` for a person to review. Unknown criteria, statuses, or
+fields fail the command with every problem listed, and nothing is
+written. In code:
+
+```js
+import { buildAcr, toYaml } from "@irs-public/aloud";
+// The report date comes from findings.provenance.date or options.date; the
+// library throws without one (the CLI falls back to today).
+const yaml = toYaml(buildAcr(findings, { date: "2026-09-30" }));
+```
+
+The contract, the status vocabulary, the policy and how to override it,
+and the checklist for finishing a draft are in
+[docs/openacr.md](docs/openacr.md). The
+[harness integration guide](docs/harness-integration.md) shows a complete
+adapter from the USWDS accessibility harness's report.
 
 ## Quickstart
 
@@ -113,6 +173,18 @@ npx aloud baseline aloud-report/android
 The gate is a ratchet: from that baseline, per-screen error counts can only
 go down, and a rule id the baseline has never seen fails. Pass `--no-gate`
 to skip the gate instead.
+
+Record why a baselined error stands, so the report and the OpenACR draft
+explain it (it still counts as a failure):
+
+```bash
+npx aloud baseline aloud-report/android --accept home:native-interactive-unlabeled \
+  --kind product-bug --summary "The close button has no label" --issue APP-12
+```
+
+Kinds are `product-bug`, `platform-gap`, and `accepted-risk`. `--prune`
+drops screens the run did not cover. See
+[accepted findings](docs/how-it-works.md#accepted-findings).
 
 ### iOS
 
@@ -165,6 +237,10 @@ fixtures and the external TodoMVC scenarios have passed repeated runs,
 including NVDA on Windows; [recorded results and limits](docs/web.md#validation-and-promotion)
 describe the tested scope.
 
+`--screen-reader voiceover` drives Safari and VoiceOver instead. It runs only
+on a disposable GitHub-hosted macOS runner that opts in, and has not yet
+passed a hosted run; see [VoiceOver command capture](docs/web.md#voiceover-command-capture-safari).
+
 Web evidence is **report-only**: browser baselines and regression gates are
 disabled, and every web OpenACR component remains `not-evaluated`.
 
@@ -184,10 +260,22 @@ For web evidence, configure `app.name` and `app.version`, then run
 `npx aloud openacr --report-web aloud-report/web`. This can be combined with
 the mobile report inputs; web criteria remain unevaluated.
 
+Every evidence file records the commit, machine, CI run, and tool versions
+it came from, and the draft's notes state them. Reports and drafts refuse
+to combine evidence from different commits unless you pass `--allow-mixed`.
+
 This emits `acr-draft.yaml`, a machine-readable accessibility conformance
 report in the GSA [OpenACR](https://github.com/GSA/openacr) format. It is a
 draft on purpose: only criteria the automated rules cover get a conformance
-level, and every note says so. See [docs/openacr.md](docs/openacr.md).
+level, and every note says so. It is built by the same engine as
+[`aloud acr`](#draft-an-acr-from-findings). See
+[docs/openacr.md](docs/openacr.md#aloud-openacr-alouds-own-audits).
+
+In code, the same engine is the package's main entry:
+`import { buildAcr, toYaml } from "@irs-public/aloud"`. The package also
+exports `@irs-public/aloud/rules` (the rule catalog) and the web drivers
+(`/web/nvda`, `/web/voiceover`, `/web/dependencies`); deep `src/`, `bin/`,
+and `examples/` paths keep working. See [docs/openacr.md](docs/openacr.md#package-entry-points).
 
 For mobile apps, aloud audits whatever screen is currently open
 (`--nav current-screen`, the default). Give it a screens manifest
@@ -210,9 +298,30 @@ aloud runs fine on GitHub-hosted runners. Copy the templates in
 
 Both templates use only GitHub-owned actions. See [docs/ci.md](docs/ci.md).
 
+To draft an OpenACR from a findings file in any repository's workflow, use
+the `aloud acr` action in this repository, pinned to a commit:
+
+```yaml
+- id: acr
+  uses: IRS-Public/aloud@<full commit sha>
+  with:
+    findings: findings.json   # required
+    out: acr.yaml             # default
+- run: echo "Draft at ${{ steps.acr.outputs.acr }}"
+```
+
+It adds a count of the draft's conformance levels to the job summary. See
+[docs/ci.md](docs/ci.md#draft-an-openacr-with-the-github-action), and the
+[harness integration guide](docs/harness-integration.md#github-actions)
+for a workflow that drafts one ACR per component and attaches them to a
+release.
+
 The repository's [browser acceptance workflow](.github/workflows/web.yml)
 runs Chromium fixtures on relevant pull requests. Manual dispatch adds the
-external web-app scenarios and can enable Windows NVDA validation.
+external web-app scenarios and can enable Windows NVDA validation. The
+[VoiceOver workflow](.github/workflows/web-voiceover.yml) runs the Safari +
+VoiceOver fixtures on manual dispatch and on pull requests that touch the
+Safari driver.
 
 ## How it works
 
@@ -238,7 +347,8 @@ limits are documented in [docs/ios.md](docs/ios.md).
 
 **Web** captures configured Chromium page states with Playwright, runs axe-core,
 and retains ARIA snapshots, screenshots, and keyboard/focus assertions. Opt-in
-NVDA adds captured command output. Run inventories and artifact hashes are
+NVDA adds captured command output; opt-in VoiceOver drives Safari through Apple
+Events on a disposable macOS runner. Run inventories and artifact hashes are
 verified when reports are regenerated. Scripted scenario completion does not
 establish full traversal or conformance; see [web coverage](docs/web.md).
 
@@ -275,7 +385,7 @@ honest shape of dogfooding:
 - **A switch flagged for being 51x31pt.** Adding CheckBox to the
   interactive set tripped the 44pt target rule on Apple's own UISwitch
   geometry. Apple's audit passes it; aloud now exempts switch-family
-  roles from the platform-minimum rule.
+  roles from both target-size rules.
 
 The meta-lesson is the tool's thesis restated: the dump is not the speech.
 Every one of these was invisible to a static tree check and surfaced only
@@ -290,6 +400,16 @@ Working today, proven in CI:
 - Experimental Chromium checks and keyboard/focus scenarios, with opt-in NVDA
   command capture validated on Windows and the external TodoMVC React app.
 - Mobile ratchet gate, HTML evidence pages, and draft OpenACR emitter.
+
+New in 0.2.0 (unreleased; see the [changelog](CHANGELOG.md)):
+
+- The shared findings -> OpenACR engine (`aloud acr`, the library, and the
+  GitHub Action), with a conservative level policy and a
+  [harness adapter](docs/harness-integration.md).
+- One rule catalog, WCAG 2.5.8 at its 24-unit minimum, accepted baseline
+  reasons, and provenance on every evidence file.
+- An experimental Safari + VoiceOver web driver, awaiting its first hosted
+  run.
 
 Roadmap, in implementation order:
 
@@ -318,7 +438,8 @@ Roadmap, in implementation order:
 6. **Web app evidence.** Experimental `aloud web` uses pinned Chromium and
    axe-core, with a separate NVDA command-capture adapter. Repeated Windows
    fixtures validate scripted command capture; browser gates still require
-   their own coverage policy. [Scope and validation](docs/web.md).
+   their own coverage policy. A Safari + VoiceOver adapter awaits its first
+   hosted acceptance run. [Scope and validation](docs/web.md).
 
 Acceptance criteria and dependencies: [technical roadmap](docs/roadmap.md).
 External app results and limits: [Wikipedia mobile validation](docs/real-app-validation.md)
@@ -347,8 +468,8 @@ wrong, open an issue; we would genuinely like to know.
 \* Real TalkBack on Android today. On iOS the default transcript is computed and
 labeled as computed; opt-in real VoiceOver captures are partial on Xcode 27
 GA, with the experimental harness already in this repo. Web defaults to
-structural checks; opt-in NVDA preserves Guidepup-formatted command output
-and remains report-only.
+structural checks; opt-in NVDA (and experimental Safari + VoiceOver) preserve
+Guidepup-formatted command output and remain report-only.
 
 ## License
 

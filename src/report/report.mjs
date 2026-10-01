@@ -6,30 +6,42 @@
 //
 //   node src/report/report.mjs --dir <report-dir>                       # summarize only
 //   node src/report/report.mjs --dir <report-dir> --baseline <f> --gate # summarize + ratchet
+//   … --allow-mixed   combine per-screen evidence from different runs
+//
+// Every per-screen file records where it came from (src/provenance.mjs).
+// The summary states that provenance, and refuses to combine files from
+// different runs (another commit, a dirty tree, another aloud, machine,
+// or CI run, or files written before provenance next to newer ones)
+// unless --allow-mixed is passed; the summary then lists every source.
 //
 // With no flags, the report dir and baseline come from the resolved
 // config (env ALOUD_CONFIG): <out>/android and baseline.android, or the
-// iOS pair when the dir ends in "ios".
+// iOS pair when the dir is named "ios" or ends in "-ios" (see platform.mjs).
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderReportHtml } from "./html.mjs";
 import { validateTalkBackFocusCapture, focusTranscript } from "../android/talkback-focus.mjs";
 import { focusTtsSummary, validateFocusTts } from "../android/tts-evidence.mjs";
-import { atfSummary, atfFindings, atfTreeNodes, validateAtfEvidence } from "../android/atf-evidence.mjs";
-import { runChecks as androidTreeChecks } from "../android/ui-tree.mjs";
-import { isDeepStrictEqual } from "node:util";
 import { validateVoiceOverCapture } from "../ios/voiceover-capture.mjs";
-import { isWebReport } from "../web/evidence.mjs";
 import { reportWeb } from "../web/report.mjs";
-import { validateBaseline, validateTreeReport } from "./validation.mjs";
+import { cliArgs } from "../cli-args.mjs";
+import { configBaselineFor, platformForReportDir } from "./platform.mjs";
+import { readTreeReport } from "./tree-report.mjs";
+import { keepAccepted } from "./accepted.mjs";
+import { migrationNote, readBaseline, readEvidenceProvenance } from "./validation.mjs";
+import { combineProvenance } from "../provenance.mjs";
 
-const args = process.argv.slice(2);
-const opt = (name, fallback) => {
-  const i = args.indexOf(`--${name}`);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
-};
-const GATE = args.includes("--gate");
+const args = cliArgs("report.mjs", {
+  dir: { type: "string" },
+  out: { type: "string" },
+  baseline: { type: "string" },
+  gate: { type: "boolean" },
+  "allow-mixed": { type: "boolean" },
+});
+const opt = args.opt;
+const GATE = args.flag("gate");
+const ALLOW_MIXED = args.flag("allow-mixed");
 
 // Resolved config (written by bin/aloud.mjs) fills in whatever the flags
 // do not. There are no repo-relative defaults: this tool audits someone
@@ -43,43 +55,69 @@ if (!OUT) {
   console.error("no report dir: pass --dir <dir> or set ALOUD_CONFIG");
   process.exit(1);
 }
-const isIos = /ios\/?$/.test(OUT);
-const BASELINE = opt("baseline", isIos ? cfg?.baseline?.ios : cfg?.baseline?.android);
+const PLATFORM = platformForReportDir(OUT);
+const isIos = PLATFORM === "ios";
+let BASELINE = opt("baseline");
+if (BASELINE === undefined && cfg) {
+  try { BASELINE = configBaselineFor(OUT, PLATFORM, cfg); }
+  catch (error) { console.error(error.message); process.exit(1); }
+}
 
 if (!existsSync(OUT)) {
   console.error(`no reports at ${OUT} — run the audit walk first`);
   process.exit(1);
 }
 
-if (isWebReport(OUT)) {
+if (PLATFORM === "web") {
   try { reportWeb(OUT, { gate: GATE }); }
   catch (error) { console.error(error.message); process.exit(1); }
   process.exit(0);
 }
 // Reject malformed baselines before emitting summaries or accepting a gate.
-const baseline = GATE && BASELINE
-  ? validateBaseline(existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")) : {}, BASELINE)
-  : null;
+// Entries naming reclassified rule ids are read in the current
+// classification (see readBaseline), with a note saying so. Without
+// --gate an existing baseline is still read, for the accepted reasons the
+// summary and the evidence page show; a missing one is fine. A summary
+// run never needed the baseline before, so there an invalid one is a
+// warning and the report is written without accepted reasons, so a
+// capture-only leg (--no-gate) still produces its evidence.
+let baseline = null;
+let migratedScreens = new Set();
+if (BASELINE && (GATE || existsSync(BASELINE))) {
+  let loaded = null;
+  try {
+    loaded = readBaseline(existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")) : {}, BASELINE);
+  } catch (error) {
+    if (GATE) throw error;
+    console.warn(
+      `warning: ignoring the baseline for this report (no --gate): ${error.message}. ` +
+        "Accepted reasons are left out; fix the baseline before gating.",
+    );
+  }
+  if (loaded) {
+    baseline = loaded.baseline;
+    migratedScreens = new Set(loaded.migrated.map(({ screen }) => screen));
+    const note = GATE ? migrationNote(loaded.migrated, BASELINE) : "";
+    if (note) console.warn(note);
+  }
+}
 
 const read = (f) => JSON.parse(readFileSync(join(OUT, f), "utf8"));
 const screens = {};
+// Each evidence file's provenance, for the summary (see combineProvenance).
+const sources = [];
 for (const f of readdirSync(OUT).sort()) {
   if (f.endsWith(".tree.json")) {
-    const r = validateTreeReport(read(f), f);
-    if (r.androidAtf !== undefined || r.treeSource === "accessibility-node-info") {
-      if (isIos || r.treeSource !== "accessibility-node-info" || r.androidAtf?.screen !== r.screen) throw new Error(`invalid Android ATF source in ${f}`);
-      const native = validateAtfEvidence(r.androidAtf);
-      const violations = androidTreeChecks(atfTreeNodes(native), { densityDpi: native.densityDpi, appPackage: native.target });
-      const errors = violations.filter((v) => v.severity === "error");
-      const gate = { errors: errors.length, ruleIds: [...new Set(errors.map((v) => v.ruleId))].sort() };
-      if (!isDeepStrictEqual(violations, r.violations) || !isDeepStrictEqual(gate, r.gate)) throw new Error(`Android ATF tree findings differ from native evidence in ${f}`);
-      r.atfSummary = atfSummary(r.androidAtf);
-      r.atfFindings = atfFindings(native, r.violations);
-      r.atfNodes = native.nodes;
-    }
+    // ATF reports are recomputed from their native evidence; older
+    // ordinary reports come back with any criteria they cannot speak to
+    // marked unchecked (see tree-report.mjs).
+    const raw = read(f);
+    sources.push({ file: f, provenance: readEvidenceProvenance(raw, f) });
+    const r = readTreeReport(raw, f, { isIos });
     screens[r.screen] = { ...screens[r.screen], ...r };
   } else if (f.endsWith(".transcript.json")) {
     const r = read(f);
+    sources.push({ file: f, provenance: readEvidenceProvenance(r, f) });
     if (r.source === "voiceover" || r.voiceOver !== undefined) {
       if (r.source !== "voiceover" || !r.voiceOver || r.voiceOver.screen !== r.screen) {
         throw new Error(`invalid real VoiceOver evidence in ${f}`);
@@ -117,6 +155,17 @@ if (ids.length === 0) {
   process.exit(1);
 }
 
+// One report describes one run. Refuse files from different runs before
+// writing anything, unless the caller explicitly allows the mix.
+let provenance;
+try {
+  provenance = combineProvenance(sources, { allowMixed: ALLOW_MIXED, what: `report dir ${OUT}` });
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
+if (provenance?.mixed) console.warn(`warning: --allow-mixed: ${OUT} combines evidence from ${provenance.mixed.length} different runs`);
+
 const requirementsPath = join(OUT, "capture-requirements.json");
 if (existsSync(requirementsPath)) {
   const requirements = JSON.parse(readFileSync(requirementsPath, "utf8"));
@@ -140,8 +189,18 @@ if (existsSync(requirementsPath)) {
   }
 }
 
+// Accepted reasons from the baseline, for the errors this run still found.
+// A reason for a rule id that no longer fires is stale and is not shown.
+for (const id of ids) {
+  const gate = screens[id].gate;
+  if (!gate || !baseline?.[id]?.accepted) continue;
+  const { kept } = keepAccepted(baseline[id].accepted, gate.ruleIds);
+  if (kept.length) screens[id].accepted = kept;
+}
+
 const summary = {
   generated: new Date().toISOString(),
+  ...(provenance ? { provenance } : {}),
   screens: Object.fromEntries(
     ids.map((id) => {
       const s = screens[id];
@@ -151,6 +210,8 @@ const summary = {
           errors: s.gate?.errors ?? null,
           warns: s.violations ? s.violations.filter((v) => v.severity === "warn").length : null,
           ruleIds: s.gate?.ruleIds ?? [],
+          ...(s.accepted ? { accepted: s.accepted } : {}),
+          ...(s.uncheckedCriteria ? { uncheckedCriteria: s.uncheckedCriteria } : {}),
           utterances: s.transcript?.length ?? null,
           ...(s.atfSummary ? { androidAtf: s.atfSummary } : {}),
           ...(s.source ? { transcriptSource: s.source } : {}),
@@ -194,7 +255,7 @@ if (existsSync(audioManifestPath)) {
 
 writeFileSync(
   join(OUT, "index.html"),
-  renderReportHtml({ screens, ids, generated: summary.generated, shots, audioManifest }),
+  renderReportHtml({ screens, ids, generated: summary.generated, shots, audioManifest, provenance }),
 );
 console.log(`summary: ${ids.length} screens → ${join(OUT, "summary.json")}`);
 
@@ -214,6 +275,13 @@ if (GATE) {
       failures.push(`${id}: no completed tree checks — run the tree pass before gating, or use --no-gate for capture-only evidence`);
       continue;
     }
+    if (screens[id].uncheckedCriteria) {
+      failures.push(
+        `${id}: tree report predates the current target-size rules, so WCAG ` +
+          `${screens[id].uncheckedCriteria.join(", ")} was not checked — re-run the tree pass`,
+      );
+      continue;
+    }
     const base = baseline[id];
     if (!base) {
       failures.push(
@@ -222,7 +290,13 @@ if (GATE) {
       continue;
     }
     if (gate.errors > base.errors) {
-      failures.push(`${id}: ${gate.errors} error(s), baseline allows ${base.errors}`);
+      // A migrated entry allows its old count less one per retired id
+      // (see readBaseline), which is still what the old entry allowed.
+      const hint = migratedScreens.has(id)
+        ? " (the entry predates the target-size reclassification, so it allows its old count less one per retired rule id; " +
+          "if these errors are known, run `aloud baseline` to accept them)"
+        : "";
+      failures.push(`${id}: ${gate.errors} error(s), baseline allows ${base.errors}${hint}`);
     }
     const newRules = gate.ruleIds.filter((r) => !base.ruleIds.includes(r));
     if (newRules.length) {

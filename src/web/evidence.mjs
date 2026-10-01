@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { validateScreenId } from "../screen-id.mjs";
-import { validateStep, webUrl } from "./config.mjs";
+import { SNAPSHOT_SOURCES, SPEECH_SOURCES, WEB_READERS, capturesSpeech, validateStep, webUrl } from "./config.mjs";
+import { safariKey } from "./voiceover.mjs";
+import { validateProvenance } from "../provenance.mjs";
 
 export const hash = (value) => createHash("sha256").update(value).digest("hex");
 const object = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -35,14 +37,21 @@ export function validateWebCapture(capture, run, screen) {
   webUrl(capture.url);
   require(capture.url === screen.expectedUrl, "captured URL differs from the requested final state");
   require(capture.coverage?.scope === "scripted-scenario" && capture.coverage.scenarioComplete === true && capture.coverage.fullTraversal === false, "coverage");
-  require(typeof capture.ariaSnapshot === "string" && capture.ariaSnapshot.trim() && capture.snapshotSource === "playwright-aria-snapshot", "structural snapshot");
-  require(capture.speechSource === (run.environment.screenReader === "nvda" ? "nvda-guidepup" : "none"), "speech source");
+  const reader = run.environment.screenReader;
+  require(Object.hasOwn(SPEECH_SOURCES, reader), "screen reader");
+  const browser = WEB_READERS[reader];
+  require(typeof capture.ariaSnapshot === "string" && capture.ariaSnapshot.trim() && capture.snapshotSource === SNAPSHOT_SOURCES[browser], "structural snapshot");
+  require(capture.speechSource === SPEECH_SOURCES[reader], "speech source");
   require(Array.isArray(capture.steps) && capture.steps.length === screen.steps.length, "missing steps");
   require(strings(capture.navigationSpeech), "navigation speech");
   for (const [i, step] of capture.steps.entries()) {
     const expected = screen.steps[i];
-    validateStep(expected, run.environment.screenReader);
+    validateStep(expected, reader);
     require(step.sequence === i && JSON.stringify(step.action) === JSON.stringify(expected) && step.completed === true && strings(step.speech), "step identity or incomplete action");
+    // Safari presses record the key actually sent (Tab goes as Option+Tab).
+    const sentKey = reader === "voiceover" && expected.action === "press" ? safariKey(expected.key) : undefined;
+    require(step.sentKey === sentKey, "sent key");
+    if (!capturesSpeech(expected, reader)) require(step.speech.length === 0, "speech on a setup action");
     require(typeof step.focused === "boolean" || step.focused === null, "focus observation");
     require(step.assertionsPassed === ((!expected.expect?.focused || step.focused === true) &&
       (!expected.expect?.speechIncludes || step.speech.some((phrase) => phrase.includes(expected.expect.speechIncludes)))), "contradictory assertion result");
@@ -58,10 +67,16 @@ export function readWebReport(dir) {
   const run = JSON.parse(readFileSync(join(dir, "web-run.json"), "utf8"));
   require(run.schemaVersion === 1 && run.platform === "web" && text(run.runId) && run.status === "completed" && run.cleanupComplete === true, "run did not complete, including cleanup; inspect web-run.json and raw captures");
   const env = run.environment;
-  require(object(env) && env.browser === "chromium" && ["none", "nvda"].includes(env.screenReader) &&
-    [env.os, env.osVersion, env.browserVersion, env.playwright, env.axe, env.locale].every(text) &&
+  require(object(env) && Object.hasOwn(WEB_READERS, env.screenReader) && env.browser === WEB_READERS[env.screenReader] &&
+    [env.os, env.osVersion, env.browserVersion, env.axe, env.locale].every(text) &&
     Number.isInteger(env.viewport?.width) && Number.isInteger(env.viewport?.height), "environment");
+  // Chromium runs through Playwright; Safari through Apple Events.
+  if (env.browser === "chromium") require(text(env.playwright), "Playwright version");
+  else require(env.playwright === undefined && env.axeInjection === "apple-events", "Safari driver");
   if (env.screenReader === "nvda") require(env.os === "win32" && text(env.screenReaderVersion) && text(env.guidepup), "NVDA provenance");
+  if (env.screenReader === "voiceover") require(env.os === "darwin" && text(env.screenReaderVersion) && text(env.guidepup), "VoiceOver provenance");
+  // Runs recorded before web-run.json carried provenance have none.
+  if (run.provenance !== undefined) validateProvenance(run.provenance, "invalid web evidence: web-run.json provenance");
   require(Array.isArray(run.screens) && run.screens.length > 0 && object(run.receipts), "expected screen inventory");
   const ids = run.screens.map((s) => validateScreenId(s.id));
   require(new Set(ids.map((id) => id.toLowerCase())).size === ids.length, "duplicate screen inventory");
@@ -80,6 +95,7 @@ export function readWebReport(dir) {
 
 export function webSummary({ run, screens }) {
   return { schemaVersion: 1, platform: "web", generated: run.generated, environment: run.environment, reportOnly: true,
+    ...(run.provenance ? { provenance: run.provenance } : {}),
     screens: Object.fromEntries(Object.entries(screens).map(([id, screen]) => [id, {
       errors: null, ruleIds: [], utterances: screen.speechSource === "none" ? null : screen.navigationSpeech.length + screen.steps.reduce((n, s) => n + s.speech.length, 0),
       web: { reportOnly: true, coverage: screen.coverage, speechSource: screen.speechSource,

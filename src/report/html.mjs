@@ -7,6 +7,9 @@
 // order, visible focus, 4.5:1 contrast in light and dark, reduced motion
 // respected, and zero external requests (works from file://).
 
+import { ACCEPTED_KIND_LABELS, isIssueUrl } from "./accepted.mjs";
+import { describeProvenance } from "../provenance.mjs";
+
 const esc = (s) =>
   String(s)
     .replace(/&/g, "&amp;")
@@ -34,6 +37,9 @@ export function displayOrder(ids, screens) {
 
 function statusOf(s) {
   if (!s.gate) return { key: "nodata", label: "No tree check" };
+  if (s.gate.errors === 0 && s.uncheckedCriteria?.length) {
+    return { key: "nodata", label: `Review · WCAG ${s.uncheckedCriteria.join(", ")} unchecked` };
+  }
   if (s.gate.errors === 0 && s.source === "voiceover") {
     return { key: "nodata", label: "Review · partial VoiceOver" };
   }
@@ -46,20 +52,52 @@ function statusOf(s) {
     : { key: "pass", label: s.atfSummary ? "Tree pass" : "Pass" };
 }
 
+// Findings list every criterion the rule gives evidence toward; tree
+// reports written before findings carried `criteria` show their `wcag`.
+// A platform-guideline warning maps to no criterion and says so.
 function findingsHtml(s) {
   if (!s.gate) return `<p class="none">No tree check in this run.</p>`;
+  const unchecked = s.uncheckedCriteria?.length
+    ? `<p class="none">This tree report predates the current target-size rules, so WCAG ${esc(s.uncheckedCriteria.join(", "))} was not checked on this screen. Re-run the tree pass for current evidence.</p>`
+    : "";
   const items = (s.violations ?? [])
     .map((v) => {
       const sev = v.severity === "error" ? "error" : "warn";
       const sevLabel = sev === "error" ? "Error" : "Warning";
+      const criteria = v.criteria ?? (v.wcag ? [v.wcag] : []);
+      const mapping = criteria.length ? `WCAG ${criteria.join(", ")}` : "Platform guideline · no WCAG criterion";
       return `<li class="finding ${sev}">
-        <p class="finding-head"><span class="sev sev-${sev}">${sevLabel}</span> <code class="rule">${esc(v.ruleId)}</code> <span class="wcag">WCAG ${esc(v.wcag)}</span></p>
+        <p class="finding-head"><span class="sev sev-${sev}">${sevLabel}</span> <code class="rule">${esc(v.ruleId)}</code> <span class="wcag">${esc(mapping)}</span></p>
         <p class="finding-detail">${esc(v.detail)}</p>
         ${v.element ? `<code class="el">${esc(v.element)}</code>` : ""}
       </li>`;
     })
     .join("\n");
-  return items ? `<ul class="findings">${items}</ul>` : `<p class="none">No findings on this screen.</p>`;
+  return unchecked + (items ? `<ul class="findings">${items}</ul>` : `<p class="none">No findings on this screen.</p>`);
+}
+
+// Accepted reasons from the baseline for this screen's errors (see
+// src/report/accepted.mjs). They explain a failure; they do not excuse it,
+// so the screen keeps its failing badge and the errors still count.
+function acceptedHtml(s) {
+  if (!s.accepted?.length) return "";
+  const items = s.accepted
+    .map((entry) => {
+      const issue = entry.issue === undefined
+        ? ""
+        : isIssueUrl(entry.issue)
+          ? `<p class="finding-detail">Tracked in <a href="${esc(entry.issue)}">${esc(entry.issue)}</a></p>`
+          : `<p class="finding-detail">Tracked as <code>${esc(entry.issue)}</code></p>`;
+      return `<li class="finding error">
+        <p class="finding-head"><span class="sev sev-error">${esc(ACCEPTED_KIND_LABELS[entry.kind] ?? entry.kind)}</span> <code class="rule">${esc(entry.ruleId)}</code></p>
+        <p class="finding-detail">${esc(entry.summary)}</p>
+        ${issue}
+      </li>`;
+    })
+    .join("\n");
+  return `<h3>Accepted in the baseline (${s.accepted.length})</h3>
+    <p>These errors are known and accepted for now, for the reasons below. They still count as errors in the gate and as failures in the OpenACR draft.</p>
+    <ul class="findings">${items}</ul>`;
 }
 
 function transcriptHtml(s, id, audioEntries, includeAudioNote) {
@@ -344,8 +382,9 @@ const AUDIO_JS = `
  * @param {string} p.generated               ISO timestamp
  * @param {Set<string>} p.shots              ids that have shots/<id>.png
  * @param {Record<string, Array<{i:number,file:string,text?:string}>>|null} p.audioManifest
+ * @param {object} [p.provenance]            summary provenance (src/provenance.mjs)
  */
-export function renderReportHtml({ screens, ids, generated, shots, audioManifest }) {
+export function renderReportHtml({ screens, ids, generated, shots, audioManifest, provenance }) {
   const order = displayOrder(ids, screens);
   const hasComputed = order.some((id) => screens[id].source === "computed-voiceover");
   const hasVoiceOver = order.some((id) => screens[id].source === "voiceover");
@@ -353,7 +392,12 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
 
   const withGate = order.filter((id) => screens[id].gate);
   const failCount = withGate.filter((id) => screens[id].gate.errors > 0).length;
-  const passCount = withGate.length - failCount;
+  // A screen whose tree report could not check a criterion is not a pass:
+  // the gate fails it, so the header must not count it as passing either.
+  const uncheckedCount = withGate.filter(
+    (id) => screens[id].gate.errors === 0 && screens[id].uncheckedCriteria?.length,
+  ).length;
+  const passCount = withGate.length - failCount - uncheckedCount;
   const errorTotal = withGate.reduce((n, id) => n + screens[id].gate.errors, 0);
   const warnTotal = order.reduce(
     (n, id) => n + (screens[id].violations?.filter((v) => v.severity === "warn").length ?? 0),
@@ -410,6 +454,7 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
         ${transcriptHtml(s, id, audioManifest?.[id], id === firstAudioId)}
         <h3>${s.atfSummary ? "Tree findings" : "Findings"} (${s.violations?.length ?? 0})</h3>
         ${findingsHtml(s)}
+        ${acceptedHtml(s)}
         ${appleAuditHtml(s, id)}
         ${androidAtfHtml(s, id)}
       </div>
@@ -433,6 +478,7 @@ export function renderReportHtml({ screens, ids, generated, shots, audioManifest
     <p class="eyebrow">aloud · Section 508 evidence</p>
     <h1>${esc(legLabel)}</h1>
     <p class="meta">${order.length} screen${order.length === 1 ? "" : "s"} · generated ${esc(generated)}</p>
+    ${provenance ? `<p class="meta">${esc(describeProvenance(provenance))}</p>` : ""}
     <dl class="stats">
       <div><dt>Screens</dt><dd>${order.length}</dd></div>
       <div><dt>${hasAppleAudit || hasVoiceOver || hasAtf ? "Tree pass" : "Pass"}</dt><dd class="is-pass">${passCount}</dd></div>

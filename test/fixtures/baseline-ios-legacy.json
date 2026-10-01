@@ -1,0 +1,10 @@
+{
+  "guest-home": {
+    "errors": 0,
+    "ruleIds": []
+  },
+  "pay": {
+    "errors": 3,
+    "ruleIds": ["ios-interactive-unlabeled", "ios-touch-target-small"]
+  }
+}

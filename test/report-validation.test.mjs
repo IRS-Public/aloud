@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const RULE = "native-interactive-unlabeled";
-const OTHER_RULE = "native-touch-target-small";
+const OTHER_RULE = "native-target-size-minimum";
 const clean = { errors: 0, ruleIds: [] };
 const oneError = { errors: 1, ruleIds: [RULE] };
 const finding = (ruleId = RULE, severity = "error") => ({ ruleId, severity });
@@ -131,7 +131,7 @@ describe("valid ordinary evidence remains compatible", () => {
   for (const platform of ["android", "ios"]) {
     it(`accepts ${platform} repeated errors and report-only warnings with unordered rule IDs`, (t) => {
       const labelRule = platform === "ios" ? "ios-interactive-unlabeled" : RULE;
-      const sizeRule = platform === "ios" ? "ios-touch-target-small" : OTHER_RULE;
+      const sizeRule = platform === "ios" ? "ios-target-size-minimum" : OTHER_RULE;
       const warningRule = platform === "ios" ? "ios-duplicate-speakable" : "native-duplicate-speakable";
       const gate = { errors: 3, ruleIds: [sizeRule, labelRule] };
       const f = fixture(t, {
@@ -162,5 +162,121 @@ describe("valid ordinary evidence remains compatible", () => {
     const result = f.run("report");
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stdout, /508 gate passed/);
+  });
+});
+
+describe("evidence from before the target-size reclassification", () => {
+  // The 48dp/44pt ids used to be 2.5.8 errors; they are now report-only
+  // guideline warnings, and native-target-size-minimum gates 2.5.8.
+  const OLD = "native-touch-target-small";
+  const NEW = "native-target-size-minimum";
+
+  it("gates a fresh clean run against an old baseline that accepted 48dp errors", (t) => {
+    const f = fixture(t, {
+      reports: [tree({ violations: [finding(OLD, "warn")], gate: clean })],
+      baseline: { home: { errors: 2, ruleIds: [OLD] } },
+    });
+    const result = f.run("report");
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /508 gate passed/);
+    assert.match(result.stderr, /lists native-touch-target-small as gating error\(s\) on 1 screen\(s\) \(home\)/);
+  });
+
+  it("keeps an unchanged app passing on an old mixed baseline", (t) => {
+    // 3 errors across two rules, one of them retired: the label rule had
+    // at most 2, and the old entry already allowed it 2.
+    const baseline = { home: { errors: 3, ruleIds: [RULE, OLD] } };
+    const two = fixture(t, { reports: [tree({ violations: [finding(), finding()], gate: { errors: 2, ruleIds: [RULE] } })], baseline });
+    const passed = two.run("report");
+    assert.equal(passed.status, 0, passed.stdout + passed.stderr);
+    assert.match(passed.stderr, /old count less one error per retired rule id.*\(home 3 -> 2\)/);
+  });
+
+  it("keeps holding every other rule an old baseline accepted", (t) => {
+    // More label errors than the old entry could have held fails, with a
+    // hint to re-accept.
+    const baseline = { home: { errors: 3, ruleIds: [RULE, OLD] } };
+    const three = fixture(t, {
+      reports: [tree({ violations: [finding(), finding(), finding()], gate: { errors: 3, ruleIds: [RULE] } })],
+      baseline,
+    });
+    const result = three.run("report");
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /home: 3 error\(s\), baseline allows 2 \(the entry predates the target-size reclassification/);
+  });
+
+  it("states each migrated entry's new allowance, not a fixed one per retired id", (t) => {
+    const f = fixture(t, {
+      reports: [tree({ violations: [], gate: clean })],
+      baseline: { home: { errors: 3, ruleIds: [OLD] } },
+    });
+    const result = f.run("report");
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stderr, /\(home 3 -> 0\)/);
+    assert.doesNotMatch(result.stderr, /one fewer/);
+  });
+
+  it("fails a screen that newly violates the 24dp rule, even where the old baseline accepted 48dp errors", (t) => {
+    const f = fixture(t, {
+      reports: [tree({ violations: [finding(NEW), finding(OLD, "warn")], gate: { errors: 1, ruleIds: [NEW] } })],
+      baseline: { home: { errors: 1, ruleIds: [OLD] } },
+    });
+    const result = f.run("report");
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /new rule id\(s\) native-target-size-minimum/);
+  });
+
+  it("keeps untouched old entries exactly as written when accepting a baseline", (t) => {
+    // Rewriting `other` as { errors: 3, ruleIds: [RULE] } would erase the
+    // only record that its 2.5.8 was never checked at 24dp, and the OpenACR
+    // draft would then report 2.5.8 as supported there.
+    const other = { errors: 4, ruleIds: [RULE, OLD] };
+    const f = fixture(t, {
+      reports: [tree({ violations: [finding(NEW)], gate: { errors: 1, ruleIds: [NEW] } })],
+      baseline: { home: { errors: 1, ruleIds: [OLD] }, other },
+    });
+    const accepted = f.run("baseline");
+    assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
+    assert.match(accepted.stderr, /on 1 screen\(s\) \(other\).*keeps those entries as written/);
+    assert.deepEqual(JSON.parse(f.readBaseline()), { home: { errors: 1, ruleIds: [NEW] }, other });
+  });
+
+  it("reads an old tree report but will not gate or baseline it", (t) => {
+    // The old walker wrote the 48dp finding as a 2.5.8 error.
+    const old = { ruleId: OLD, severity: "error", wcag: "2.5.8", criteria: ["2.5.8"], detail: "touch target 32x32dp (minimum 48x48dp)" };
+    const f = fixture(t, {
+      reports: [tree({ violations: [finding(), old], gate: { errors: 2, ruleIds: [OLD, RULE] } })],
+      baseline: { home: { errors: 2, ruleIds: [OLD, RULE] } },
+    });
+    const summarized = f.run("report", false);
+    assert.equal(summarized.status, 0, summarized.stdout + summarized.stderr);
+    const summary = JSON.parse(readFileSync(join(f.out, "summary.json"), "utf8"));
+    assert.deepEqual(
+      { errors: summary.screens.home.errors, warns: summary.screens.home.warns, ruleIds: summary.screens.home.ruleIds },
+      { errors: 1, warns: 1, ruleIds: [RULE] },
+    );
+    assert.deepEqual(summary.screens.home.uncheckedCriteria, ["2.5.8"]);
+    const html = readFileSync(join(f.out, "index.html"), "utf8");
+    assert.match(html, /predates the current target-size rules, so WCAG 2\.5\.8 was not checked/);
+    assert.match(html, /Platform guideline · no WCAG criterion/);
+
+    const gated = f.run("report");
+    assert.equal(gated.status, 1, gated.stdout + gated.stderr);
+    assert.match(gated.stderr, /home: tree report predates the current target-size rules, so WCAG 2\.5\.8 was not checked/);
+
+    const before = f.readBaseline();
+    const accepted = f.run("baseline");
+    assert.equal(accepted.status, 1, accepted.stdout + accepted.stderr);
+    assert.match(accepted.stderr, /re-run the tree pass before accepting a baseline/);
+    assert.equal(f.readBaseline(), before);
+  });
+
+  it("reads an old tree report's 48dp finding written before findings carried criteria", (t) => {
+    const old = { ruleId: OLD, severity: "error", wcag: "2.5.8", detail: "touch target 32x32dp (minimum 48x48dp)" };
+    const f = fixture(t, { reports: [tree({ violations: [old], gate: { errors: 1, ruleIds: [OLD] } })] });
+    assert.equal(f.run("report", false).status, 0);
+    const summary = JSON.parse(readFileSync(join(f.out, "summary.json"), "utf8"));
+    assert.deepEqual(summary.screens.home.errors, 0);
+    assert.deepEqual(summary.screens.home.uncheckedCriteria, ["2.5.8"]);
   });
 });

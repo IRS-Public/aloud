@@ -51,6 +51,17 @@ const PATH_KEYS = [
   ["web", "storageState"],
 ];
 
+// Files aloud itself writes into the app's checkout: the report root, the
+// baselines, and the OpenACR draft. Provenance leaves them out of the
+// app's dirty check (see collectProvenance), so accepting a baseline
+// between an Android and an iOS audit does not make the two legs look like
+// different code. Missing keys are skipped; paths are as the config holds
+// them (resolved by loadConfig).
+export function aloudOutputPaths(cfg) {
+  return [cfg?.out, cfg?.baseline?.android, cfg?.baseline?.ios, cfg?.openacr?.out]
+    .filter((path) => typeof path === "string" && path.length > 0);
+}
+
 function resolvePathsInPlace(obj, baseDir) {
   for (const keyPath of PATH_KEYS) {
     let parent = obj;

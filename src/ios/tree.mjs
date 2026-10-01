@@ -6,8 +6,16 @@
 // Same scope note as the Android rules: this is the high-confidence subset
 // the dump can prove. Apple's own audit (performAccessibilityAudit) and the
 // Xcode 27 real-VoiceOver API layer on later — rule ids here are stable and
-// live in the user's iOS baseline file (see `aloud baseline`).
+// live in the user's iOS baseline file (see `aloud baseline`). Severity and
+// WCAG criteria per rule live in src/rules/catalog.mjs.
 
+import {
+  TARGET_SIZE_MINIMUM,
+  createFindings,
+  hasArea,
+  repeatedAnnouncements,
+  spacingConflict,
+} from "../rules/shared.mjs";
 import { INTERACTIVE_ROLES, composeUtterance, isFocusable } from "./voiceover.mjs";
 
 // idb v1.1.8 (the brew-installed release) emits ONE flat JSON array in
@@ -87,7 +95,7 @@ function normFrame(f) {
 export function validateIosCapture(elements) {
   const containers = new Set(["Application", "Window", "SystemWide"]);
   const usable = elements.some((el) =>
-    el.role.trim() && !containers.has(el.role) && el.frame && el.frame.w > 0 && el.frame.h > 0 &&
+    el.role.trim() && !containers.has(el.role) && hasArea(el.frame) &&
     (isFocusable(el) || el.role === "Image"),
   );
   if (!usable) {
@@ -99,6 +107,8 @@ export function validateIosCapture(elements) {
 // role_description says "heading" (UIAccessibilityTraitHeader through mac-AX).
 const isHeading = (el) =>
   el.role === "Heading" || /\bheading\b/i.test(el.roleDescription ?? "");
+
+const oneDecimal = (value) => Number(value.toFixed(1));
 
 const describe = (el) =>
   `${el.role || "?"}${el.testID ? ` testID=${el.testID}` : ""}` +
@@ -112,36 +122,69 @@ export function computeTranscript(elements) {
 }
 
 export function runIosChecks(elements) {
-  const violations = [];
-  const add = (ruleId, wcag, el, detail, severity = "error") =>
-    violations.push({ ruleId, wcag, severity, element: describe(el), detail });
+  const { violations, add } = createFindings("iOS", describe);
+
+  // Every enabled target on screen, for the 2.5.8 spacing exception.
+  // Frames are already in points, the unit the rule measures in.
+  const undersized = (el) => el.frame.w < TARGET_SIZE_MINIMUM || el.frame.h < TARGET_SIZE_MINIMUM;
+  const targets = elements
+    .filter((el) => INTERACTIVE_ROLES.has(el.role) && el.enabled && hasArea(el.frame))
+    .map((el) => ({
+      element: el,
+      undersized: undersized(el),
+      box: { x1: el.frame.x, y1: el.frame.y, x2: el.frame.x + el.frame.w, y2: el.frame.y + el.frame.h },
+    }));
 
   for (const el of elements) {
-    const visible = el.frame && el.frame.w > 0 && el.frame.h > 0;
-    if (!visible) continue;
+    if (!hasArea(el.frame)) continue;
     const interactive = INTERACTIVE_ROLES.has(el.role);
 
     // 4.1.2 Name, Role, Value — an unlabeled control announces as just
     // "button": nothing tells the user what it does.
     if (interactive && el.enabled && !el.label && !el.value) {
-      add("ios-interactive-unlabeled", "4.1.2", el, "interactive element with no label or value");
+      add("ios-interactive-unlabeled", el, "interactive element with no label or value");
     }
 
-    // 4.1.2 — an image element VoiceOver can reach but cannot describe.
+    // 1.1.1 Non-text Content — an image element VoiceOver can reach but
+    // cannot describe. Image-role elements are not controls (an image
+    // button dumps as Button), so this is a text-alternative gap.
     if (el.role === "Image" && !el.label && !el.value) {
-      add("ios-image-unlabeled", "4.1.2", el, "image element without an accessibility label");
+      add("ios-image-unlabeled", el, "image element without an accessibility label");
     }
 
-    // Target size — 44x44pt is the Apple platform minimum (HIG; Apple's
-    // hitRegion audit uses the same bar. WCAG 2.5.8 AA is 24px — we hold
-    // the platform bar, same policy as the Android 48dp rule).
     // UISwitch is 51x31pt from Apple's own hands — their audit passes it,
-    // so the platform-minimum rule exempts switch-family roles (the row
-    // that hosts one typically extends the hit area anyway).
-    if (interactive && el.enabled && !SWITCH_ROLES.has(el.role) && (el.frame.w < 44 || el.frame.h < 44)) {
+    // so both target-size rules exempt switch-family roles (the row that
+    // hosts one typically extends the hit area anyway). A switch still
+    // counts as a neighbour in other targets' spacing checks.
+    const sizeJudged = interactive && el.enabled && !SWITCH_ROLES.has(el.role);
+
+    // 2.5.8 Target Size (Minimum) — a target under 24x24pt fails unless
+    // the spacing exception covers it: its 24pt circle must stay clear of
+    // every other target and every other undersized target's circle. The
+    // dump is flat, so every other target is a neighbour. The inline,
+    // essential, user-agent, and equivalent-control exceptions need a human.
+    if (sizeJudged && undersized(el)) {
+      const self = targets.find((t) => t.element === el);
+      const conflict = spacingConflict(self, targets);
+      if (conflict) {
+        const overlap = conflict.with === "target"
+          ? `overlaps ${describe(conflict.other.element)}`
+          : `overlaps the spacing circle of ${describe(conflict.other.element)}`;
+        add(
+          "ios-target-size-minimum",
+          el,
+          `touch target ${oneDecimal(el.frame.w)}x${oneDecimal(el.frame.h)}pt ` +
+            `(minimum 24x24pt) and its 24pt spacing circle ${overlap}`,
+        );
+      }
+    }
+
+    // Platform guideline, report-only — the Apple Human Interface
+    // Guidelines (and Apple's hitRegion audit) ask for 44x44pt. No WCAG AA
+    // criterion requires it, so the catalog maps it to none.
+    if (sizeJudged && (el.frame.w < 44 || el.frame.h < 44)) {
       add(
         "ios-touch-target-small",
-        "2.5.8",
         el,
         `touch target ${Math.round(el.frame.w)}x${Math.round(el.frame.h)}pt (minimum 44x44pt)`,
       );
@@ -159,10 +202,8 @@ export function runIosChecks(elements) {
     if (interactive && !VALUE_BEARING_ROLES.has(el.role) && (el.value === "1" || el.value === "0")) {
       add(
         "ios-toggle-raw-value",
-        "4.1.2",
         el,
         `control announces raw value "${el.value}" — a switch state should speak on/off`,
-        "warn",
       );
     }
   }
@@ -209,27 +250,18 @@ export function runIosChecks(elements) {
       if (el.label.length > 90) continue;
       add(
         "ios-list-row-not-interactive",
-        "4.1.2",
         el,
         `row "${el.label}" sits in a list where ${interactiveRows.length} sibling rows announce as interactive, but this one has no interactive trait`,
-        "warn",
       );
     }
   }
 
-  // 4.1.2 — two controls that announce identically are indistinguishable.
+  // 4.1.2 / 2.4.6 — two controls that announce identically are indistinguishable.
   // Warn-only, like the Android rule: lists legitimately repeat labels.
-  const spoken = new Map();
-  for (const el of elements) {
-    if (!INTERACTIVE_ROLES.has(el.role) || !el.enabled) continue;
-    if (!(el.frame && el.frame.w > 0 && el.frame.h > 0)) continue;
-    const utterance = composeUtterance(el).toLowerCase();
-    if (!utterance) continue;
-    if (spoken.has(utterance)) {
-      add("ios-duplicate-speakable", "4.1.2", el, `same announcement: "${utterance}"`, "warn");
-    } else {
-      spoken.set(utterance, el);
-    }
+  const controls = elements.filter((el) => INTERACTIVE_ROLES.has(el.role) && el.enabled && hasArea(el.frame));
+  const utteranceOf = (el) => composeUtterance(el).toLowerCase();
+  for (const { element, announcement } of repeatedAnnouncements(controls, utteranceOf)) {
+    add("ios-duplicate-speakable", element, `same announcement: "${announcement}"`);
   }
 
   return violations;

@@ -7,11 +7,11 @@
 
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { loadConfig, validateForLeg } from "../src/config.mjs";
-import { isWebReport } from "../src/web/evidence.mjs";
+import { platformForReportDir } from "../src/report/platform.mjs";
 
 const ALOUD_HOME = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -45,8 +45,18 @@ const OPTIONS = {
     dir: { type: "string" },
     baseline: { type: "string" },
     gate: { type: "boolean" },
+    "allow-mixed": { type: "boolean" },
   },
-  baseline: { ...GLOBAL_OPTIONS, baseline: { type: "string" } },
+  baseline: {
+    ...GLOBAL_OPTIONS,
+    baseline: { type: "string" },
+    prune: { type: "boolean" },
+    "allow-mixed": { type: "boolean" },
+    accept: { type: "string" },
+    kind: { type: "string" },
+    summary: { type: "string" },
+    issue: { type: "string" },
+  },
   openacr: {
     ...GLOBAL_OPTIONS,
     android: { type: "string" },
@@ -57,6 +67,18 @@ const OPTIONS = {
     date: { type: "string" },
     catalog: { type: "string" },
     version: { type: "string" },
+    "allow-mixed": { type: "boolean" },
+  },
+  // acr reads no config: any evidence source can run it. --out names the
+  // output YAML file.
+  acr: {
+    help: { type: "boolean" },
+    findings: { type: "string" },
+    out: { type: "string" },
+    policy: { type: "string" },
+    catalog: { type: "string" },
+    date: { type: "string" },
+    "step-summary": { type: "string" },
   },
 };
 
@@ -69,13 +91,23 @@ Commands:
                real checks and report into ./aloud-demo-report [--out <dir>]
   android      Run the Android leg: TalkBack transcript pass + tree pass + report + gate
   ios          Run the iOS leg: computed VoiceOver transcript + tree checks + report + gate
-  web          Experimental Chromium page checks and optional NVDA command evidence (report-only)
+  web          Experimental Chromium page checks and optional NVDA or VoiceOver command evidence
+               (report-only)
   talkback     Manage TalkBack on the device: status | install <apk> | enable | disable |
                configure | get [--foss|--build]
   tts          Build or install the optional silent recording TTS engine
-  report       Re-aggregate an existing report dir (--dir, --baseline, --gate)
+  report       Re-aggregate an existing report dir (--dir, --baseline, --gate) [--allow-mixed:
+               combine per-screen evidence from different runs]
   baseline     Accept current counts into a baseline: aloud baseline <report-dir> [--baseline <file>]
+               [--prune] [--accept <screen>:<ruleId> --kind <kind> --summary "..." [--issue <ref>]]
+               [--allow-mixed: accept tree reports from different runs]
   openacr      Emit a draft OpenACR (--android/--ios baselines or --report/--report-ios/--report-web dirs)
+               [--date YYYY-MM-DD] [--version <v>] [--catalog <file>: same chapters and criteria
+               as the bundled 2.5-edition-wcag-2.2-508-en catalog] [--allow-mixed: combine inputs
+               from different commits]
+  acr          Build a draft OpenACR from any findings JSON: aloud acr --findings <file.json>
+               [--out acr-draft.yaml] [--policy <file.json>] [--catalog <file>] [--date YYYY-MM-DD]
+               [--step-summary <file>: append a Markdown level count, e.g. $GITHUB_STEP_SUMMARY]
 
 Global flags:
   --config <file>   Config file (default: ./aloud.config.json if present)
@@ -99,12 +131,22 @@ Leg flags (android, ios):
   --voiceover computed|real     iOS speech source (default: computed; real needs Xcode 27)
   --voiceover-max-steps N       Maximum forward moves for real speech (1–100, default: 20)
 
+Baseline flags:
+  --prune                       Drop screens this run did not cover (renamed or removed)
+  --accept <screen>:<ruleId>    Record why a baselined error is accepted (add or replace)
+  --kind <kind>                 product-bug | platform-gap | accepted-risk
+  --summary "..."               One sentence, at most 140 characters
+  --issue <ref>                 Optional tracker URL or id
+
 Web flags:
   --url <url>                  HTTP(S) page or base URL for a manifest
   --screens <file>             Web scenario manifest; --flow selects flows
-  --screen-reader none|nvda    NVDA requires a dedicated Windows desktop
-  --storage-state <file>       Playwright authentication state (kept out of artifacts)
-  --headed                    Show Chromium (always enabled with NVDA)
+  --screen-reader none|nvda|voiceover
+                               NVDA requires a dedicated Windows desktop; VoiceOver uses
+                               Safari on a disposable GitHub-hosted macOS runner only
+  --storage-state <file>       Playwright authentication state (kept out of artifacts;
+                               Chromium only)
+  --headed                    Show the browser (Chromium; always shown with NVDA or VoiceOver)
   --no-gate                   Optional acknowledgment; web captures are always report-only
 
   aloud --help          Show this help
@@ -263,12 +305,14 @@ function runReport(argv) {
   if (values.help) return console.log(USAGE);
   const { cfg, resolvedPath } = resolveAndWriteConfig(values);
   const dir = values.dir ? resolve(values.dir) : join(cfg.out, "android");
-  if (isWebReport(dir)) {
+  const platform = platformForReportDir(dir);
+  if (platform === "web") {
     const args = [join(ALOUD_HOME, "src", "report", "report.mjs"), "--out", dir];
     if (values.gate) args.push("--gate");
+    if (values["allow-mixed"]) args.push("--allow-mixed");
     return run(process.execPath, args, resolvedPath);
   }
-  const isIos = basename(dir) === "ios" || basename(dir).endsWith("-ios");
+  const isIos = platform === "ios";
   const baseline = values.baseline
     ? resolve(values.baseline)
     : isIos
@@ -276,7 +320,15 @@ function runReport(argv) {
       : cfg.baseline.android;
   const args = [join(ALOUD_HOME, "src", "report", "report.mjs"), "--out", dir, "--baseline", baseline];
   if (values.gate) args.push("--gate");
+  if (values["allow-mixed"]) args.push("--allow-mixed");
   run(process.execPath, args, resolvedPath);
+}
+
+// Flags given more than once. parseArgs keeps the last value, and which
+// one was meant is unknowable, so the caller refuses instead.
+function repeatedFlags(argv, names) {
+  return names.filter((name) =>
+    argv.filter((arg) => arg === `--${name}` || arg.startsWith(`--${name}=`)).length > 1);
 }
 
 function runBaseline(argv) {
@@ -284,41 +336,71 @@ function runBaseline(argv) {
   if (values.help) return console.log(USAGE);
   const reportDir = positionals[0];
   if (!reportDir) fail("Usage: aloud baseline <report-dir> [--baseline <file>]");
+  // One accepted reason per run: a second --accept would be dropped.
+  const repeated = repeatedFlags(argv, ["accept", "kind", "summary", "issue"]);
+  if (repeated.length) fail(`aloud baseline: ${repeated.map((name) => `--${name}`).join(", ")} given more than once; accept one reason per run`);
   const dir = resolve(reportDir);
-  if (isWebReport(dir)) fail("Experimental web evidence is report-only; baselines are not enabled");
+  const platform = platformForReportDir(dir);
+  if (platform === "web") fail("Experimental web evidence is report-only; baselines are not enabled");
   const { cfg, resolvedPath } = resolveAndWriteConfig(values);
-  const isIos = basename(dir) === "ios" || basename(dir).endsWith("-ios");
+  const isIos = platform === "ios";
   const baseline = values.baseline
     ? resolve(values.baseline)
     : isIos
       ? cfg.baseline.ios
       : cfg.baseline.android;
-  run(
-    process.execPath,
-    [join(ALOUD_HOME, "src", "report", "baseline.mjs"), dir, "--baseline", baseline],
-    resolvedPath,
-  );
+  const args = [join(ALOUD_HOME, "src", "report", "baseline.mjs"), dir, "--baseline", baseline];
+  if (values.prune) args.push("--prune");
+  if (values["allow-mixed"]) args.push("--allow-mixed");
+  // --flag=value, so a summary that starts with "-" is not read as a flag.
+  for (const flag of ["accept", "kind", "summary", "issue"]) {
+    if (values[flag] !== undefined) args.push(`--${flag}=${values[flag]}`);
+  }
+  run(process.execPath, args, resolvedPath);
 }
 
-function runOpenacr(argv) {
+// Drop flags given an empty value (--date ""), which count as absent, as
+// they always have.
+function givenFlags(values) {
+  return Object.fromEntries(Object.entries(values).filter(([, value]) => value !== ""));
+}
+
+// The OpenACR commands run in this process. Their module loads the OpenACR
+// validators, so it is imported only when one of them runs.
+async function runOpenacrCommand(command, run) {
+  let result;
+  try {
+    const commands = await import("../src/cli/openacr.mjs");
+    result = run(commands);
+  } catch (err) {
+    fail(`aloud ${command}: ${err.message}`);
+  }
+  console.log(`draft OpenACR → ${result.out} (report_date ${result.date})`);
+}
+
+async function runOpenacr(argv) {
   const { values } = parse("openacr", argv);
   if (values.help) return console.log(USAGE);
+  const flags = givenFlags(values);
   // For openacr, --out names the output YAML file (config: openacr.out).
   // The report root still comes from the config file.
   const overrides = {};
-  if (values.out) setPath(overrides, ["openacr", "out"], resolve(values.out));
-  const { cfg, resolvedPath } = resolveAndWriteConfig({ ...values, out: undefined }, overrides);
+  if (flags.out) setPath(overrides, ["openacr", "out"], resolve(flags.out));
+  const { cfg } = resolveAndWriteConfig({ ...flags, out: undefined }, overrides);
   try {
-    validateForLeg(cfg, "openacr", { requireVersion: !values.version });
+    validateForLeg(cfg, "openacr", { requireVersion: !flags.version });
   } catch (err) {
     fail(`aloud openacr: ${err.message}`);
   }
-  const args = [join(ALOUD_HOME, "src", "report", "openacr.mjs")];
-  for (const flag of ["android", "ios", "report", "report-ios", "report-web", "date", "catalog", "version"]) {
-    if (values[flag]) args.push(`--${flag}`, values[flag]);
-  }
-  if (values.out) args.push("--out", cfg.openacr.out);
-  run(process.execPath, args, resolvedPath);
+  await runOpenacrCommand("openacr", ({ openacr }) => openacr({ ...flags, out: cfg.openacr.out }, cfg));
+}
+
+async function runAcr(argv) {
+  const { values } = parse("acr", argv);
+  if (values.help) return console.log(USAGE);
+  const flags = givenFlags(values);
+  if (!flags.findings) fail(`aloud acr: --findings <file.json> is required\n\nRun "aloud --help" for usage.`);
+  await runOpenacrCommand("acr", ({ acr }) => acr(flags));
 }
 
 const [command, ...rest] = process.argv.slice(2);
@@ -359,7 +441,10 @@ switch (command) {
     runBaseline(rest);
     break;
   case "openacr":
-    runOpenacr(rest);
+    await runOpenacr(rest);
+    break;
+  case "acr":
+    await runAcr(rest);
     break;
   default:
     fail(`aloud: unknown command "${command}"\n\n${USAGE}`);

@@ -1,0 +1,55 @@
+name: Experimental web VoiceOver evidence
+# Safari + VoiceOver on a disposable GitHub-hosted macOS runner, dispatched
+# by hand or run when a pull request touches the driver. Guidepup setup
+# changes the runner's accessibility settings, which is why aloud refuses to
+# start VoiceOver anywhere else: it requires
+# GITHUB_ACTIONS=true, RUNNER_ENVIRONMENT=github-hosted and the explicit
+# ALOUD_ALLOW_NATIVE_DESKTOP opt-in set below.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/web/voiceover.mjs'
+      - 'src/web/safari.mjs'
+      - 'test/web-voiceover-smoke.mjs'
+      - 'test/web-fixture/**'
+      - '.github/workflows/web-voiceover.yml'
+permissions:
+  contents: read
+concurrency:
+  group: web-voiceover-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  voiceover:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      ALOUD_ALLOW_NATIVE_DESKTOP: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+      # Hosted macOS machines sometimes fail Guidepup's TCC or Do Not Disturb
+      # writes on the first try; the USWDS harness allows a second attempt.
+      - name: Set up VoiceOver
+        run: npx --yes @guidepup/setup@0.25.3 setup --ci || npx --yes @guidepup/setup@0.25.3 setup --ci
+      - run: npx --yes @guidepup/setup@0.25.3 install
+      # Aloud observes its Safari window through Apple Events. Full keyboard
+      # access lets Tab reach buttons and checkboxes; Safari's tab-to-links
+      # preference is left off, and aloud sends Option+Tab to reach links.
+      - name: Prepare Safari
+        run: |
+          defaults write com.apple.Safari AllowJavaScriptFromAppleEvents -bool true
+          defaults write NSGlobalDomain AppleKeyboardUIMode -int 2
+      # The page viewport must fit the runner's display; log it for sizing failures.
+      - name: Record the display
+        run: system_profiler SPDisplaysDataType | grep -iE 'resolution|ui looks like' || true
+      - run: npm run test:web:voiceover
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-voiceover-evidence
+          path: aloud-report/web-voiceover-smoke
+          retention-days: 14

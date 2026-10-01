@@ -1,0 +1,8 @@
+{
+  "product": { "name": "Fixture Site", "version": "2.0.0" },
+  "components": ["web"],
+  "findings": [
+    { "criterion": "1.1.1", "component": "web", "status": "met" },
+    { "criterion": "9.9.9", "component": "web", "status": "met" }
+  ]
+}

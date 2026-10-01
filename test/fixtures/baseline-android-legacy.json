@@ -1,0 +1,14 @@
+{
+  "guest-home": {
+    "errors": 0,
+    "ruleIds": []
+  },
+  "orders-list": {
+    "errors": 1,
+    "ruleIds": ["native-touch-target-small"]
+  },
+  "settings": {
+    "errors": 0,
+    "ruleIds": []
+  }
+}

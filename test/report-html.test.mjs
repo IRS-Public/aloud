@@ -72,6 +72,37 @@ describe("evidence page renderer", () => {
     assert.ok(html.includes("A &quot;quoted&quot; &lt;title&gt;"));
   });
 
+  it("lists every criterion a finding bears on, falling back to wcag for older reports", () => {
+    const screens = base();
+    screens.failing.violations[0].criteria = ["4.1.2", "1.3.1"];
+    const html = render(screens);
+    assert.ok(html.includes('<span class="wcag">WCAG 4.1.2, 1.3.1</span>'));
+    assert.ok(html.includes('<span class="wcag">WCAG 2.5.8</span>'));
+  });
+
+  it("labels a finding with no criterion as a platform guideline", () => {
+    const screens = base();
+    screens.failing.violations[1] = {
+      ruleId: "native-touch-target-small",
+      criteria: [],
+      severity: "warn",
+      detail: "touch target 32x32dp (minimum 48x48dp)",
+      element: "<node class=Button>",
+    };
+    const html = render(screens);
+    assert.ok(html.includes('<span class="wcag">Platform guideline · no WCAG criterion</span>'));
+    assert.ok(!html.includes("WCAG 2.5.8"));
+  });
+
+  it("flags a screen whose tree report could not check a criterion", () => {
+    const screens = base();
+    screens.passing.uncheckedCriteria = ["2.5.8"];
+    const html = render(screens);
+    assert.ok(html.includes("Review · WCAG 2.5.8 unchecked"));
+    assert.ok(html.includes("so WCAG 2.5.8 was not checked on this screen"));
+    assert.ok(!html.includes("<dt>Pass</dt><dd class=\"is-pass\">1</dd>"), "an unchecked screen is not a pass");
+  });
+
   it("labels computed VoiceOver honestly", () => {
     const screens = base();
     screens.failing.source = "computed-voiceover";

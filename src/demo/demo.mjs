@@ -24,13 +24,15 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dedupeConsecutive, segmentTranscript } from "../android/transcript.mjs";
 import { parseUiDump, runChecks } from "../android/ui-tree.mjs";
+import { cliArgs } from "../cli-args.mjs";
+import { ALOUD_HOME, collectProvenance } from "../provenance.mjs";
 import { reconstructSpeech } from "./speak.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(HERE, "fixtures");
 
 // The sample capture's identity. densityDpi matches the device the sample
-// screen was laid out for (Pixel-7-class, 420dpi: 48dp = 126px).
+// screen was laid out for (Pixel-7-class, 420dpi: 24dp = 63px, 48dp = 126px).
 const SCREEN_ID = "order-status";
 const SCREEN_TITLE = "Order status";
 const APP_NAME = "Example Shop";
@@ -43,7 +45,11 @@ export const AUDIO_NOTICE =
   "Audio is reconstructed: synthesized from the captured transcript, not a recording of the device.";
 
 // The documented sample contract (the README quotes these verbatim).
-const EXPECTED_RULE_IDS = ["native-interactive-unlabeled", "native-touch-target-small"];
+// The gating errors, then the report-only warnings. The 32dp Cancel button
+// meets WCAG 2.5.8's 24dp minimum, so it is a platform-guideline warning
+// (Android's 48dp), not an error.
+const EXPECTED_RULE_IDS = ["native-interactive-unlabeled"];
+const EXPECTED_WARN_IDS = ["native-touch-target-small"];
 const EXPECTED_UTTERANCES = [
   "Order status, heading",
   "Your order shipped on Tuesday, August 25th.",
@@ -52,11 +58,7 @@ const EXPECTED_UTTERANCES = [
   "Cancel order, button",
 ];
 
-const args = process.argv.slice(2);
-const opt = (name, fallback) => {
-  const i = args.indexOf(`--${name}`);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
-};
+const { opt } = cliArgs("demo", { out: { type: "string" } });
 
 function fail(msg) {
   console.error(msg);
@@ -78,6 +80,10 @@ const violations = runChecks(parseUiDump(xml), {
 });
 const errors = violations.filter((v) => v.severity === "error");
 const ruleIds = [...new Set(errors.map((v) => v.ruleId))].sort();
+const warnIds = violations
+  .filter((v) => v.severity !== "error")
+  .map((v) => v.ruleId)
+  .sort();
 
 // ── transcript pass: real segmentation over the bundled logcat capture ──
 const logcat = readFileSync(join(FIXTURES, `${SCREEN_ID}.logcat.txt`), "utf8");
@@ -87,12 +93,15 @@ const transcript = dedupeConsecutive(segmentTranscript(logcat)[SCREEN_ID] ?? [])
 if (
   JSON.stringify(ruleIds) !== JSON.stringify(EXPECTED_RULE_IDS) ||
   errors.length !== EXPECTED_RULE_IDS.length ||
+  JSON.stringify(warnIds) !== JSON.stringify(EXPECTED_WARN_IDS) ||
   JSON.stringify(transcript) !== JSON.stringify(EXPECTED_UTTERANCES)
 ) {
   fail(
     `aloud demo: the bundled sample no longer produces its documented findings.\n` +
       `  expected rules: ${EXPECTED_RULE_IDS.join(", ")}\n` +
       `  got rules:      ${ruleIds.join(", ") || "(none)"} (${errors.length} error(s))\n` +
+      `  expected warns: ${EXPECTED_WARN_IDS.join(", ")}\n` +
+      `  got warns:      ${warnIds.join(", ") || "(none)"}\n` +
       `  got ${transcript.length} utterance(s), expected ${EXPECTED_UTTERANCES.length}\n` +
       `Refusing to write a demo report that does not match the docs. ` +
       `Update the fixtures and the README together.`,
@@ -100,6 +109,11 @@ if (
 }
 
 // ── write the per-screen artifacts in the walker's exact shapes ──
+// The sample ships inside aloud, so the "app" commit is aloud's own: read
+// only from aloud's own checkout. Installed under a project's
+// node_modules, the enclosing repo is that project, not the sample, so
+// the commit is recorded as unknown rather than as the project's.
+const provenance = collectProvenance({ cwd: ALOUD_HOME, requireRoot: ALOUD_HOME, exclude: [OUT] });
 writeFileSync(
   join(OUT, `${SCREEN_ID}.tree.json`),
   JSON.stringify(
@@ -108,6 +122,7 @@ writeFileSync(
       title: `${SCREEN_TITLE} (${APP_NAME} sample)`,
       violations,
       gate: { errors: errors.length, ruleIds },
+      provenance,
     },
     null,
     2,
@@ -115,7 +130,7 @@ writeFileSync(
 );
 writeFileSync(
   join(OUT, `${SCREEN_ID}.transcript.json`),
-  JSON.stringify({ screen: SCREEN_ID, source: "talkback", transcript }, null, 2),
+  JSON.stringify({ screen: SCREEN_ID, source: "talkback", transcript, provenance }, null, 2),
 );
 copyFileSync(join(FIXTURES, `${SCREEN_ID}.png`), join(OUT, "shots", `${SCREEN_ID}.png`));
 
@@ -123,7 +138,10 @@ console.log(
   `  screen ${SCREEN_ID}: ${transcript.length} utterances, ` +
     `${errors.length} error(s), ${violations.length - errors.length} warn(s)`,
 );
-for (const v of errors) console.log(`    ${v.ruleId} (WCAG ${v.wcag}): ${v.detail}`);
+for (const v of violations) {
+  const label = v.severity === "error" ? `WCAG ${v.criteria.join(", ")}` : "guideline, warn";
+  console.log(`    ${v.ruleId} (${label}): ${v.detail}`);
+}
 
 // ── reconstructed speech audio ──
 // Synthesized before the report renders: the report generator picks up
