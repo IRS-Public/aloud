@@ -33,3 +33,26 @@ export function platformForReportDir(dir) {
   if (isWebReport(dir)) return "web";
   return ios ? "ios" : "android";
 }
+
+// Pick the config baseline for a report dir, for the report and baseline
+// scripts run without --baseline. Before 0.2.0 those scripts counted any
+// path ending in "ios" as iOS, so "out/app_ios" took the iOS baseline;
+// the shared rule above counts it as Android. A dir named "iOS" or
+// "app-iOS" counts as Android under both rules, though it most likely
+// holds iOS evidence. Rather than quietly gate such a dir against the
+// Android baseline, this throws and asks for --baseline. Only a separate
+// word "ios", in any case ("app_ios", "app.ios", "build/iOS"), is
+// ambiguous; "radios" or "myios" was never meant as iOS. Returns
+// undefined when the config names no baseline for the platform.
+export function configBaselineFor(dir, platform, cfg) {
+  const name = basename(resolve(dir.replace(/[\\/]+$/, "") || "/"));
+  if (platform === "android" && /(^|[^A-Za-z0-9])ios$/i.test(name)) {
+    const history = name.endsWith("ios") ? "; before 0.2.0 it counted as iOS" : "";
+    throw new Error(
+      `report dir ${dir} is named "${name}", which counts as Android (only "ios" or "*-ios" is iOS)${history}. ` +
+        "Pass --baseline <file> to choose its baseline, " +
+        'or rename the dir (for example to "app-ios").',
+    );
+  }
+  return platform === "ios" ? cfg?.baseline?.ios : cfg?.baseline?.android;
+}

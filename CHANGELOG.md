@@ -52,6 +52,16 @@ build drafts through one findings contract and one level policy.
 - **Strict flags in the internal scripts.** The walkers, report, baseline,
   web capture, and demo scripts stop on an unknown, value-less, or
   repeated flag instead of ignoring it.
+- **iOS report dirs are named "ios" or "*-ios".** Run directly,
+  `src/report/report.mjs` and `src/report/baseline.mjs` used to count any
+  path ending in "ios" as iOS; they now share the `aloud` CLI's rule, so
+  "radios" or "myios" is Android. When they would take the baseline from
+  `ALOUD_CONFIG` for a dir whose name ends in a separate word "ios" in any
+  case ("out/app_ios", "app.ios", "build/iOS"), they stop and ask for
+  `--baseline <file>` rather than gate iOS evidence against the Android
+  baseline. Rename such a dir (for example to "app-ios") or pass
+  `--baseline`. The `aloud` CLI always passes `--baseline` and is
+  unaffected.
 - **`node src/report/openacr.mjs` no longer runs a command.** Use
   `aloud openacr`. The module exports the same names, but two changed
   contents: `RULES` and `AUTOMATED_CRITERIA` are now frozen views of the

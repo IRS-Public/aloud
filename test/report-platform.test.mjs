@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { isIosReportDir, platformForReportDir } from "../src/report/platform.mjs";
+import { configBaselineFor, isIosReportDir, platformForReportDir } from "../src/report/platform.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -101,5 +101,40 @@ console.log([p("."), p("./"), p("screens/.."), p("..")].join(","));`;
     const baseline = spawnSync(process.execPath, [join(ROOT, "src/report/baseline.mjs"), "."], { cwd: out, encoding: "utf8", env });
     assert.equal(baseline.status, 0, baseline.stderr);
     assert.match(baseline.stdout + baseline.stderr, /baseline-ios\.json/);
+  });
+
+  it("refuses to guess a config baseline for a dir the old scripts counted as iOS", () => {
+    const cfg = { baseline: { android: "/b/android.json", ios: "/b/ios.json" } };
+    for (const dir of ["out/app_ios", "out/app.ios/", "/abs/app_ios"]) {
+      assert.throws(() => configBaselineFor(dir, platformForReportDir(dir), cfg), /before 0\.2\.0 it counted as iOS\. Pass --baseline/, dir);
+    }
+    for (const dir of ["build/iOS", "out/app-iOS"]) {
+      assert.throws(() => configBaselineFor(dir, platformForReportDir(dir), cfg), /counts as Android .*\)\. Pass --baseline/, dir);
+    }
+    assert.equal(configBaselineFor("out/radios", "android", cfg), "/b/android.json");
+    assert.equal(configBaselineFor("out/myios", "android", cfg), "/b/android.json");
+    assert.equal(configBaselineFor("out/app-ios", "ios", cfg), "/b/ios.json");
+    assert.equal(configBaselineFor("out/ios", "ios", {}), undefined);
+  });
+
+  it("report and baseline stop on out/app_ios without --baseline, and accept it with one", (t) => {
+    const root = tempDir(t);
+    const out = join(root, "app_ios");
+    mkdirSync(out);
+    const gate = { errors: 0, ruleIds: [] };
+    writeFileSync(join(out, "home.tree.json"), JSON.stringify({ screen: "home", violations: [], gate }));
+    const iosBaseline = join(root, "baseline-ios.json");
+    writeFileSync(iosBaseline, JSON.stringify({ home: gate }));
+    const config = join(root, "config.resolved.json");
+    writeFileSync(config, JSON.stringify({ out: root, baseline: { android: join(root, "baseline-android.json"), ios: iosBaseline } }));
+    const env = { ...process.env, ALOUD_CONFIG: config };
+    const run = (script, ...args) => spawnSync(process.execPath, [join(ROOT, "src/report", script), ...args], { cwd: root, encoding: "utf8", env });
+
+    for (const result of [run("report.mjs", "--dir", out, "--gate"), run("baseline.mjs", out)]) {
+      assert.equal(result.status, 1, result.stdout + result.stderr);
+      assert.match(result.stderr, /counted as iOS\. Pass --baseline/);
+      assert.doesNotMatch(result.stderr, /    at /);
+    }
+    assert.equal(run("report.mjs", "--dir", out, "--gate", "--baseline", iosBaseline).status, 0);
   });
 });

@@ -37,7 +37,7 @@ import { join, resolve } from "node:path";
 import { cliArgs } from "../cli-args.mjs";
 import { parseAcceptFlags } from "./accepted.mjs";
 import { mergeBaseline } from "./baseline-merge.mjs";
-import { platformForReportDir } from "./platform.mjs";
+import { configBaselineFor, platformForReportDir } from "./platform.mjs";
 import { readTreeReport } from "./tree-report.mjs";
 import { migrationNote, readEvidenceProvenance } from "./validation.mjs";
 import { combineProvenance } from "../provenance.mjs";
@@ -94,7 +94,11 @@ if (platform === "web") {
   process.exit(1);
 }
 const isIos = platform === "ios";
-const baselinePath = opt("baseline", isIos ? cfg?.baseline?.ios : cfg?.baseline?.android);
+let baselinePath = opt("baseline");
+if (baselinePath === undefined && cfg) {
+  try { baselinePath = configBaselineFor(positionals[0] ?? reportDir, platform, cfg); }
+  catch (error) { console.error(`aloud baseline: ${error.message}`); process.exit(1); }
+}
 if (!baselinePath) {
   console.error("no baseline path: pass --baseline <file> or set ALOUD_CONFIG");
   process.exit(1);

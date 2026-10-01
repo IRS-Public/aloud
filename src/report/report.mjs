@@ -26,7 +26,7 @@ import { focusTtsSummary, validateFocusTts } from "../android/tts-evidence.mjs";
 import { validateVoiceOverCapture } from "../ios/voiceover-capture.mjs";
 import { reportWeb } from "../web/report.mjs";
 import { cliArgs } from "../cli-args.mjs";
-import { platformForReportDir } from "./platform.mjs";
+import { configBaselineFor, platformForReportDir } from "./platform.mjs";
 import { readTreeReport } from "./tree-report.mjs";
 import { keepAccepted } from "./accepted.mjs";
 import { migrationNote, readBaseline, readEvidenceProvenance } from "./validation.mjs";
@@ -57,7 +57,11 @@ if (!OUT) {
 }
 const PLATFORM = platformForReportDir(OUT);
 const isIos = PLATFORM === "ios";
-const BASELINE = opt("baseline", isIos ? cfg?.baseline?.ios : cfg?.baseline?.android);
+let BASELINE = opt("baseline");
+if (BASELINE === undefined && cfg) {
+  try { BASELINE = configBaselineFor(OUT, PLATFORM, cfg); }
+  catch (error) { console.error(error.message); process.exit(1); }
+}
 
 if (!existsSync(OUT)) {
   console.error(`no reports at ${OUT} — run the audit walk first`);
