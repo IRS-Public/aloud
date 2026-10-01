@@ -49,7 +49,10 @@ const screens = [
 const path = join(root, "screens.json");
 writeFileSync(path, JSON.stringify([{ id: "voiceover", screens }]));
 try {
-  const cfg = loadConfig(undefined, { out: root, web: { screenReader: "voiceover", screens: path, timeoutMs: 30000 } });
+  // Hosted macOS runners have a 1024 × 768 display; a Safari page cannot be
+  // taller than the screen leaves room for, so the default 1280 × 800 fails.
+  const cfg = loadConfig(undefined, { out: root, web: { screenReader: "voiceover", screens: path, timeoutMs: 30000,
+    viewport: { width: 1024, height: 600 } } });
   const report = await captureWeb(cfg);
   const evidence = readWebReport(report);
   assert.equal(Object.keys(evidence.screens).length, screens.length);

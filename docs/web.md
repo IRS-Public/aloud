@@ -181,7 +181,9 @@ changes what the evidence can say:
 - axe-core runs from the same pinned build that `@axe-core/playwright` uses,
   injected into the page. Frames are not injected.
 - Safari's language comes from the system; a `web.locale` that differs fails
-  the run. The window is sized so the page area matches `web.viewport`.
+  the run. The window is sized so the page area matches `web.viewport`, and
+  the run fails if the screen is too small for it. Hosted macOS runners have a
+  1024 × 768 display, so use a viewport such as 1024 × 600 there.
 - The screenshot is `screencapture` of the window's screen rectangle and
   needs Screen Recording permission on the runner.
 - Playwright storage state cannot be loaded, so `storageState` is refused.
