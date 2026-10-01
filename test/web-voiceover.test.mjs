@@ -260,7 +260,7 @@ test("Safari page scripts report values and errors through a JSON envelope", () 
 // `body` is the page content that the DOM outline reads.
 const AXE_RESULT = { testEngine: { name: "axe-core", version: "4.13.0" }, incomplete: [], passes: [], inapplicable: [],
   violations: [{ id: "button-name", tags: ["wcag412"], help: "Name buttons", description: "Buttons need names", nodes: [{ target: ["#unnamed"], html: "<button></button>" }] }] };
-function fakeSafari({ language = "en-US", chrome = [0, 80], status = 200, axeVersion = "4.13.0", body = element("BODY") } = {}) {
+function fakeSafari({ language = "en-US", chrome = [0, 80], screen, status = 200, axeVersion = "4.13.0", body = element("BODY") } = {}) {
   const world = { windows: [], closed: [], activated: 0, bounds: [0, 0, 0, 0], scripts: 0 };
   const makeDocument = (url) => {
     const elements = { "#email": { tagName: "INPUT", value: "", focused: false, clicked: 0, visible: true, events: [] } };
@@ -280,7 +280,10 @@ function fakeSafari({ language = "en-US", chrome = [0, 80], status = 200, axeVer
     version: async () => "26.0",
     openWindow: async () => { world.windows.push("7"); return "7"; },
     closeWindow: async (id) => { world.closed.push(id); },
-    setBounds: async (id, bounds) => { world.bounds = bounds; },
+    // macOS keeps a window inside the screen's available area.
+    setBounds: async (id, [left, top, right, bottom]) => {
+      world.bounds = [left, top, right, screen ? Math.min(bottom, top + screen[1]) : bottom];
+    },
     bounds: async () => world.bounds,
     activate: async () => { world.activated++; },
     setUrl: async (id, url) => { world.document = makeDocument(url); world.window = {}; },
@@ -291,7 +294,8 @@ function fakeSafari({ language = "en-US", chrome = [0, 80], status = 200, axeVer
       const performance = { getEntriesByType: () => [{ responseStatus: status }] };
       const getComputedStyle = () => ({ display: "block", visibility: "visible" });
       const innerWidth = world.bounds[2] - chrome[0], innerHeight = world.bounds[3] - chrome[1];
-      Object.assign(window, { innerWidth, innerHeight });
+      Object.assign(window, { innerWidth, innerHeight },
+        screen && { screen: { availWidth: screen[0], availHeight: screen[1] } });
       return String(new Function("document", "window", "navigator", "performance", "getComputedStyle", "Event",
         `return ${source}`)(document, window, navigator, performance, getComputedStyle, class { constructor(type) { this.type = type; } }));
     },
@@ -316,6 +320,13 @@ test("the Safari driver opens its own sized window, checks the language, and clo
   await context.close();
   await context.close();
   assert.deepEqual(world.closed, ["7"]);
+
+  // A screen too short for the page fails with its size instead of
+  // recording a viewport the page never had.
+  const short = fakeSafari({ screen: [1280, 709] });
+  await assert.rejects((await createSafari(short.io).launch()).newContext({ viewport: { width: 1280, height: 800 } }),
+    /got 1280 × 629; screen available 1280 × 709\); choose a smaller web.viewport/);
+  assert.deepEqual(short.world.closed, ["7"]);
 
   const german = fakeSafari({ language: "de-DE" });
   await assert.rejects((await createSafari(german.io).launch()).newContext({ locale: "en-US" }), /Safari's language is de-DE/);

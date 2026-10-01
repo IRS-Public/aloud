@@ -403,15 +403,31 @@ export async function preflightRequest(io, url, timeoutMs) {
 }
 
 // Size the window so the page area matches the viewport: set the outer size,
-// measure the page, correct once for the window's chrome, and verify.
+// measure the page, correct once for the window's chrome, and verify. Safari
+// relays out after a resize, so each measurement waits for the page size to
+// settle. macOS keeps a window inside the screen, so a failure names the
+// screen's available size.
 async function sizeWindow(io, id, evaluate, { width, height }) {
   const inner = () => evaluate(() => [window.innerWidth, window.innerHeight]);
+  const settled = async (want) => {
+    let last = await inner();
+    for (let waited = 0; waited < 2000; waited += 100) {
+      if (last[0] === want[0] && last[1] === want[1]) break;
+      await io.sleep(100);
+      const next = await inner();
+      if (next[0] === last[0] && next[1] === last[1] && waited >= 500) break;
+      last = next;
+    }
+    return last;
+  };
   await io.setBounds(id, [0, 0, width, height]);
-  const [firstWidth, firstHeight] = await inner();
+  const [firstWidth, firstHeight] = await settled([width, height]);
   await io.setBounds(id, [0, 0, width + (width - firstWidth), height + (height - firstHeight)]);
-  const [finalWidth, finalHeight] = await inner();
+  const [finalWidth, finalHeight] = await settled([width, height]);
   if (finalWidth !== width || finalHeight !== height) {
-    throw new Error(`Safari could not size its page to ${width} × ${height} (got ${finalWidth} × ${finalHeight})`);
+    const screen = await evaluate(() => window.screen ? [window.screen.availWidth, window.screen.availHeight] : null);
+    throw new Error(`Safari could not size its page to ${width} × ${height} (got ${finalWidth} × ${finalHeight}`
+      + `${Array.isArray(screen) ? `; screen available ${screen[0]} × ${screen[1]}` : ""}); choose a smaller web.viewport`);
   }
 }
 

@@ -43,6 +43,9 @@ jobs:
         run: |
           defaults write com.apple.Safari AllowJavaScriptFromAppleEvents -bool true
           defaults write NSGlobalDomain AppleKeyboardUIMode -int 2
+      # The page viewport must fit the runner's display; log it for sizing failures.
+      - name: Record the display
+        run: system_profiler SPDisplaysDataType | grep -iE 'resolution|ui looks like' || true
       - run: npm run test:web:voiceover
       - uses: actions/upload-artifact@v4
         if: always()
