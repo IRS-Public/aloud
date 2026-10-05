@@ -19,7 +19,10 @@ aloud at a reviewed commit and imports `src/web/nvda.mjs` and
 those paths and their exports stable (they are also exported as
 `@irs-public/aloud/web/nvda` and `/web/dependencies`). aloud's Safari +
 VoiceOver driver (`src/web/voiceover.mjs`, see [web.md](web.md#voiceover-command-capture-safari))
-is a port of the harness's own native driver.
+is a port of the harness's own native driver, and carries its failure
+context (`captureContext`), typed punctuation, pass-next-key and
+host-refusal handling, so the harness can drive VoiceOver through it in
+place of its own copy.
 
 ## What the adapter reads
 

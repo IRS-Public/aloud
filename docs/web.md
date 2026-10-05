@@ -169,6 +169,9 @@ changes what the evidence can say:
   System Events inside one capture held open that long. Only a letter, a
   digit, `Backspace`, `Enter`, or `Space` can be sent this way.
   `{ "action": "press", "key": "x", "listenMs": 2500, "expect": { "speechIncludes": "characters over" } }`
+- A `press` of one character that is not a letter or a digit (`:`, `/`) is
+  typed through VoiceOver instead of pressed: Guidepup's press has key codes
+  for only a handful of punctuation and sends nothing for the rest.
 - Apple Events cannot see HTTP status, so a direct request from Node checks
   the URL first (bounded by `web.timeoutMs`), and Safari's navigation timing
   is checked too when Safari reports a status. Node must be able to reach and
@@ -194,11 +197,18 @@ nothing. A timed-out command is never retried, and no further reader is
 started in that process.
 
 The driver is also a library: `@irs-public/aloud/web/voiceover` exports
-`startVoiceOver`, `voiceOverCommand`, `voiceOverListen`, and
-`stopVoiceOver`, with the same guards, alongside the NVDA driver at
-`@irs-public/aloud/web/nvda`. The USWDS accessibility harness already
-imports the NVDA driver and its dependency pins from a pinned aloud
-checkout; see [the harness integration guide](harness-integration.md).
+`startVoiceOver`, `voiceOverCommand` (`press`, `type`, and the cursor
+commands), `voiceOverListen`, `voiceOverPassNextKey` (VoiceOver passes the
+next key to Safari untouched), `settleVoiceOver` (with an optional action,
+such as a navigation, run inside the settle's capture), and `stopVoiceOver`,
+with the same guards. `captureContext(phrases)` gives, for a capture a
+command returned, the command that produced it, the speech its settle
+discarded, and the item under the VoiceOver cursor when it ended, for
+failure messages that say more than the words heard. `hostRefusal` names a
+machine that refuses Apple events, on which startup stops after one attempt.
+The NVDA driver is at `@irs-public/aloud/web/nvda`. The USWDS accessibility
+harness already imports the NVDA driver and its dependency pins from a
+pinned aloud checkout; see [the harness integration guide](harness-integration.md).
 
 ## Evidence and re-aggregation
 
