@@ -87,6 +87,45 @@ export function speechLog(phrases) {
   return [...phrases];
 }
 
+// A single character that is not a letter or a digit, such as ":" or "/".
+// Guidepup's press has key codes for a platform-specific handful of
+// punctuation and silently sends nothing for the rest, so the driver types
+// such a character through the reader's type command instead. Ported from
+// the harness's isTypedCharacter.
+export const isTypedCharacter = (key) => typeof key === "string" && key.length === 1 && !/^[A-Za-z0-9]$/.test(key);
+
+// Failure context for each capture a command returned, keyed by the
+// returned array: the command, the speech the settle before it discarded
+// (after a silent settle Guidepup can repeat the previous phrase, so this is
+// context, not proof of late speech) and the item under the VoiceOver cursor
+// when the capture ended, which tells a cursor that moved silently from one
+// that never moved. Ported from the harness's settledBefore and cursorAfter.
+const contexts = new WeakMap();
+export const captureContext = (phrases) => contexts.get(phrases);
+
+async function recordContext(reader, phrases, command, settled) {
+  let cursor;
+  if (typeof reader.itemText === "function") {
+    try {
+      cursor = await reader.itemText();
+    } catch (error) {
+      cursor = `unavailable (${error.message})`;
+    }
+  }
+  contexts.set(phrases, { command, settled, cursor });
+  return phrases;
+}
+
+// Some hosted macOS machines refuse every Apple event to System Events for
+// the whole job (-1743 is errAEEventNotPermitted); a second attempt on the
+// same machine has never passed. Returns the reason when `output` shows that
+// refusal. Ported from the harness's setup-attempts.
+export function hostRefusal(output) {
+  return /Not authorized to send Apple events to System Events|\(-1743\)/.test(String(output ?? ""))
+    ? "this machine refuses Apple events to System Events"
+    : undefined;
+}
+
 // `ps -axo pid=,lstart=,comm=` lines for VoiceOver, as pid -> "start command".
 // The start time is part of the identity, so a later process that reuses a
 // pid is never mistaken for this run's reader.
@@ -197,16 +236,21 @@ async function deadline(operation, ms, label, state) {
 }
 
 // Runs `operation` up to `attempts` times, recovering with `between` after
-// each failure. A failed recovery stops further attempts. Every error is
-// kept on the thrown AggregateError.
-export async function withAttempts(operation, { attempts, between }) {
+// each failure. A failed recovery stops further attempts, and so does a
+// failure `unrecoverable` gives a reason for (another attempt on this
+// machine cannot help); that reason is kept as `unavailable` on the thrown
+// AggregateError, with every error.
+export async function withAttempts(operation, { attempts, between, unrecoverable = () => undefined }) {
   const errors = [];
+  let unavailable;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       return await operation(attempt);
     } catch (error) {
       errors.push(error);
+      unavailable = unrecoverable(error);
     }
+    if (unavailable) break;
     if (attempt < attempts) {
       try {
         await between(attempt);
@@ -216,7 +260,11 @@ export async function withAttempts(operation, { attempts, between }) {
       }
     }
   }
-  throw new AggregateError(errors, `VoiceOver did not start: ${errors.map((e) => e.message).join("; ")}`);
+  const reasons = errors.map((e) => e.message).join("; ");
+  throw Object.assign(
+    new AggregateError(errors, unavailable ? `VoiceOver cannot start here, ${unavailable}: ${reasons}` : `VoiceOver did not start: ${reasons}`),
+    { unavailable },
+  );
 }
 
 // Start VoiceOver with Guidepup. Refuses to replace an existing session:
@@ -247,6 +295,7 @@ export async function startVoiceOver({ env = process.env, platform = process.pla
           await stopOwnedVoiceOver(await io.voiceOverProcesses(), io);
           await io.sleep(START_RETRY_PAUSE_MS);
         },
+        unrecoverable: (error) => hostRefusal(error.message),
       },
     );
   } catch (error) {
@@ -270,35 +319,52 @@ export async function startVoiceOver({ env = process.env, platform = process.pla
 
 // Let pending speech finish inside its own capture, and return it. Commands
 // settle first so page loads and earlier announcements never land in the
-// next command's log.
-export async function settleVoiceOver(reader, timeoutMs) {
+// next command's log. An `action`, such as a navigation, runs inside the
+// capture before the wait, so what it makes VoiceOver say is discarded with
+// the rest. The settled phrase stays in Guidepup's log on purpose: its
+// VoiceOver clear remembers the last entry and the next capture skips it, so
+// the command's own clear must find the log non-empty; a second clear on an
+// empty log forgets the entry, and the next capture then begins with the
+// item VoiceOver spoke before the command.
+export async function settleVoiceOver(reader, timeoutMs, { action = async () => {} } = {}) {
   const state = session(reader);
   return deadline((async () => {
     await reader.clearSpokenPhraseLog();
-    await reader.capture(() => awaitQuiet(state.io.lastPhrase, state.io), { capture: true });
+    await reader.capture(async () => {
+      await action();
+      await awaitQuiet(state.io.lastPhrase, state.io);
+    }, { capture: true });
     return speechLog(await reader.spokenPhraseLog());
   })(), timeoutMs + SETTLE.maxMs, "VoiceOver settle", state);
 }
 
 // Send one command and return its captured speech. `press` keys go to
-// Safari (Tab becomes Option+Tab, see safariKey); cursor commands act on
-// VoiceOver's current item and take no application. Never retried.
+// Safari (Tab becomes Option+Tab, see safariKey), except a single character
+// that is not a letter or a digit, which is typed (see isTypedCharacter);
+// `type` types text; cursor commands act on VoiceOver's current item and take
+// no application. The returned capture's context is in captureContext.
+// Never retried.
 export async function voiceOverCommand(reader, command, argument, timeoutMs) {
   const state = session(reader);
-  if (command === "press") {
-    if (!text(argument)) throw new Error("VoiceOver press requires a key");
+  if (command === "press" || command === "type") {
+    if (!text(argument)) throw new Error(`VoiceOver ${command} requires ${command === "press" ? "a key" : "text"}`);
   } else if (!VOICEOVER_COMMANDS.includes(command)) {
     throw new Error(`unsupported VoiceOver command: ${command}`);
   } else if (argument !== undefined) {
     throw new Error(`VoiceOver ${command} takes no argument`);
   }
-  await settleVoiceOver(reader, timeoutMs);
+  const settled = await settleVoiceOver(reader, timeoutMs);
   await reader.clearSpokenPhraseLog();
-  const action = command === "press"
-    ? reader.press(safariKey(argument), { capture: true, application: state.application })
-    : reader[command]({ capture: true });
+  const typed = command === "type" || (command === "press" && isTypedCharacter(argument));
+  const sent = command === "press" && !typed ? safariKey(argument) : argument;
+  const action = typed
+    ? reader.type(argument, { capture: true, application: state.application })
+    : command === "press"
+      ? reader.press(sent, { capture: true, application: state.application })
+      : reader[command]({ capture: true });
   await deadline(action, timeoutMs, `VoiceOver ${command}`, state);
-  return speechLog(await reader.spokenPhraseLog());
+  const label = typed ? `type ${JSON.stringify(argument)}` : command === "press" ? `press ${sent}` : command;
+  return recordContext(reader, speechLog(await reader.spokenPhraseLog()), label, settled);
 }
 
 // Press `key` through the operating system inside one capture that stays
@@ -314,14 +380,28 @@ export async function voiceOverListen(reader, key, milliseconds, timeoutMs) {
   if (!Number.isInteger(milliseconds) || milliseconds < LISTEN_MS.min || milliseconds > LISTEN_MS.max) {
     throw new Error(`VoiceOver listen window must be an integer from ${LISTEN_MS.min} to ${LISTEN_MS.max} ms`);
   }
-  await settleVoiceOver(reader, timeoutMs);
+  const settled = await settleVoiceOver(reader, timeoutMs);
   await reader.clearSpokenPhraseLog();
   const listen = reader.capture(async () => {
     await state.io.sendKey(key);
     await state.io.sleep(milliseconds);
   }, { capture: true });
   await deadline(listen, milliseconds + timeoutMs, `VoiceOver press ${key} with listen window`, state);
-  return speechLog(await reader.spokenPhraseLog());
+  return recordContext(reader, speechLog(await reader.spokenPhraseLog()), `press ${key} for ${milliseconds} ms`, settled);
+}
+
+// Tell VoiceOver to pass the next key combination to Safari untouched, for
+// a key VoiceOver would otherwise take. Sent through Guidepup inside its
+// own capture; the key itself follows as a `press`. Ported from the
+// harness's passNextKey. Never retried.
+export async function voiceOverPassNextKey(reader, timeoutMs) {
+  const state = session(reader);
+  await deadline(
+    reader.perform(reader.keyboardCommands.ignoreNextKeyCombination, { capture: true, application: state.application }),
+    timeoutMs,
+    "VoiceOver pass next key",
+    state,
+  );
 }
 
 // Stop Guidepup's reader, then any process this run started that is still

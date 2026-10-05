@@ -125,7 +125,13 @@ build drafts through one findings contract and one level policy.
   (`aloud web --screen-reader voiceover`, `src/web/voiceover.mjs`,
   `src/web/safari.mjs`), parallel to the NVDA driver. It runs only on a
   disposable GitHub-hosted macOS runner that opts in, and has not yet
-  passed a hosted run. `dependencies.mjs` gains `axeCoreSource`.
+  passed a hosted run. `dependencies.mjs` gains `axeCoreSource`. The driver
+  carries the USWDS harness's failure context (`captureContext`: the
+  command, the speech its settle discarded, the cursor item), types a lone
+  punctuation character through the reader, can tell VoiceOver to pass the
+  next key to Safari (`voiceOverPassNextKey`), lets a settle run an action
+  inside its capture, and stops startup at once on a machine that refuses
+  Apple events (`hostRefusal`).
 - One shared report-platform helper and shared rule-engine helpers, so
   every entry point agrees on android, ios, or web.
 - **Documentation for the findings engine.** [docs/openacr.md](docs/openacr.md)

@@ -8,9 +8,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
-  SETTLE, assertNativeDesktop, awaitQuiet, matchingOwnedProcesses, parseVoiceOverProcesses, resetVoiceOverTimeoutForTests,
-  VOICEOVER_COMMANDS, macosKeyScript, safariKey, settleVoiceOver, speechLog, startVoiceOver, stopOwnedVoiceOver, stopVoiceOver,
-  voiceOverCommand, voiceOverListen, withAttempts,
+  SETTLE, assertNativeDesktop, awaitQuiet, captureContext, hostRefusal, isTypedCharacter, matchingOwnedProcesses,
+  parseVoiceOverProcesses, resetVoiceOverTimeoutForTests, VOICEOVER_COMMANDS, macosKeyScript, safariKey, settleVoiceOver,
+  speechLog, startVoiceOver, stopOwnedVoiceOver, stopVoiceOver, voiceOverCommand, voiceOverListen, voiceOverPassNextKey,
+  withAttempts,
 } from "../src/web/voiceover.mjs";
 import {
   createSafari, domOutline, javascriptScript, pageResult, pageScript, preflightRequest, sameDocumentUrl,
@@ -51,12 +52,13 @@ function fakeIo({ processes = new Map(), phrases = ["Ready"] } = {}) {
 }
 
 // A Guidepup-shaped VoiceOver that records every call, in order.
-function fakeVoiceOver({ io, startFailures = 0, log = ["Button, Save"] } = {}) {
+function fakeVoiceOver({ io, startFailures = 0, log = ["Button, Save"], item = "Save email, button" } = {}) {
   const calls = [];
   let failures = startFailures;
   const reader = {
     calls,
     log,
+    item,
     get version() { return "fixture-voiceover"; },
     start: async (options) => {
       calls.push(["start", options]);
@@ -68,8 +70,14 @@ function fakeVoiceOver({ io, startFailures = 0, log = ["Button, Save"] } = {}) {
     capture: async (action, options) => { calls.push(["capture", options]); await action(); },
     spokenPhraseLog: async () => reader.log,
     press: async (key, options) => { calls.push(["press", key, options]); },
+    type: async (characters, options) => { calls.push(["type", characters, options]); },
+    perform: async (command, options) => { calls.push(["perform", command, options]); },
+    keyboardCommands: { ignoreNextKeyCombination: "ignore-next-key" },
     next: async (options) => { calls.push(["next", options]); },
     interact: async (options) => { calls.push(["interact", options]); },
+    // The item under the VoiceOver cursor; not a recorded call, so the
+    // command sequences above stay as they are.
+    itemText: async () => reader.item,
   };
   return reader;
 }
@@ -219,6 +227,88 @@ test("VoiceOver commands settle first, send Safari keys, and validate their inpu
   await assert.rejects(voiceOverCommand(reader, "next", undefined, 1000), /invalid Guidepup speech log/);
   await stopVoiceOver(reader);
   await assert.rejects(voiceOverCommand(reader, "next", undefined, 1000), /not started/);
+});
+
+test("a settle can run an action inside its capture, before the quiet wait", async () => {
+  const io = fakeIo();
+  const voiceOver = fakeVoiceOver({ io, log: ["Fixture page, web content"] });
+  const reader = await start(io, voiceOver);
+  voiceOver.calls.length = 0;
+  const order = [];
+  const sleep = io.sleep;
+  io.sleep = async (ms) => { order.push(`sleep ${ms}`); await sleep(ms); };
+  const settled = await settleVoiceOver(reader, 1000, { action: async () => { order.push("action"); } });
+  assert.deepEqual(settled, ["Fixture page, web content"]);
+  assert.deepEqual(voiceOver.calls.map(([name]) => name), ["clear", "capture"]);
+  assert.equal(order[0], "action");
+  assert.ok(order.length > 1 && order.slice(1).every((step) => step.startsWith("sleep")));
+  await stopVoiceOver(reader);
+});
+
+test("each capture remembers its command, the speech its settle discarded and the cursor item", async () => {
+  const io = fakeIo();
+  const voiceOver = fakeVoiceOver({ io, log: ["Save email, button"], item: "Save email, button" });
+  const reader = await start(io, voiceOver);
+  const pressed = await voiceOverCommand(reader, "press", "Tab", 1000);
+  assert.deepEqual(captureContext(pressed), {
+    command: "press Option+Tab", settled: ["Save email, button"], cursor: "Save email, button",
+  });
+  const moved = await voiceOverCommand(reader, "next", undefined, 1000);
+  assert.equal(captureContext(moved).command, "next");
+  const listened = await voiceOverListen(reader, "x", 1500, 1000);
+  assert.equal(captureContext(listened).command, "press x for 1500 ms");
+  // A cursor read that fails is context, never a failed command.
+  voiceOver.itemText = async () => { throw new Error("AppleScript timed out"); };
+  const later = await voiceOverCommand(reader, "next", undefined, 1000);
+  assert.deepEqual(later, ["Save email, button"]);
+  assert.equal(captureContext(later).cursor, "unavailable (AppleScript timed out)");
+  assert.equal(captureContext(["not a capture"]), undefined);
+  await stopVoiceOver(reader);
+});
+
+test("a lone punctuation character is typed, and type sends text", async () => {
+  const io = fakeIo();
+  const voiceOver = fakeVoiceOver({ io });
+  const reader = await start(io, voiceOver);
+  const colon = await voiceOverCommand(reader, "press", ":", 1000);
+  assert.deepEqual(voiceOver.calls.at(-1), ["type", ":", { capture: true, application: "Safari" }]);
+  assert.equal(captureContext(colon).command, 'type ":"');
+  await voiceOverCommand(reader, "press", "a", 1000);
+  assert.deepEqual(voiceOver.calls.at(-1), ["press", "a", { capture: true, application: "Safari" }]);
+  await voiceOverCommand(reader, "type", "Ada", 1000);
+  assert.deepEqual(voiceOver.calls.at(-1), ["type", "Ada", { capture: true, application: "Safari" }]);
+  await assert.rejects(voiceOverCommand(reader, "type", "", 1000), /VoiceOver type requires text/);
+  for (const key of [":", "/", ";"]) assert.equal(isTypedCharacter(key), true, key);
+  for (const key of ["a", "7", "Tab", "Shift+Tab", "", undefined]) assert.equal(isTypedCharacter(key), false, String(key));
+  await stopVoiceOver(reader);
+});
+
+test("pass next key performs VoiceOver's ignore-next-key command inside a capture", async () => {
+  const io = fakeIo();
+  const voiceOver = fakeVoiceOver({ io });
+  const reader = await start(io, voiceOver);
+  voiceOver.calls.length = 0;
+  await voiceOverPassNextKey(reader, 1000);
+  assert.deepEqual(voiceOver.calls, [["perform", "ignore-next-key", { capture: true, application: "Safari" }]]);
+  await stopVoiceOver(reader);
+  await assert.rejects(voiceOverPassNextKey(reader, 1000), /not started by startVoiceOver/);
+});
+
+test("a machine that refuses Apple events stops startup after one attempt", async () => {
+  assert.equal(hostRefusal("execution error: Not authorized to send Apple events to System Events. (-1743)"),
+    "this machine refuses Apple events to System Events");
+  assert.equal(hostRefusal("VoiceOver not ready (-600)"), undefined);
+  const io = fakeIo();
+  const voiceOver = fakeVoiceOver({ io });
+  voiceOver.start = async (options) => {
+    voiceOver.calls.push(["start", options]);
+    throw new Error("osascript: Not authorized to send Apple events to System Events. (-1743)");
+  };
+  const error = await start(io, voiceOver).catch((e) => e);
+  assert.match(error.message, /cannot start here, this machine refuses Apple events to System Events/);
+  assert.equal(error.unavailable, "this machine refuses Apple events to System Events");
+  assert.equal(voiceOver.calls.filter(([name]) => name === "start").length, 1);
+  assert.deepEqual(io.slept, []);
 });
 
 test("a timed-out VoiceOver command is never retried and blocks further readers", async () => {
