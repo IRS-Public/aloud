@@ -38,6 +38,15 @@
       "evidence": [{ "id": "DP-C01", "environments": ["unit"] }]
     },
     {
+      "criterion": "4.1.1",
+      "component": "web",
+      "status": "standard-interpretation",
+      "notes": [
+        "WCAG 2.0 and 2.1 errata: 4.1.1 Parsing is always satisfied for HTML content (https://www.w3.org/WAI/WCAG21/Understanding/parsing.html), and WCAG 2.2 removed it. The markup checks passed; a markup defect that broke a relationship, a name or a state would be reported under the criterion it affects."
+      ],
+      "evidence": [{ "id": "DP-M01", "environments": ["unit"] }]
+    },
+    {
       "criterion": "2.1.1",
       "component": "web",
       "status": "failing",

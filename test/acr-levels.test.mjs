@@ -20,6 +20,7 @@ describe("default policy", () => {
   const expected = {
     met: "supports",
     "human-reviewed": "supports",
+    "standard-interpretation": "supports",
     "partly-tested": "not-evaluated",
     "platform-limitation": "not-evaluated",
     incomplete: "not-evaluated",
@@ -50,6 +51,7 @@ describe("default policy", () => {
   it("explains every status in a plain-English note", () => {
     for (const status of STATUSES) assert.ok(adherenceFor(status).note.length > 30, status);
     assert.match(adherenceFor("human-reviewed").note, /person reviewed/);
+    assert.match(adherenceFor("standard-interpretation").note, /published interpretation .* no test applies/);
     assert.match(adherenceFor("page-level").note, /site team is responsible/);
   });
 

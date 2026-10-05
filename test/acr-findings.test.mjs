@@ -226,7 +226,7 @@ describe("rejected findings", () => {
 
   it("reject known issues on a passing or not-applicable finding", () => {
     const issues = [{ id: "GH-1", summary: "Keyboard trap in dialog" }];
-    for (const status of ["met", "human-reviewed", "not-triggered", "page-level"]) {
+    for (const status of ["met", "human-reviewed", "standard-interpretation", "not-triggered", "page-level"]) {
       assertProblem((f) => { f.findings[0].status = status; f.findings[0].issues = issues; },
         new RegExp(`findings\\[0\\]\\.issues: a "${status}" finding may not list known issues`));
     }
@@ -236,10 +236,19 @@ describe("rejected findings", () => {
   });
 
   it("reject a passing finding that names nothing it rests on", () => {
-    for (const status of ["met", "human-reviewed"]) {
+    for (const status of ["met", "human-reviewed", "standard-interpretation"]) {
       assertProblem((f) => { f.findings[0] = { criterion: "1.4.3", component: "web", status }; },
         new RegExp(`findings\\[0\\]: a "${status}" finding must say what it rests on`));
     }
+    // An interpretation must be cited in the notes; evidence alone is not it.
+    assertProblem((f) => {
+      f.findings[0] = { criterion: "4.1.1", component: "web", status: "standard-interpretation", evidence: [{ id: "markup" }] };
+    }, /findings\[0\]\.notes: a standard-interpretation finding must cite the interpretation it rests on/);
+    const interpreted = validateFindings({ ...base(), findings: [{
+      criterion: "4.1.1", component: "web", status: "standard-interpretation",
+      notes: ["WCAG 2.1 errata: 4.1.1 Parsing is always satisfied for HTML content."],
+    }] });
+    assert.equal(interpreted.findings[0].status, "standard-interpretation");
     // Any one of evidence, covers, or notes is enough.
     for (const grounds of [{ evidence: [{ id: "contrast" }] }, { covers: "text contrast" }, { notes: ["Checked by hand."] }]) {
       const out = validateFindings({ ...base(), findings: [{ criterion: "1.4.3", component: "web", status: "met", ...grounds }] });

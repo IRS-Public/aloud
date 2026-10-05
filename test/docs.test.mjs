@@ -62,11 +62,11 @@ describe("examples/findings.example.json", () => {
     const acr = buildAcr(example);
     assert.deepEqual(validateAcr(acr), { valid: true, problems: [] });
     assert.deepEqual(levelCounts(acr).levels, {
-      supports: 2,
+      supports: 3,
       "partially-supports": 1,
       "does-not-support": 1,
       "not-applicable": 2,
-      "not-evaluated": 121,
+      "not-evaluated": 120,
     });
   });
 
