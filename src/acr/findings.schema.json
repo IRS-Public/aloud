@@ -126,6 +126,7 @@
           "enum": [
             "met",
             "human-reviewed",
+            "standard-interpretation",
             "failing",
             "known-defect",
             "partly-tested",

@@ -96,6 +96,16 @@ row, likewise, may hide checks that never ran; its "Some tests did not run
 in" note names them, and `not-evaluated` sends the row to a person either
 way.
 
+One row is mapped by criterion rather than by status. The harness's own
+catalog records WCAG 2.0 and 2.1's 4.1.1 Parsing as satisfied for HTML by
+the W3C's errata (WCAG 2.2 removed it), while each component still runs
+markup checks against that row, so the harness's adapter emits 4.1.1 as
+[`standard-interpretation`](openacr.md#the-status-vocabulary): the finding
+cites the errata in its notes and keeps the markup checks' results there as
+information, and the draft reads `supports` with a note that the level rests
+on the standard's interpretation, not on a test. The example adapter below
+does not include that rule.
+
 ### Profiles
 
 Rows with profile `section508`, `additional-wcag21`, or

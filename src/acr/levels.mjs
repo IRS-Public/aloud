@@ -25,7 +25,8 @@ export const ADHERENCE_LEVELS = Object.freeze([
 export const FAILING_SHARES = Object.freeze(["some", "all"]);
 
 // Every status a finding may carry, grouped by what it proves:
-//   passing      the evidence shows the criterion is met
+//   passing      the evidence shows the criterion is met, or the standard's
+//                own interpretation says it always is for this content
 //   failing      the evidence shows a defect (failingShare applies)
 //   unproven     the criterion applies, but the evidence proves nothing yet
 //   out-of-scope the criterion does not apply to this component
@@ -33,6 +34,7 @@ export const FAILING_SHARES = Object.freeze(["some", "all"]);
 export const STATUS_KINDS = Object.freeze({
   met: "passing",
   "human-reviewed": "passing",
+  "standard-interpretation": "passing",
   failing: "failing",
   "known-defect": "failing",
   "partly-tested": "unproven",
@@ -75,6 +77,12 @@ export const DEFAULT_POLICY = deepFreeze({
     note:
       "A person reviewed this and judged the criterion met; the automated tests only check that " +
       "the reviewed content stays as approved. The judgment is that person's, which a test cannot repeat.",
+  },
+  "standard-interpretation": {
+    level: "supports",
+    note:
+      "The standard's own published interpretation says this criterion is always satisfied for " +
+      "this kind of content, so no test applies; the notes cite it.",
   },
   failing: {
     level: { some: "partially-supports", all: "does-not-support" },

@@ -85,6 +85,14 @@ build drafts through one findings contract and one level policy.
 
 ### Added
 
+- **`standard-interpretation` finding status.** A passing status for a
+  criterion the standard's own published interpretation says is always
+  satisfied for the content: WCAG 2.0 and 2.1's 4.1.1 Parsing on HTML,
+  per the W3C errata. It maps to `supports` with a note that says the
+  level rests on the interpretation, not a test; the finding must cite the
+  interpretation in its `notes`, and like every passing status it may list
+  no known issues (a markup defect that breaks a relationship, a name, or
+  a state belongs to 1.3.1 or 4.1.2).
 - **Shared OpenACR engine** (`src/acr/`): a findings contract
   (`src/acr/findings.schema.json`, `validateFindings`), a status
   vocabulary and conservative level policy (`src/acr/levels.mjs`; only

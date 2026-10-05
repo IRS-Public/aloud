@@ -137,7 +137,8 @@ mobile app is `software`, as in aloud's own drafts.
 | `notes` | no* | Further sentences for the row's notes, such as a scope statement or which tests did not run. |
 
 \* A `met` or `human-reviewed` finding needs at least one of `evidence`,
-`covers`, or `notes`.
+`covers`, or `notes`; a `standard-interpretation` finding needs `notes`
+that cite the interpretation.
 
 ### What the contract rejects
 
@@ -151,10 +152,13 @@ It rejects, listing every problem at once:
 - two findings for the same criterion and component;
 - `failingShare` on a status that is not a failure;
 - a `known-defect` finding with no `issues`;
-- a passing finding (`met`, `human-reviewed`) with no `evidence`,
-  `covers`, or `notes`, since a pass must say what it rests on;
+- a passing finding (`met`, `human-reviewed`, `standard-interpretation`)
+  with no `evidence`, `covers`, or `notes`, since a pass must say what it
+  rests on, and a `standard-interpretation` finding whose `notes` do not
+  cite the interpretation;
 - `issues` on a passing or out-of-scope finding (`met`, `human-reviewed`,
-  `not-triggered`, `page-level`), since the catalog defines "supports" as
+  `standard-interpretation`, `not-triggered`, `page-level`), since the
+  catalog defines "supports" as
   met without known defects; use `known-defect` or `failing` instead;
 - repeated evidence or issue ids within a finding;
 - an impossible date, such as `2026-02-31`.
@@ -206,6 +210,15 @@ it, so it always matches the contract.
       "status": "human-reviewed",
       "covers": "the label and format hint text a person approved",
       "evidence": [{ "id": "DP-C01", "environments": ["unit"] }]
+    },
+    {
+      "criterion": "4.1.1",
+      "component": "web",
+      "status": "standard-interpretation",
+      "notes": [
+        "WCAG 2.0 and 2.1 errata: 4.1.1 Parsing is always satisfied for HTML content (https://www.w3.org/WAI/WCAG21/Understanding/parsing.html), and WCAG 2.2 removed it. The markup checks passed; a markup defect that broke a relationship, a name or a state would be reported under the criterion it affects."
+      ],
+      "evidence": [{ "id": "DP-M01", "environments": ["unit"] }]
     },
     {
       "criterion": "2.1.1",
@@ -308,9 +321,9 @@ The 4.1.2 row of the draft built from it reads:
           https://github.com/example/design-system/issues/42. Evidence: DP-S03.
 ```
 
-Its report notes count 2 `supports`, 1 `partially-supports`, 1
-`does-not-support`, 2 `not-applicable`, and 121 `not-evaluated` rows: the
-twelve findings, plus every criterion no finding covers.
+Its report notes count 3 `supports`, 1 `partially-supports`, 1
+`does-not-support`, 2 `not-applicable`, and 120 `not-evaluated` rows: the
+thirteen findings, plus every criterion no finding covers.
 
 ## The status vocabulary
 
@@ -321,7 +334,7 @@ may ever reach:
 
 | Kind | Statuses | What it proves |
 |---|---|---|
-| passing | `met`, `human-reviewed` | The criterion is met. |
+| passing | `met`, `human-reviewed`, `standard-interpretation` | The criterion is met, or the standard says it always is for this content. |
 | failing | `failing`, `known-defect` | A defect keeps the criterion from being met. `failingShare` applies. |
 | unproven | `partly-tested`, `platform-limitation`, `incomplete`, `untested`, `unreviewed` | The criterion applies, but the evidence does not settle it yet. |
 | out-of-scope | `not-triggered`, `page-level` | The criterion is outside this component. |
@@ -332,6 +345,12 @@ What each status means:
   cover the whole criterion.
 - `human-reviewed`: a person reviewed the criterion and judged it met;
   automated tests only keep the reviewed content as approved.
+- `standard-interpretation`: the standard's own published interpretation
+  says the criterion is always satisfied for this kind of content, so no
+  test applies; the notes cite it. The case it exists for is WCAG 2.0 and
+  2.1 success criterion 4.1.1 Parsing on HTML: the W3C's errata say it is
+  always satisfied, WCAG 2.2 removed it, and a markup defect that affects
+  a relationship, a name, or a state belongs to the criterion it affects.
 - `failing`: an automated test for the criterion failed.
 - `known-defect`: a known, recorded defect keeps the criterion from being
   met (its test may be switched off until the fix lands).
@@ -359,6 +378,7 @@ adherence level and a note that opens the row's notes:
 |---|---|---|---|
 | `met` | passing | `supports` | Every test passed and they cover the criterion. |
 | `human-reviewed` | passing | `supports` | A person judged it met; see below. |
+| `standard-interpretation` | passing | `supports` | The standard itself says the criterion is satisfied for this content; see below. |
 | `failing` | failing | `partially-supports`; `does-not-support` with `failingShare: "all"` | OpenACR's own definitions: some functionality fails, or most of it does. |
 | `known-defect` | failing | `partially-supports`; `does-not-support` with `failingShare: "all"` | A known defect is still a defect; the issue is named in the notes. |
 | `partly-tested` | unproven | `not-evaluated` | The untested part could fail, so passing tests cannot support the whole criterion. |
@@ -400,6 +420,17 @@ Three mappings deserve their reasons:
   overstate the evidence. `not-evaluated` sends it to a person, who can
   test the gap by hand or decide the limitation is outside the product.
   A stricter caller may map it to `partially-supports`.
+- **`standard-interpretation` -> `supports`.** For 4.1.1 Parsing on
+  HTML, the W3C's errata to WCAG 2.0 and 2.1 say the criterion is always
+  satisfied, and WCAG 2.2 removed it; the US Access Board's ICT baseline
+  records the same reading. A test cannot add to that, and a markup check
+  that fails is not a 4.1.1 failure: when the bad markup breaks a
+  relationship, a name, or a state, the defect belongs to 1.3.1 or 4.1.2.
+  So the producer states the interpretation in the finding's `notes`,
+  which the contract requires, and may keep its markup findings there as
+  information. The note says the level rests on the standard's own
+  interpretation, not on a test. A 508 office that does not accept the
+  errata may override it to `not-evaluated`.
 
 `failingShare` defaults to `"some"`: a producer that sees only the pages,
 screens, or environments it was given cannot show a failure affects all

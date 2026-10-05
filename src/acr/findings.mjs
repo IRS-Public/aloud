@@ -147,6 +147,10 @@ function catalogProblems(input, index, catalogId) {
     if (finding.status === "known-defect" && !finding.issues) {
       problems.push(`${at}.issues: a known-defect finding must name the known issue`);
     }
+    // The interpretation is the whole evidence, so the finding must cite it.
+    if (finding.status === "standard-interpretation" && !finding.notes?.length) {
+      problems.push(`${at}.notes: a standard-interpretation finding must cite the interpretation it rests on`);
+    }
     // A known issue contradicts a pass or a "does not apply": the catalog
     // defines "supports" as met without known defects.
     const kind = STATUS_KINDS[finding.status];
