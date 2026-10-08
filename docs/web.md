@@ -73,6 +73,12 @@ instead of embedding credentials in `fill` steps.
 ## NVDA command capture
 
 NVDA is an experimental adapter with recorded Windows fixture acceptance below.
+The driver is also a library: `@irs-public/aloud/web/nvda` exports
+`startNvda`, `nvdaCommand` (`press`, `type` and Guidepup's cursor
+commands), `nvdaListen` (a letter, a digit or a named key sent through
+Windows inside one capture held open for a window of 1000 to 30000 ms),
+`nvdaPassNextKey` and `stopNvda`, which waits for nvda.exe to exit;
+the operating system is reached through an injectable `io`.
 Its validation applies to the recorded environment and scripted scenarios. Use
 a dedicated Windows test desktop. Aloud refuses to start if NVDA is already
 running, so Guidepup cannot replace an everyday screen-reader session. Setup modifies the

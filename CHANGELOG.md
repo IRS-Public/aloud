@@ -85,6 +85,18 @@ build drafts through one findings contract and one level policy.
 
 ### Added
 
+- **NVDA driver: the harness refinements.** `src/web/nvda.mjs` gains an
+  injectable `io` (tasklist, cscript, timers), `nvdaCommand` with `type`
+  and typed lone punctuation, `nvdaListen` (a key sent through Windows
+  inside one capture held open for a window), `nvdaPassNextKey`,
+  `windowsKeyScript`, `isTypedCharacter`, a `startNvda` that gives
+  Guidepup's start two attempts under a 30 second deadline each, with a
+  stop and the exit wait between them, and takes options for tests, and a
+  `stopNvda` that waits up to ten seconds for nvda.exe to exit, since the
+  next start refuses to replace a running NVDA. Ported from the USWDS
+  accessibility harness, which becomes a thin layer over these exports.
+  Unit tests in `test/web-nvda.test.mjs`.
+
 - **`standard-interpretation` finding status.** A passing status for a
   criterion the standard's own published interpretation says is always
   satisfied for the content: WCAG 2.0 and 2.1's 4.1.1 Parsing on HTML,
