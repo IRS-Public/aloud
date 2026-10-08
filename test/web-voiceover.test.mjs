@@ -8,7 +8,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
-  SETTLE, assertNativeDesktop, awaitQuiet, captureContext, hostRefusal, isTypedCharacter, matchingOwnedProcesses,
+  LATE_SPEECH_MS, SETTLE, assertNativeDesktop, awaitLateSpeech, awaitQuiet, captureContext, hostRefusal, isSilentCapture,
+  isTypedCharacter, matchingOwnedProcesses,
   parseVoiceOverProcesses, resetVoiceOverTimeoutForTests, VOICEOVER_COMMANDS, macosKeyScript, safariKey, settleVoiceOver,
   speechLog, startVoiceOver, stopOwnedVoiceOver, stopVoiceOver, voiceOverCommand, voiceOverListen, voiceOverPassNextKey,
   withAttempts,
@@ -263,6 +264,42 @@ test("each capture remembers its command, the speech its settle discarded and th
   assert.deepEqual(later, ["Save email, button"]);
   assert.equal(captureContext(later).cursor, "unavailable (AppleScript timed out)");
   assert.equal(captureContext(["not a capture"]), undefined);
+  await stopVoiceOver(reader);
+});
+
+test("a capture that only repeats the settled phrase waits for late speech", async () => {
+  const io = fakeIo({ phrases: ["Sojourner Truth, checked, checkbox"] });
+  const voiceOver = fakeVoiceOver({ io, log: ["Sojourner Truth, checked, checkbox"] });
+  const reader = await start(io, voiceOver);
+  // The settle leaves the Tab's announcement; Guidepup's capture of the Space
+  // repeats it; VoiceOver announces the new state a second after that.
+  const quietUntil = io.now() + SETTLE.quietMs + 1000;
+  io.lastPhrase = async () => (io.now() >= quietUntil ? "unchecked" : "Sojourner Truth, checked, checkbox");
+  const pressed = await voiceOverCommand(reader, "press", "Space", 1000);
+  assert.deepEqual(pressed, ["unchecked"]);
+  assert.deepEqual(captureContext(pressed).settled, ["Sojourner Truth, checked, checkbox"]);
+  // Nothing late: the capture stands, after the full wait.
+  io.lastPhrase = async () => "Sojourner Truth, checked, checkbox";
+  const before = io.now();
+  assert.deepEqual(await voiceOverCommand(reader, "press", "Space", 1000), ["Sojourner Truth, checked, checkbox"]);
+  assert.ok(io.now() - before >= SETTLE.quietMs + LATE_SPEECH_MS);
+  // A capture with its own speech never waits: the settle hears the old
+  // phrase, the Tab's capture the next checkbox.
+  voiceOver.log = ["Frederick Douglass, unchecked, checkbox"];
+  const logs = [["Sojourner Truth, checked, checkbox"]];
+  voiceOver.spokenPhraseLog = async () => logs.shift() ?? voiceOver.log;
+  io.lastPhrase = async () => "Frederick Douglass, unchecked, checkbox";
+  const settledAt = io.now();
+  assert.deepEqual(await voiceOverCommand(reader, "press", "Tab", 1000), ["Frederick Douglass, unchecked, checkbox"]);
+  assert.ok(io.now() - settledAt < SETTLE.quietMs + LATE_SPEECH_MS);
+  // A phrase that cannot be read leaves the capture alone.
+  voiceOver.log = ["Frederick Douglass, unchecked, checkbox"];
+  io.lastPhrase = async () => { throw new Error("AppleScript timed out"); };
+  assert.deepEqual(await voiceOverCommand(reader, "press", "Space", 1000), ["Frederick Douglass, unchecked, checkbox"]);
+  assert.deepEqual(await awaitLateSpeech({ now: io.now, sleep: io.sleep }, "x"), []);
+  assert.equal(isSilentCapture(["a"], []), false);
+  assert.equal(isSilentCapture(["a", "b"], ["a"]), false);
+  assert.equal(isSilentCapture(["a"], ["b", "a"]), true);
   await stopVoiceOver(reader);
 });
 

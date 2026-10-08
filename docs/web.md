@@ -169,6 +169,13 @@ changes what the evidence can say:
   System Events inside one capture held open that long. Only a letter, a
   digit, `Backspace`, `Enter`, or `Space` can be sent this way.
   `{ "action": "press", "key": "x", "listenMs": 2500, "expect": { "speechIncludes": "characters over" } }`
+- A capture that heard nothing within about 600 ms comes back from Guidepup
+  as the phrase the settle left. After such a capture Aloud keeps polling
+  VoiceOver's last phrase for three seconds and, once a new phrase arrives,
+  until a quiet second, and records the late speech alone, so an answer a
+  busy machine delays (a state VoiceOver announces after a Space) is not lost
+  to the next command. A command whose capture has its own speech never
+  waits.
 - A `press` of one character that is not a letter or a digit (`:`, `/`) is
   typed through VoiceOver instead of pressed: Guidepup's press has key codes
   for only a handful of punctuation and sends nothing for the rest.

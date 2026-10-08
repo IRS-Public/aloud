@@ -13,6 +13,14 @@ build drafts through one findings contract and one level policy.
 
 ### Behavior changes
 
+- **A silent VoiceOver capture waits for late speech.** When a command's
+  capture holds only the phrase its settle left, Guidepup's repeat of a
+  capture that heard nothing, `voiceOverCommand` polls VoiceOver's last
+  phrase for up to three seconds more and, once a new phrase arrives, until
+  a quiet second, and returns the late speech alone. Such a command takes up
+  to three seconds longer; a command whose capture has its own speech is
+  unchanged. New exports `LATE_SPEECH_MS`, `isSilentCapture` and
+  `awaitLateSpeech`.
 - **WCAG 2.5.8 target size is checked at its 24-unit minimum.** New error
   rules `native-target-size-minimum` (24dp) and `ios-target-size-minimum`
   (24pt) carry 2.5.8 and apply the spacing exception.
