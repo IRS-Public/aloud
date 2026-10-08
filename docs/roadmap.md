@@ -146,13 +146,14 @@ status kind so nothing can turn a failure or a gap into `supports`. See
 
 The [harness integration guide](harness-integration.md) documents an
 adapter from the USWDS accessibility harness's requirements report,
-tested against a fixture and a real report, and a release workflow that
-drafts one ACR per component.
+tested against a fixture and a real report. The harness keeps its own
+copy and drafts one ACR per component in its workflow, with aloud pinned
+by commit.
 
 Next steps:
 
-- Have the harness adopt the adapter in its own repository and pin the
-  action by commit; keep the status mapping in step with its report.
+- Keep the example adapter's status mapping in step with the harness's
+  report and its own copy.
 - Add web findings from `aloud web` once web evidence is validated and has
   a gating policy; until then web components stay `not-evaluated`.
 - Support more OpenACR catalogs (for example, the EN 301 549 editions)

@@ -32,6 +32,17 @@ const START_RETRY_PAUSE_MS = 5000;
 // phrase, or when reading it fails, a fixed wait is used instead.
 export const SETTLE = { quietMs: 1000, pollMs: 100, maxMs: 5000, fixedMs: 1500 };
 
+// Guidepup's capture polls VoiceOver's last phrase and, when nothing new has
+// been said after about 600 ms, records the phrase it already knew and
+// returns. So a command's log that holds only the phrase its settle left is
+// a capture that heard nothing, and an answer VoiceOver gives later, which a
+// busy hosted machine has done for a Space that toggled a checkbox, is lost
+// or lands in the next command's log. After such a capture the command keeps
+// polling the last phrase for LATE_SPEECH_MS and, once a new phrase arrives,
+// until a quiet second, and returns the late speech alone: the repeated
+// phrase was not spoken after the command.
+export const LATE_SPEECH_MS = 3000;
+
 // A timed-out Guidepup or AppleScript action cannot be cancelled. Once one
 // times out, this process never starts another reader or sends it commands.
 let timedOut = false;
@@ -208,6 +219,50 @@ export async function awaitQuiet(lastPhrase, { now, sleep }) {
   }
 }
 
+// True when `phrases`, a command's capture, is only the phrase the settle
+// before it left behind: Guidepup's repeat of a capture that heard nothing.
+export const isSilentCapture = (phrases, settled) =>
+  phrases.length === 1 && settled.length > 0 && phrases[0] === settled.at(-1);
+
+// VoiceOver's last phrase, or undefined when it cannot be read.
+async function currentPhrase(io) {
+  if (!io.lastPhrase) return undefined;
+  try {
+    return await io.lastPhrase();
+  } catch {
+    return undefined;
+  }
+}
+
+// After a silent capture, polls VoiceOver's last phrase for a change from
+// `baseline`, the phrase read before the command: up to LATE_SPEECH_MS for
+// the first new phrase, then until it has been quiet for SETTLE.quietMs, and
+// never past SETTLE.maxMs more. Returns the new phrases in order; [] when
+// none came, or when the baseline or a poll could not be read.
+export async function awaitLateSpeech({ lastPhrase, now, sleep }, baseline) {
+  if (!lastPhrase || baseline === undefined) return [];
+  const heard = [];
+  try {
+    let phrase = baseline;
+    const started = now();
+    let changed = started;
+    for (;;) {
+      const next = await lastPhrase();
+      if (next !== phrase) {
+        phrase = next;
+        changed = now();
+        if (text(next)) heard.push(next);
+      }
+      const limit = heard.length ? SETTLE.quietMs : LATE_SPEECH_MS;
+      if (now() - changed >= limit || now() - started >= LATE_SPEECH_MS + SETTLE.maxMs) break;
+      await sleep(SETTLE.pollMs);
+    }
+  } catch {
+    // The capture stands as Guidepup returned it.
+  }
+  return heard;
+}
+
 function session(reader) {
   const state = sessions.get(reader);
   if (!state) throw new Error("VoiceOver reader was not started by startVoiceOver");
@@ -354,6 +409,7 @@ export async function voiceOverCommand(reader, command, argument, timeoutMs) {
     throw new Error(`VoiceOver ${command} takes no argument`);
   }
   const settled = await settleVoiceOver(reader, timeoutMs);
+  const baseline = await currentPhrase(state.io);
   await reader.clearSpokenPhraseLog();
   const typed = command === "type" || (command === "press" && isTypedCharacter(argument));
   const sent = command === "press" && !typed ? safariKey(argument) : argument;
@@ -364,7 +420,12 @@ export async function voiceOverCommand(reader, command, argument, timeoutMs) {
       : reader[command]({ capture: true });
   await deadline(action, timeoutMs, `VoiceOver ${command}`, state);
   const label = typed ? `type ${JSON.stringify(argument)}` : command === "press" ? `press ${sent}` : command;
-  return recordContext(reader, speechLog(await reader.spokenPhraseLog()), label, settled);
+  let phrases = speechLog(await reader.spokenPhraseLog());
+  if (isSilentCapture(phrases, settled)) {
+    const late = await awaitLateSpeech(state.io, baseline);
+    if (late.length) phrases = late;
+  }
+  return recordContext(reader, phrases, label, settled);
 }
 
 // Press `key` through the operating system inside one capture that stays
