@@ -76,9 +76,9 @@ GitHub gives each step its own summary file and a later step cannot read
 the action's; `test/action.test.mjs` checks that table by running the
 action's build step locally.
 
-For a complete workflow (convert a test report into one findings file per
-component, draft each in a matrix job, and attach every draft to a GitHub
-release), see the
+For a complete workflow that converts a test report into one findings
+file per component and drafts each with `aloud acr` from a pinned
+checkout, see how the USWDS accessibility harness does it in the
 [harness integration guide](harness-integration.md#github-actions).
 
 ## Schedule triggers only fire from the default branch

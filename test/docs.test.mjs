@@ -109,6 +109,7 @@ describe("the USWDS harness adapter example", () => {
 
   it("maps exactly the harness statuses onto findings statuses", () => {
     assert.deepEqual(Object.keys(STATUS_MAP).sort(), [
+      "awaiting-review",
       "consumer-responsibility",
       "human-reviewed",
       "incomplete",
@@ -118,6 +119,7 @@ describe("the USWDS harness adapter example", () => {
       "not-triggered",
       "partly-tested",
       "platform-limitation",
+      "standard-interpretation",
       "unreviewed",
       "untested",
     ]);
@@ -133,7 +135,7 @@ describe("the USWDS harness adapter example", () => {
     assert.equal(findings.product.name, "USWDS date-picker");
     assert.equal(findings.product.version, "3.13.0");
     assert.equal(byCriterion.has("APG-RADIO"), false);
-    assert.equal(findings.findings.length, 12);
+    assert.equal(findings.findings.length, 16);
     for (const row of report.components[0].criteria.filter((r) => r.profile !== "project")) {
       assert.equal(byCriterion.get(row.criterion).status, STATUS_MAP[row.status], row.criterion);
     }
@@ -143,7 +145,7 @@ describe("the USWDS harness adapter example", () => {
     assert.equal(byCriterion.get("2.1.1").failingShare, "some");
     assert.equal(byCriterion.get("2.1.2").failingShare, "all");
     assert.equal(byCriterion.get("4.1.2").failingShare, "all");
-    for (const criterion of ["1.1.1", "1.4.11", "1.3.1"]) {
+    for (const criterion of ["1.1.1", "2.4.7", "1.3.1"]) {
       assert.equal(byCriterion.get(criterion).failingShare, undefined, criterion);
     }
   });
@@ -165,10 +167,37 @@ describe("the USWDS harness adapter example", () => {
     assert.deepEqual(finding.evidence[1], { id: "DP-S09" });
   });
 
-  it("maps human-reviewed rows to partly-tested, saying only the wording was reviewed", () => {
+  it("maps awaiting-review rows to partly-tested, saying the wording awaits a person", () => {
     const finding = byCriterion.get("3.3.2");
     assert.equal(finding.status, "partly-tested");
-    assert.match(finding.notes.at(-1), /keep wording a person approved; whether it is clear.*is not tested/);
+    assert.equal(finding.notes.at(-1), "The tests keep the wording as written; whether it is clear awaits a person's review");
+  });
+
+  it("maps human-reviewed rows to human-reviewed, naming the reviewer and their judgment", () => {
+    assert.deepEqual(byCriterion.get("3.3.1").notes, [
+      "Scope of the checks, not a result: Typing a date outside the allowed range marks the field invalid and names the range. Not tested: the message the browser shows for a date it cannot read.",
+      "Reviewed by octocat on 2026-09-29: The browser's message names the field and asks for a date in the format shown.",
+    ]);
+    // An older report used the status for approved wording alone, with no review.
+    const unrecorded = structuredClone(report);
+    delete unrecorded.components[0].criteria.find((r) => r.criterion === "3.3.1").review;
+    assert.throws(() => harnessToFindings(unrecorded), /3\.3\.1: a human-reviewed row needs the review it rests on/);
+  });
+
+  it("gives a shared row's site part its own note", () => {
+    assert.deepEqual(byCriterion.get("2.4.6").notes, [
+      "Scope of the checks, not a result: The label and hint are tied to the field.",
+      "Left to each site: a label that names the date its own form asks for.",
+    ]);
+  });
+
+  it("notes a feature an environment lacks, without counting it as evidence or an issue", () => {
+    const finding = byCriterion.get("1.4.11");
+    assert.equal(finding.status, "met");
+    // A summary the registry does not have falls back to the issue's name.
+    assert.deepEqual(finding.notes, ["Not applicable in webkit: WEBKIT-FORCED-COLORS"]);
+    assert.deepEqual(finding.evidence, [{ id: "DP-FC01", environments: ["chromium", "firefox"] }]);
+    assert.equal(finding.issues, undefined);
   });
 
   it("labels a scope statement so the draft never states it as a result", () => {
@@ -176,6 +205,14 @@ describe("the USWDS harness adapter example", () => {
     // Triage reasons for rows no check can fail stay as written.
     assert.deepEqual(byCriterion.get("1.2.2").notes, ["The date picker has no video."]);
     assert.deepEqual(byCriterion.get("2.4.2").notes, ["Every page needs a title."]);
+    // A standard-interpretation row's reason is its citation, copied as written.
+    const interpreted = byCriterion.get("4.1.1");
+    assert.equal(interpreted.status, "standard-interpretation");
+    assert.deepEqual(interpreted.notes, [report.components[0].criteria.find((r) => r.criterion === "4.1.1").reason]);
+    assert.equal(interpreted.evidence, undefined);
+    const uncited = structuredClone(report);
+    uncited.components[0].criteria.find((r) => r.criterion === "4.1.1").reason = "";
+    assert.throws(() => harnessToFindings(uncited), /4\.1\.1: a standard-interpretation row needs a reason/);
   });
 
   it("carries issues, notes, evidence, and provenance", () => {
@@ -183,7 +220,7 @@ describe("the USWDS harness adapter example", () => {
       { id: "DP-EXPANDED-STATE", kind: "core-bug", summary: "The calendar toggle does not say whether it is open." },
     ]);
     // An issue the registry does not know still names itself.
-    assert.match(byCriterion.get("1.4.11").issues[0].summary, /Known issue WEBKIT-FORCED-COLORS/);
+    assert.match(byCriterion.get("2.4.7").issues[0].summary, /Known issue DP-WEBKIT-FOCUS-RING/);
     assert.deepEqual(byCriterion.get("2.1.1").notes, [
       "Scope of the checks, not a result: Every control works from the keyboard.",
       "Failing checks: DP-K03 (passed only in chromium)",
@@ -217,10 +254,14 @@ describe("the USWDS harness adapter example", () => {
         .find((entry) => entry.num === criterion).components[0].adherence.level;
     assert.equal(level("1.1.1"), "supports");
     assert.equal(level("3.3.2"), "not-evaluated");
+    assert.equal(level("3.3.1"), "supports");
+    assert.equal(level("2.4.6"), "supports");
     assert.equal(level("2.1.1"), "partially-supports");
     assert.equal(level("2.1.2"), "does-not-support");
-    assert.equal(level("1.4.11"), "not-evaluated");
+    assert.equal(level("1.4.11"), "supports");
+    assert.equal(level("2.4.7"), "not-evaluated");
     assert.equal(level("2.4.2"), "not-applicable");
+    assert.equal(level("4.1.1"), "supports");
   });
 
   it("refuses unknown statuses and profiles, runs with unhandled errors, and known-bug runs", () => {
@@ -260,7 +301,7 @@ describe("the harness adapter from the command line", () => {
 
   it("writes findings that aloud acr turns into a draft", () => {
     const registry = join(dir, "known-issues.mjs");
-    writeFileSync(registry, 'export const knownIssues = [{ name: "WEBKIT-FORCED-COLORS", kind: "platform-gap", summary: "Safari has no high-contrast mode." }];\n');
+    writeFileSync(registry, 'export const knownIssues = [{ name: "WEBKIT-FORCED-COLORS", kind: "absent-feature", summary: "Safari has no high-contrast mode." }];\n');
     const env = { PATH: process.env.PATH, USWDS_VERSION: "3.13.0" };
     const out = join(dir, "findings");
     const adapter = spawnSync(process.execPath, [join(ROOT, ADAPTER), join(ROOT, HARNESS_REPORT), out, registry], {
@@ -271,7 +312,7 @@ describe("the harness adapter from the command line", () => {
     assert.deepEqual(readdirSync(out), ["date-picker.json"]);
     const written = JSON.parse(readFileSync(join(out, "date-picker.json"), "utf8"));
     assert.equal(written.product.version, "3.13.0");
-    assert.equal(written.findings.find((f) => f.criterion === "1.4.11").issues[0].summary, "Safari has no high-contrast mode.");
+    assert.ok(written.findings.find((f) => f.criterion === "1.4.11").notes.includes("Not applicable in webkit: Safari has no high-contrast mode."));
 
     const draft = join(dir, "acr.yaml");
     const acr = spawnSync(process.execPath, [join(ROOT, "bin/aloud.mjs"), "acr", "--findings", join(out, "date-picker.json"), "--out", draft], {

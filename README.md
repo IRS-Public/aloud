@@ -313,8 +313,8 @@ the `aloud acr` action in this repository, pinned to a commit:
 It adds a count of the draft's conformance levels to the job summary. See
 [docs/ci.md](docs/ci.md#draft-an-openacr-with-the-github-action), and the
 [harness integration guide](docs/harness-integration.md#github-actions)
-for a workflow that drafts one ACR per component and attaches them to a
-release.
+for how the USWDS accessibility harness drafts one ACR per component in
+its own workflow.
 
 The repository's [browser acceptance workflow](.github/workflows/web.yml)
 runs Chromium fixtures on relevant pull requests. Manual dispatch adds the
