@@ -68,6 +68,8 @@
               "skippedIn": [],
               "blockedIn": [],
               "issues": [],
+              "absentIn": [],
+              "absentFeatures": [],
               "failures": []
             },
             {
@@ -104,10 +106,63 @@
               "skippedIn": [],
               "blockedIn": [],
               "issues": [],
+              "absentIn": [],
+              "absentFeatures": [],
               "failures": []
             }
           ],
           "reason": "The icon-only calendar toggle has an accessible name.",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "2.4.6",
+          "name": "Headings and Labels",
+          "summary": null,
+          "profile": "section508",
+          "scope": "component",
+          "coverage": "shared",
+          "status": "met",
+          "checks": [
+            {
+              "id": "DP-L01",
+              "title": "Check DP-L01",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "passing",
+              "passed": 3,
+              "failed": 0,
+              "skipped": 0,
+              "environments": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "passedIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "reviewedCopy": false,
+              "declaredIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "missingIn": [],
+              "skippedIn": [],
+              "blockedIn": [],
+              "issues": [],
+              "absentIn": [],
+              "absentFeatures": [],
+              "failures": []
+            }
+          ],
+          "reason": "The label and hint are tied to the field. Left to each site: a label that names the date its own form asks for.",
           "sourceUrl": "https://www.w3.org/TR/WCAG22/"
         },
         {
@@ -117,7 +172,7 @@
           "profile": "section508",
           "scope": "component",
           "coverage": "full",
-          "status": "human-reviewed",
+          "status": "awaiting-review",
           "checks": [
             {
               "id": "DP-C01",
@@ -153,11 +208,69 @@
               "skippedIn": [],
               "blockedIn": [],
               "issues": [],
+              "absentIn": [],
+              "absentFeatures": [],
               "failures": []
             }
           ],
-          "reason": "The label and hint keep the approved wording.",
+          "reason": "The label and hint keep the shipped wording.",
           "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "3.3.1",
+          "name": "Error Identification",
+          "summary": null,
+          "profile": "section508",
+          "scope": "component",
+          "coverage": "partial",
+          "status": "human-reviewed",
+          "checks": [
+            {
+              "id": "DP-E01",
+              "title": "Check DP-E01",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "passing",
+              "passed": 3,
+              "failed": 0,
+              "skipped": 0,
+              "environments": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "passedIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "reviewedCopy": false,
+              "declaredIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "missingIn": [],
+              "skippedIn": [],
+              "blockedIn": [],
+              "issues": [],
+              "absentIn": [],
+              "absentFeatures": [],
+              "failures": []
+            }
+          ],
+          "reason": "Typing a date outside the allowed range marks the field invalid and names the range. Not tested: the message the browser shows for a date it cannot read.",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/",
+          "review": {
+            "reviewer": "octocat",
+            "date": "2026-09-29",
+            "judgment": "The browser's message names the field and asks for a date in the format shown."
+          }
         },
         {
           "criterion": "1.4.10",
@@ -202,6 +315,8 @@
               "skippedIn": [],
               "blockedIn": [],
               "issues": [],
+              "absentIn": [],
+              "absentFeatures": [],
               "failures": []
             }
           ],
@@ -251,6 +366,8 @@
               "skippedIn": [],
               "blockedIn": [],
               "issues": [],
+              "absentIn": [],
+              "absentFeatures": [],
               "failures": []
             },
             {
@@ -286,6 +403,8 @@
               "skippedIn": [],
               "blockedIn": [],
               "issues": [],
+              "absentIn": [],
+              "absentFeatures": [],
               "failures": [
                 "firefox: opens with Enter"
               ]
@@ -333,6 +452,8 @@
               "skippedIn": [],
               "blockedIn": [],
               "issues": [],
+              "absentIn": [],
+              "absentFeatures": [],
               "failures": [
                 "chromium: Escape closes",
                 "firefox: Escape closes",
@@ -388,6 +509,8 @@
               "issues": [
                 "DP-EXPANDED-STATE"
               ],
+              "absentIn": [],
+              "absentFeatures": [],
               "failures": []
             }
           ],
@@ -401,11 +524,101 @@
           "profile": "additional-wcag21",
           "scope": "component",
           "coverage": "full",
-          "status": "platform-limitation",
+          "status": "met",
           "checks": [
             {
               "id": "DP-FC01",
               "title": "Check DP-FC01",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "passing",
+              "passed": 2,
+              "failed": 0,
+              "skipped": 0,
+              "environments": [
+                "chromium",
+                "firefox"
+              ],
+              "passedIn": [
+                "chromium",
+                "firefox"
+              ],
+              "reviewedCopy": false,
+              "declaredIn": [
+                "chromium",
+                "firefox"
+              ],
+              "missingIn": [],
+              "skippedIn": [],
+              "blockedIn": [],
+              "issues": [],
+              "absentIn": [
+                "webkit"
+              ],
+              "absentFeatures": [
+                "WEBKIT-FORCED-COLORS"
+              ],
+              "failures": []
+            }
+          ],
+          "reason": "",
+          "sourceUrl": "https://www.w3.org/TR/WCAG22/"
+        },
+        {
+          "criterion": "2.4.7",
+          "name": "Focus Visible",
+          "summary": null,
+          "profile": "section508",
+          "scope": "component",
+          "coverage": "full",
+          "status": "platform-limitation",
+          "checks": [
+            {
+              "id": "DP-V01",
+              "title": "Check DP-V01",
+              "testCount": 1,
+              "tests": [
+                {
+                  "file": "testing/components/usa-date-picker/example.test.mjs",
+                  "line": 10
+                }
+              ],
+              "status": "passing",
+              "passed": 3,
+              "failed": 0,
+              "skipped": 0,
+              "environments": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "passedIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "reviewedCopy": false,
+              "declaredIn": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "missingIn": [],
+              "skippedIn": [],
+              "blockedIn": [],
+              "issues": [],
+              "absentIn": [],
+              "absentFeatures": [],
+              "failures": []
+            },
+            {
+              "id": "DP-V02",
+              "title": "Check DP-V02",
               "testCount": 1,
               "tests": [
                 {
@@ -438,8 +651,10 @@
                 "webkit"
               ],
               "issues": [
-                "WEBKIT-FORCED-COLORS"
+                "DP-WEBKIT-FOCUS-RING"
               ],
+              "absentIn": [],
+              "absentFeatures": [],
               "failures": []
             }
           ],
@@ -488,6 +703,8 @@
               "skippedIn": [],
               "blockedIn": [],
               "issues": [],
+              "absentIn": [],
+              "absentFeatures": [],
               "failures": []
             }
           ],
@@ -543,6 +760,18 @@
           "sourceUrl": "https://www.w3.org/TR/WCAG22/"
         },
         {
+          "criterion": "4.1.1",
+          "name": "Parsing",
+          "summary": null,
+          "profile": "section508",
+          "scope": "standard-interpretation",
+          "coverage": "full",
+          "status": "standard-interpretation",
+          "checks": [],
+          "reason": "The standard's own errata say 4.1.1 Parsing is always satisfied for HTML content, and the Access Board's ICT Testing Baseline (test 24.A) requires no parsing test, so this row rests on that interpretation.",
+          "sourceUrl": "https://www.w3.org/TR/2008/REC-WCAG20-20081211/"
+        },
+        {
           "criterion": "APG-RADIO",
           "name": "Radio group pattern",
           "summary": null,
@@ -585,6 +814,8 @@
               "skippedIn": [],
               "blockedIn": [],
               "issues": [],
+              "absentIn": [],
+              "absentFeatures": [],
               "failures": []
             }
           ],

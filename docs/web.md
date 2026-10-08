@@ -117,9 +117,12 @@ desktop. Firefox, JAWS, and mobile browsers are not part of this milestone.
 
 `--screen-reader voiceover` (or `web.screenReader: "voiceover"`) runs the
 same scenarios in Safari with macOS VoiceOver, through Guidepup 0.34.0. It is
-ported from the USWDS accessibility harness's native driver and is
-**unvalidated**: the [web VoiceOver workflow](../.github/workflows/web-voiceover.yml)
-exists, but no hosted run has been reviewed yet.
+ported from the USWDS accessibility harness's native driver. The
+[web VoiceOver workflow](../.github/workflows/web-voiceover.yml) ran green on
+a hosted macOS runner for the pull request that brought the harness's
+refinements (#46), and since 2026-10-06 the harness drives all 47 of its
+VoiceOver suites through this driver on hosted runners; the fixture smoke
+below is the validation this repository holds itself.
 
 Starting VoiceOver changes the machine's accessibility settings, so Aloud
 refuses to run it on a developer's Mac. It requires macOS and all of
@@ -207,8 +210,8 @@ discarded, and the item under the VoiceOver cursor when it ended, for
 failure messages that say more than the words heard. `hostRefusal` names a
 machine that refuses Apple events, on which startup stops after one attempt.
 The NVDA driver is at `@irs-public/aloud/web/nvda`. The USWDS accessibility
-harness already imports the NVDA driver and its dependency pins from a
-pinned aloud checkout; see [the harness integration guide](harness-integration.md).
+harness imports both drivers, the Safari helpers and the dependency pins
+from a pinned aloud checkout; see [the harness integration guide](harness-integration.md).
 
 ## Evidence and re-aggregation
 

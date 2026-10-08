@@ -15,9 +15,11 @@ import { pathToFileURL } from "node:url";
 // Harness criterion status -> findings status. Anything else throws.
 export const STATUS_MAP = Object.freeze({
   met: "met",
-  // The harness's "human-reviewed" means the tests keep wording a person
-  // approved; nobody judged the whole criterion met, so a person reviews it.
-  "human-reviewed": "partly-tested",
+  // A named person recorded, in the component's reviews.csv, a judgment of
+  // what the checks cannot settle; the note names them and what they found.
+  "human-reviewed": "human-reviewed",
+  // The checks keep wording nobody has judged yet, so a person decides.
+  "awaiting-review": "partly-tested",
   "partly-tested": "partly-tested",
   "not-met": "failing",
   "not-met-known-issue": "known-defect",
@@ -27,6 +29,9 @@ export const STATUS_MAP = Object.freeze({
   unreviewed: "unreviewed",
   "consumer-responsibility": "page-level",
   "not-triggered": "not-triggered",
+  // The standard's own interpretation satisfies the row; the harness's reason
+  // cites it, and no check is counted.
+  "standard-interpretation": "standard-interpretation",
 });
 
 // WCAG rows are in the OpenACR catalog. "project" rows (USWDS's own
@@ -55,9 +60,22 @@ const passedWhere = ({ passedIn }) => (passedIn.length ? `passed only in ${passe
 const TRIAGED = new Set(["not-triggered", "consumer-responsibility", "unreviewed"]);
 const reasonNote = (row) => (TRIAGED.has(row.status) ? row.reason : `Scope of the checks, not a result: ${row.reason}`);
 
+// A "shared" row's reason ends with what each site writes and checks itself,
+// which is the site's part, not a scope the checks cover: its own note.
+const SITE_CONTENT = "Left to each site: ";
+const reasonNotes = (row) => {
+  const at = row.coverage === "shared" ? row.reason.indexOf(SITE_CONTENT) : -1;
+  if (at < 0) return [reasonNote(row)];
+  return [reasonNote({ ...row, reason: row.reason.slice(0, at).trim() }), row.reason.slice(at).trim()];
+};
+
 function toFinding(row, issuesByName) {
   const status = STATUS_MAP[row.status];
   if (!status) throw new Error(`${row.criterion}: unknown harness status "${row.status}"`);
+  if (status === "standard-interpretation") {
+    if (!row.reason) throw new Error(`${row.criterion}: a standard-interpretation row needs a reason that cites the interpretation`);
+    return { criterion: row.criterion, component: "web", status, notes: [row.reason] };
+  }
   const finding = { criterion: row.criterion, component: "web", status };
   if (status === "failing" || status === "known-defect") finding.failingShare = failingShare(row.checks);
   const names = [...new Set(row.checks.flatMap((check) => check.issues))];
@@ -68,9 +86,16 @@ function toFinding(row, issuesByName) {
       return known?.kind ? { id, kind: known.kind, summary } : { id, summary };
     });
   }
-  const notes = row.reason ? [reasonNote(row)] : [];
+  // Older harness reports used "human-reviewed" for approved wording alone.
+  if (row.status === "human-reviewed" && !row.review) {
+    throw new Error(`${row.criterion}: a human-reviewed row needs the review it rests on`);
+  }
+  const notes = row.reason ? reasonNotes(row) : [];
+  if (row.status === "awaiting-review") {
+    notes.push("The tests keep the wording as written; whether it is clear awaits a person's review");
+  }
   if (row.status === "human-reviewed") {
-    notes.push("The tests keep wording a person approved; whether it is clear, and the rest of the criterion, is not tested");
+    notes.push(`Reviewed by ${row.review.reviewer} on ${row.review.date}: ${row.review.judgment}`);
   }
   const failing = row.checks.filter((check) => check.status === "failing");
   if (failing.length) {
@@ -78,6 +103,12 @@ function toFinding(row, issuesByName) {
   }
   const missing = [...new Set(row.checks.flatMap((check) => [...check.missingIn, ...check.skippedIn]))];
   if (missing.length) notes.push(`Some tests did not run in: ${missing.join(", ")}`);
+  // A feature an environment does not have, such as high contrast in Safari,
+  // leaves its tests nothing to verify there; those results are not evidence.
+  for (const id of new Set(row.checks.flatMap((check) => check.absentFeatures ?? []))) {
+    const where = new Set(row.checks.filter((check) => check.absentFeatures?.includes(id)).flatMap((check) => check.absentIn));
+    notes.push(`Not applicable in ${[...where].join(", ")}: ${issuesByName.get(id)?.summary ?? id}`);
+  }
   if (notes.length) finding.notes = notes;
   // Each check is evidence; environments lists where its tests ran.
   if (row.checks.length) {

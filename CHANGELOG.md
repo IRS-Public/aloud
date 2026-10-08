@@ -85,6 +85,28 @@ build drafts through one findings contract and one level policy.
 
 ### Added
 
+- **Harness guide: current report statuses and integration.** The example
+  adapter (`examples/harness-to-findings.example.mjs`), the status table
+  in `docs/harness-integration.md` and the harness fixture follow the USWDS
+  harness's report as it now is. `standard-interpretation`, a row the
+  standard's own published interpretation satisfies (4.1.1 Parsing for
+  HTML), maps to the finding status of the same name with the row's reason
+  as its citation. `human-reviewed` now means a person recorded a review
+  in the component's `reviews.csv`, so it maps to `human-reviewed` with a
+  "Reviewed by" note naming the reviewer, the date and their judgment, and
+  a row without its review throws. The new `awaiting-review` (wording the
+  tests keep, not yet judged) maps to `partly-tested` with a note that it
+  awaits a person's review. A `shared` row's "Left to each site" clause
+  becomes its own note, and a check skipped where a feature does not exist
+  (an `absent-feature` known issue, such as high contrast in Safari) gets
+  a "Not applicable in" note instead of a finding issue. The guide also
+  describes the harness's integration as it is: its own two-argument copy
+  of the adapter, and its report job, which drafts every run with known
+  bugs off with `aloud acr` at the commit its screen reader jobs pin and
+  keeps the drafts only from full runs, in place of the proposed matrix
+  and release jobs. It records that the harness now imports the Safari and
+  VoiceOver driver, and `docs/web.md` records that driver's hosted
+  validation.
 - **`standard-interpretation` finding status.** A passing status for a
   criterion the standard's own published interpretation says is always
   satisfied for the content: WCAG 2.0 and 2.1's 4.1.1 Parsing on HTML,
@@ -140,7 +162,8 @@ build drafts through one findings contract and one level policy.
   guarantees, and a checklist for finishing a draft.
   [docs/harness-integration.md](docs/harness-integration.md) maps the USWDS
   accessibility harness's report onto findings, with a tested adapter
-  (`examples/harness-to-findings.example.mjs`) and a release workflow.
+  (`examples/harness-to-findings.example.mjs`), and describes how the
+  harness drafts with it.
   `examples/findings.example.json` uses every field and status; tests keep
   the examples, the docs' tables, and every relative link in step.
 
