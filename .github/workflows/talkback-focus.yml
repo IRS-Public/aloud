@@ -84,7 +84,7 @@ jobs:
         run: node test/android-tts-smoke.mjs
       - name: Check TTS queue accounting and process recovery
         run: node test/android-tts-engine-smoke.mjs
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: talkback-focus-evidence
