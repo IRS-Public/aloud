@@ -1,7 +1,7 @@
 // Run only on a disposable GitHub-hosted macOS runner after Guidepup setup
 // (.github/workflows/web-voiceover.yml). Actual command logs, including
-// failed captures, remain available as CI artifacts. Not yet validated on a
-// hosted runner: treat a first pass as evidence to review, not acceptance.
+// failed captures, remain available as CI artifacts. Hosted fixture runs have
+// passed; each run remains evidence to review, not a conformance decision.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";

@@ -20,7 +20,7 @@ web checks run without a screen reader by default.
   `--voiceover real --no-gate` and labels traversal as partial.
 - **Web (experimental)**: Chromium page checks, screenshots, and structural
   snapshots, with an opt-in NVDA command-capture adapter for Windows and an
-  unvalidated Safari + VoiceOver adapter for disposable GitHub-hosted macOS
+  opt-in Safari + VoiceOver adapter validated on disposable GitHub-hosted macOS
   runners. Web evidence is report-only. [Setup and validation status](docs/web.md).
 
 Around the capture:
@@ -230,6 +230,12 @@ generating speech. Use the [web config](examples/aloud.web.config.example.json)
 and [scenario manifest](examples/screens-web.example.json) to capture named
 page states and assert keyboard focus.
 
+| Mode | Operating system | Browser | Captured screen-reader output |
+| --- | --- | --- | --- |
+| Default structural audit | macOS, Windows, or Linux | Chromium | None |
+| `--screen-reader nvda` | Windows | Chromium | NVDA through Guidepup |
+| `--screen-reader voiceover` | macOS | Safari | VoiceOver through Guidepup |
+
 On a dedicated Windows desktop, `--screen-reader nvda` adds Guidepup-formatted
 NVDA command output and speech assertions. Follow the
 [NVDA setup instructions](docs/web.md#nvda-command-capture) first. Chromium
@@ -238,8 +244,9 @@ including NVDA on Windows; [recorded results and limits](docs/web.md#validation-
 describe the tested scope.
 
 `--screen-reader voiceover` drives Safari and VoiceOver instead. It runs only
-on a disposable GitHub-hosted macOS runner that opts in, and has not yet
-passed a hosted run; see [VoiceOver command capture](docs/web.md#voiceover-command-capture-safari).
+on a disposable GitHub-hosted macOS runner that opts in. Its hosted fixture
+workflow has passed repeatedly; see
+[VoiceOver command capture](docs/web.md#voiceover-command-capture-safari).
 
 Web evidence is **report-only**: browser baselines and regression gates are
 disabled, and every web OpenACR component remains `not-evaluated`.

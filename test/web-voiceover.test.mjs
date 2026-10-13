@@ -88,7 +88,10 @@ const start = (io, voiceOver) => startVoiceOver({ env: HOSTED, platform: "darwin
 
 test("VoiceOver refuses anything but an opted-in, GitHub-hosted macOS runner", () => {
   assert.throws(() => assertNativeDesktop({ env: HOSTED, platform: "linux" }), /requires macOS/);
-  assert.throws(() => assertNativeDesktop({ env: {}, platform: "darwin" }), /disposable GitHub-hosted/);
+  assert.throws(
+    () => assertNativeDesktop({ env: {}, platform: "darwin" }),
+    /Experimental web VoiceOver evidence workflow by manual dispatch/,
+  );
   for (const key of Object.keys(HOSTED)) {
     assert.throws(() => assertNativeDesktop({ env: { ...HOSTED, [key]: "0" }, platform: "darwin" }), /ALOUD_ALLOW_NATIVE_DESKTOP=1/);
   }

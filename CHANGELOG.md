@@ -165,9 +165,9 @@ build drafts through one findings contract and one level policy.
 - **Experimental Safari + VoiceOver web driver**
   (`aloud web --screen-reader voiceover`, `src/web/voiceover.mjs`,
   `src/web/safari.mjs`), parallel to the NVDA driver. It runs only on a
-  disposable GitHub-hosted macOS runner that opts in, and has not yet
-  passed a hosted run. `dependencies.mjs` gains `axeCoreSource`. The driver
-  carries the USWDS harness's failure context (`captureContext`: the
+  disposable GitHub-hosted macOS runner that opts in; its hosted fixture
+  workflow has passed repeatedly. `dependencies.mjs` gains `axeCoreSource`.
+  The driver carries the USWDS harness's failure context (`captureContext`: the
   command, the speech its settle discarded, the cursor item), types a lone
   punctuation character through the reader, can tell VoiceOver to pass the
   next key to Safari (`voiceOverPassNextKey`), lets a settle run an action
