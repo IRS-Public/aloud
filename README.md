@@ -230,11 +230,11 @@ generating speech. Use the [web config](examples/aloud.web.config.example.json)
 and [scenario manifest](examples/screens-web.example.json) to capture named
 page states and assert keyboard focus.
 
-| Mode | Operating system | Browser | Captured screen-reader output |
+| Mode | Runs on | Browser | Captured screen-reader output |
 | --- | --- | --- | --- |
 | Default structural audit | macOS, Windows, or Linux | Chromium | None |
-| `--screen-reader nvda` | Windows | Chromium | NVDA through Guidepup |
-| `--screen-reader voiceover` | macOS | Safari | VoiceOver through Guidepup |
+| `--screen-reader nvda` | Dedicated Windows desktop | Chromium | NVDA through Guidepup |
+| `--screen-reader voiceover` | Disposable GitHub-hosted macOS runner (opt-in) | Safari | VoiceOver through Guidepup |
 
 On a dedicated Windows desktop, `--screen-reader nvda` adds Guidepup-formatted
 NVDA command output and speech assertions. Follow the

@@ -4,7 +4,8 @@
 HTML evidence page. Opt-in NVDA capture adds command output and interaction
 assertions on a dedicated Windows desktop. Opt-in VoiceOver capture drives
 Safari on a disposable GitHub-hosted macOS runner. Its hosted fixture workflow
-has passed repeatedly, including the driver-refinement and late-speech changes.
+has passed repeatedly, including on the driver refinements (#46) and the
+late-speech fix (#47).
 This milestone is **report-only**:
 there is no browser baseline or regression gate yet. Every web component in
 the OpenACR draft remains `not-evaluated`.
@@ -152,11 +153,13 @@ defaults write NSGlobalDomain AppleKeyboardUIMode -int 2
 ALOUD_ALLOW_NATIVE_DESKTOP=1 npx aloud web --url http://127.0.0.1:3000 --screen-reader voiceover
 ```
 
-This is the supported macOS speech-capture path; NVDA is not required. From
-the repository's Actions page, the **Experimental web VoiceOver evidence**
-workflow can also be dispatched manually. The default structural audit remains
-available on a developer Mac with `--screen-reader none` and does not start
-VoiceOver.
+These commands belong in a workflow step: GitHub sets `GITHUB_ACTIONS` and
+`RUNNER_ENVIRONMENT` on its hosted runners, so the last command is refused
+anywhere else. The [web VoiceOver workflow](../.github/workflows/web-voiceover.yml)
+is a working example; it runs this repository's fixture smoke rather than a
+URL of yours, and maintainers can also dispatch it from the Actions page. On a
+developer's Mac, `--screen-reader none` (the default) runs the structural
+audit without starting VoiceOver.
 
 Safari WebDriver blocks native keys, so Aloud does not use Playwright here.
 It opens its own Safari window and observes it through Apple Events. That
