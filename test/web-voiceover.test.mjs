@@ -297,6 +297,15 @@ test("a capture that only repeats the settled phrase waits for late speech", asy
   io.lastPhrase = async () => { throw new Error("AppleScript timed out"); };
   assert.deepEqual(await voiceOverCommand(reader, "press", "Space", 1000), ["Frederick Douglass, unchecked, checkbox"]);
   assert.deepEqual(await awaitLateSpeech({ now: io.now, sleep: io.sleep }, "x"), []);
+  // Late phrases are cleaned as Guidepup cleans its captures: AppleScript's
+  // "missing value" is no speech.
+  const lateIo = (phrases) => ({ ...fakeClock(), lastPhrase: async () => phrases.shift() ?? phrases.last });
+  const missing = ["missing value"];
+  missing.last = "missing value";
+  assert.deepEqual(await awaitLateSpeech(lateIo(missing), "Sojourner Truth, checked, checkbox"), []);
+  const spaced = ["  unchecked,   checkbox ", "Press @VOModifier()-Space"];
+  spaced.last = "Press @VOModifier()-Space";
+  assert.deepEqual(await awaitLateSpeech(lateIo(spaced), "Sojourner Truth"), ["unchecked, checkbox", "Press Control-Option-Space"]);
   assert.equal(isSilentCapture(["a"], []), false);
   assert.equal(isSilentCapture(["a", "b"], ["a"]), false);
   assert.equal(isSilentCapture(["a"], ["b", "a"]), true);
@@ -346,6 +355,48 @@ test("a machine that refuses Apple events stops startup after one attempt", asyn
   assert.equal(error.unavailable, "this machine refuses Apple events to System Events");
   assert.equal(voiceOver.calls.filter(([name]) => name === "start").length, 1);
   assert.deepEqual(io.slept, []);
+  // Guidepup 0.34.0 rethrows every failed start as "VoiceOver cannot be
+  // started", with the refusal in its causes.
+  const wrapped = fakeVoiceOver({ io });
+  wrapped.start = async (options) => {
+    wrapped.calls.push(["start", options]);
+    const refusal = new Error("Failed to activate VoiceOver\nexecution error: Not authorized to send Apple events to VoiceOver. (-1743)");
+    throw new Error("VoiceOver cannot be started", { cause: refusal });
+  };
+  const caused = await start(io, wrapped).catch((e) => e);
+  assert.equal(caused.unavailable, "this machine refuses Apple events to System Events");
+  assert.match(caused.message, /VoiceOver cannot be started: Failed to activate VoiceOver\nexecution error: Not authorized/);
+  assert.equal(wrapped.calls.filter(([name]) => name === "start").length, 1);
+  assert.deepEqual(io.slept, []);
+});
+
+test("a failed VoiceOver start reports the causes Guidepup wraps", async () => {
+  const io = fakeIo();
+  const voiceOver = fakeVoiceOver({ io });
+  voiceOver.start = async () => { throw new Error("VoiceOver cannot be started", { cause: new Error("Timed out waiting for VoiceOver to start") }); };
+  const error = await start(io, voiceOver).catch((e) => e);
+  assert.equal(error.unavailable, undefined);
+  assert.equal(error.errors.length, 2);
+  assert.match(error.message, /^VoiceOver did not start: VoiceOver cannot be started: Timed out waiting for VoiceOver to start; VoiceOver cannot be started: Timed out/);
+});
+
+test("a started VoiceOver whose processes cannot be listed is stopped, not left running", async () => {
+  const io = fakeIo();
+  const voiceOver = fakeVoiceOver({ io });
+  // Two listings refuse an existing session; the third follows the start.
+  let listings = 0;
+  const list = io.voiceOverProcesses;
+  io.voiceOverProcesses = async () => { if (++listings === 3) throw new Error("ps timed out"); return list(); };
+  await assert.rejects(start(io, voiceOver), /^Error: ps timed out$/);
+  assert.deepEqual(voiceOver.calls.map(([name]) => name), ["start", "stop"]);
+  assert.equal(io.table.size, 0);
+  await assert.rejects(voiceOverCommand(voiceOver, "next", undefined, 1000), /not started by startVoiceOver/);
+  // A stop that fails as well is reported with the listing failure.
+  listings = 0;
+  voiceOver.stop = async () => { throw new Error("AppleScript refused"); };
+  const both = await start(io, voiceOver).catch((e) => e);
+  assert.ok(both instanceof AggregateError);
+  assert.match(both.message, /ps timed out; cleanup after startup also failed/);
 });
 
 test("a timed-out VoiceOver command is never retried and blocks further readers", async () => {

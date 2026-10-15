@@ -78,7 +78,16 @@ The driver is also a library: `@irs-public/aloud/web/nvda` exports
 commands), `nvdaListen` (a letter, a digit or a named key sent through
 Windows inside one capture held open for a window of 1000 to 30000 ms),
 `nvdaPassNextKey` and `stopNvda`, which waits for nvda.exe to exit;
-the operating system is reached through an injectable `io`.
+the operating system is reached through an injectable `io`. `startNvda`
+gives Guidepup's start two attempts of up to a minute each (`timeoutMs`),
+long enough for Guidepup's own two 30-second waits for nvda.exe. Guidepup
+refuses another start, and a stop, while one is pending, so a start that
+misses its deadline gets 15 more seconds to settle (`settleMs`); one still
+pending then ends startup with an error. Every failed attempt, the last
+included, is stopped and waited out, so a failed start does not leave
+nvda.exe running for the next start to refuse. A command that times out is
+not retried, and its reader refuses further commands until it is started
+again: Guidepup's action keeps running, and its log waits for it.
 Its validation applies to the recorded environment and scripted scenarios. Use
 a dedicated Windows test desktop. Aloud refuses to start if NVDA is already
 running, so Guidepup cannot replace an everyday screen-reader session. Setup modifies the
@@ -221,7 +230,9 @@ with the same guards. `captureContext(phrases)` gives, for a capture a
 command returned, the command that produced it, the speech its settle
 discarded, and the item under the VoiceOver cursor when it ended, for
 failure messages that say more than the words heard. `hostRefusal` names a
-machine that refuses Apple events, on which startup stops after one attempt.
+machine that refuses Apple events, on which startup stops after one attempt;
+Guidepup wraps that refusal in its "VoiceOver cannot be started", so startup
+reads each failure with its causes.
 The NVDA driver is at `@irs-public/aloud/web/nvda`. The USWDS accessibility
 harness imports both drivers, the Safari helpers and the dependency pins
 from a pinned aloud checkout; see [the harness integration guide](harness-integration.md).
