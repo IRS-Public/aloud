@@ -120,8 +120,9 @@ exercise creation, completion, and filtering with retained evidence.
 The Safari + VoiceOver adapter runs only on a disposable GitHub-hosted macOS
 runner. Hosted runs of its fixtures passed for the driver refinements and
 the late-speech wait; the reviewed environment and command logs are
-recorded in [web validation](web.md#validation-and-promotion), and the USWDS
-accessibility harness drives its VoiceOver suites through it.
+recorded in [web validation](web.md#validation-and-promotion). The USWDS
+accessibility harness drives its NVDA and VoiceOver suites through both
+drivers.
 See [web setup and limits](web.md).
 
 Next acceptance steps:

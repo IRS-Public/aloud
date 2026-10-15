@@ -79,7 +79,11 @@ The driver is also a library: `@irs-public/aloud/web/nvda` exports
 commands), `nvdaListen` (a letter, a digit or a named key sent through
 Windows inside one capture held open for a window of 1000 to 30000 ms),
 `nvdaPassNextKey` and `stopNvda`, which waits for nvda.exe to exit;
-the operating system is reached through an injectable `io`.
+the operating system is reached through an injectable `io`. `startNvda`
+gives Guidepup's start two attempts of 30 seconds each; pass `timeoutMs`
+for longer ones. The USWDS accessibility harness has driven its NVDA suites
+through these exports since 2026-10-10 and passes 60000, because a first
+start on a fresh hosted Windows machine has run past 30 seconds.
 Its validation applies to the recorded environment and scripted scenarios. Use
 a dedicated Windows test desktop. Aloud refuses to start if NVDA is already
 running, so Guidepup cannot replace an everyday screen-reader session. Setup modifies the
@@ -128,7 +132,7 @@ ported from the USWDS accessibility harness's native driver. The
 [web VoiceOver workflow](../.github/workflows/web-voiceover.yml) ran green on
 a hosted macOS runner for the pull requests that brought the harness's
 refinements (#46) and the late-speech wait (#47), and since 2026-10-06 the
-harness drives all 47 of its VoiceOver suites through this driver on hosted
+harness drives all of its VoiceOver suites through this driver on hosted
 runners; the fixture smoke below is the validation this repository holds
 itself ([recorded results](#validation-and-promotion)).
 
