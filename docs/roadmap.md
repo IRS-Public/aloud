@@ -117,11 +117,17 @@ claims full traversal. Its opt-in native acceptance workflow passed repeated
 Windows fixtures on 2026-09-20, including form errors, modal focus return,
 live regions, duplicate labels, and long output. External TodoMVC scenarios
 exercise creation, completion, and filtering with retained evidence.
+The Safari + VoiceOver adapter runs only on a disposable GitHub-hosted macOS
+runner. Hosted runs of its fixtures passed for the driver refinements and
+the late-speech wait; the reviewed environment and command logs are
+recorded in [web validation](web.md#validation-and-promotion), and the USWDS
+accessibility harness drives its VoiceOver suites through it.
 See [web setup and limits](web.md).
 
 Next acceptance steps:
 
-- Repeat Windows acceptance when browser, NVDA, or Guidepup versions change;
+- Repeat Windows acceptance when browser, NVDA, or Guidepup versions change,
+  and macOS acceptance when Safari, macOS, or Guidepup versions change;
   retain the exact environment identities and raw command output.
 - Validate authenticated and changing page states on an external web app, including
   frames and shadow content, and record unsupported cases without loosening checks.
@@ -129,9 +135,8 @@ Next acceptance steps:
   gating. Baselines must identify the browser/reader/OS/locale/viewport and rule suite.
 - Validate additional browser and screen-reader combinations independently. A
   Playwright WebKit run must not be labeled as Safari coverage.
-- Run the Safari + VoiceOver fixtures (`web-voiceover.yml`) on a hosted macOS
-  runner, review the retained command logs, screenshots, and DOM outlines, and
-  record the environment before describing that adapter as validated.
+- Run the external TodoMVC scenarios with Safari + VoiceOver; today only the
+  fixtures have run with that adapter.
 
 ## 7. Shared OpenACR engine
 

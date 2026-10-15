@@ -3,9 +3,8 @@
 `aloud web` captures named states in Chromium, runs axe-core, and writes an
 HTML evidence page. Opt-in NVDA capture adds command output and interaction
 assertions on a dedicated Windows desktop. Opt-in VoiceOver capture drives
-Safari on a disposable GitHub-hosted macOS runner. Its hosted fixture workflow
-has passed repeatedly, including on the driver refinements (#46) and the
-late-speech fix (#47).
+Safari on a disposable GitHub-hosted macOS runner, where its fixtures have
+passed repeatedly ([recorded results](#validation-and-promotion)).
 This milestone is **report-only**:
 there is no browser baseline or regression gate yet. Every web component in
 the OpenACR draft remains `not-evaluated`.
@@ -127,10 +126,11 @@ desktop. Firefox, JAWS, and mobile browsers are not part of this milestone.
 same scenarios in Safari with macOS VoiceOver, through Guidepup 0.34.0. It is
 ported from the USWDS accessibility harness's native driver. The
 [web VoiceOver workflow](../.github/workflows/web-voiceover.yml) ran green on
-a hosted macOS runner for the pull request that brought the harness's
-refinements (#46), and since 2026-10-06 the harness drives all 47 of its
-VoiceOver suites through this driver on hosted runners; the fixture smoke
-below is the validation this repository holds itself.
+a hosted macOS runner for the pull requests that brought the harness's
+refinements (#46) and the late-speech wait (#47), and since 2026-10-06 the
+harness drives all 47 of its VoiceOver suites through this driver on hosted
+runners; the fixture smoke below is the validation this repository holds
+itself ([recorded results](#validation-and-promotion)).
 
 Starting VoiceOver changes the machine's accessibility settings, so Aloud
 refuses to run it on a developer's Mac. It requires macOS and all of
@@ -336,3 +336,24 @@ frames, shadow content, and broader production application coverage remain
 unvalidated. Neither the fixture nor external passes establish full traversal
 or audible delivery. Raw CI captures, screenshots, and reports are retained in
 the linked runs' artifacts for 14 days.
+
+[VoiceOver acceptance run 37845354715](https://github.com/IRS-Public/aloud/actions/runs/37845354715),
+for the late-speech wait (#47) on 2026-10-08, completed both fixture passes
+on a GitHub-hosted `macos-15` runner (Darwin 24.6.0, arm64) with Safari
+26.6.1, Guidepup 0.34.0 (which reports VoiceOver as `0.0.1-VoiceOver4`),
+axe-core 4.13.0, and a 1024x600 viewport. Both passes recorded successful
+cleanup and passed every focus and speech assertion. Review of the retained
+command logs, screenshots, and Safari DOM outlines confirmed
+`heading level 1 Account settings` and `Email` from the cursor commands, the
+form error, `Open preferences button main` after the dialog closed, the live
+status announcement, three `Repeat button` entries, and the entire long
+accessible name with its final verification phrase. Every initial
+navigation log was empty, as [described above](#voiceover-command-capture-safari).
+The one axe finding, `button-name`, is the fixture's deliberately unnamed
+button. The same workflow passed for the driver refinements (#46,
+[run 37361735589](https://github.com/IRS-Public/aloud/actions/runs/37361735589))
+and on three other pull requests from 2026-10-01. These runs cover the
+fixture only: no external or authenticated site has been run with
+VoiceOver, and they establish neither full traversal nor audible delivery.
+Hosted runner images update Safari and macOS on their own schedule, so a
+later run can differ from this record without a driver change.
