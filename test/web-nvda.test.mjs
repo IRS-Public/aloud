@@ -42,23 +42,66 @@ test("NVDA starts only on Windows and never replaces a running NVDA", async () =
   await assert.rejects(startNvda({ io: fakeIo({ running: true }), platform: "win32" }), /already running/);
 });
 
-test("NVDA startup gets a second attempt after a timeout, with a stop between, and keeps every error", async () => {
-  assert.deepEqual(NVDA_START, { attempts: 2, timeoutMs: 30000 });
+const later = (ms, settle) => new Promise((resolve, reject) => setTimeout(() => settle(resolve, reject), ms));
+
+// A Guidepup-shaped reader whose starts follow `starts` in turn, recording
+// each start, each start settling, and each stop in one ordered list.
+function startingReader(starts) {
   const reader = fakeReader();
-  const io = fakeIo();
-  let starts = 0;
-  const nvda = { ...reader, start: async () => { starts++; if (starts === 1) return new Promise(() => {}); } };
-  const started = await startNvda({ io, platform: "win32", guidepup: { nvda }, timeoutMs: 20 });
-  assert.equal(starts, 2);
-  assert.deepEqual(reader.calls, [["stop"]]);
-  assert.equal(started, nvda);
-  // Both attempts failing: an AggregateError with both reasons.
-  const never = { ...fakeReader(), start: async () => new Promise(() => {}) };
-  const error = await startNvda({ io, platform: "win32", guidepup: { nvda: never }, timeoutMs: 20 }).catch((caught) => caught);
+  const events = [];
+  let count = 0;
+  reader.start = () => {
+    const start = starts[count++]();
+    events.push(`start ${count}`);
+    const n = count;
+    start.then(() => events.push(`start ${n} resolved`), () => events.push(`start ${n} rejected`));
+    return start;
+  };
+  reader.stop = async () => { events.push("stop"); };
+  return { reader, events };
+}
+
+test("NVDA startup gets a second attempt after a timeout, once the timed-out start settles and is stopped", async () => {
+  assert.deepEqual(NVDA_START, { attempts: 2, timeoutMs: 60000, settleMs: 15000 });
+  // The first start fails after its deadline; Guidepup would refuse a retry
+  // before then, so the retry waits for it.
+  const failsLate = startingReader([() => later(40, (_, reject) => reject(new Error("cannot be started"))), async () => {}]);
+  const started = await startNvda({ io: fakeIo(), platform: "win32", guidepup: { nvda: failsLate.reader }, timeoutMs: 20, settleMs: 1000 });
+  assert.equal(started, failsLate.reader);
+  assert.deepEqual(failsLate.events, ["start 1", "start 1 rejected", "stop", "start 2", "start 2 resolved"]);
+  // The first start succeeds after its deadline: it is stopped, not kept.
+  const startsLate = startingReader([() => later(40, (resolve) => resolve()), async () => {}]);
+  await startNvda({ io: fakeIo(), platform: "win32", guidepup: { nvda: startsLate.reader }, timeoutMs: 20, settleMs: 1000 });
+  assert.deepEqual(startsLate.events, ["start 1", "start 1 resolved", "stop", "start 2", "start 2 resolved"]);
+});
+
+test("a start still pending after its settle window is neither retried nor stopped", async () => {
+  const { reader, events } = startingReader([() => new Promise(() => {})]);
+  const error = await startNvda({ io: fakeIo(), platform: "win32", guidepup: { nvda: reader }, timeoutMs: 20, settleMs: 20 }).catch((caught) => caught);
   assert.ok(error instanceof AggregateError);
-  assert.equal(error.errors.length, 2);
-  assert.match(error.message, /did not start in 2 attempts/);
+  assert.match(error.message, /still pending 20 ms after its deadline; dedicated test desktop needs recovery/);
+  assert.equal(error.errors.length, 1);
   assert.match(error.errors[0].message, /NVDA startup timed out/);
+  assert.deepEqual(events, ["start 1"]);
+});
+
+test("the last failed start is stopped and waited out too, and every error is kept", async () => {
+  const fail = async () => { throw new Error("cannot be started"); };
+  const { reader, events } = startingReader([fail, fail]);
+  const io = fakeIo();
+  const error = await startNvda({ io, platform: "win32", guidepup: { nvda: reader }, timeoutMs: 20, settleMs: 20 }).catch((caught) => caught);
+  assert.ok(error instanceof AggregateError);
+  assert.match(error.message, /^NVDA did not start in 2 attempts$/);
+  assert.deepEqual(error.errors.map((each) => each.message), ["cannot be started", "cannot be started"]);
+  assert.deepEqual(events, ["start 1", "start 1 rejected", "stop", "start 2", "start 2 rejected", "stop"]);
+  // A failed start that leaves nvda.exe running past the exit wait says so,
+  // since the next start would refuse to replace it.
+  const leaves = startingReader([0, 0].map(() => async () => { io.running = true; throw new Error("cannot be started"); }));
+  io.running = false;
+  io.slept.length = 0;
+  const stuck = await startNvda({ io, platform: "win32", guidepup: { nvda: leaves.reader }, timeoutMs: 20, settleMs: 20 }).catch((caught) => caught);
+  assert.match(stuck.message, /did not start in 2 attempts, and nvda.exe did not exit; dedicated test desktop needs recovery/);
+  assert.equal(io.slept.length, 2 * NVDA_EXIT.attempts);
 });
 
 test("the Windows key script accepts letters, digits and the named keys only", () => {
@@ -105,6 +148,30 @@ test("pass next key performs NVDA's ignore-next-key command inside a capture", a
   const reader = fakeReader(["Pass next key through"]);
   assert.deepEqual(await nvdaPassNextKey(reader, 1000), ["Pass next key through"]);
   assert.deepEqual(reader.calls, [["clear"], ["perform", "ignore-next-key", { capture: true }]]);
+});
+
+test("a timed-out NVDA command refuses later commands, which would wait behind it, until NVDA starts again", async () => {
+  const reader = fakeReader();
+  // Guidepup's log clear waits for every action, the timed-out one included.
+  let pending;
+  reader.next = () => (pending = new Promise(() => {}));
+  reader.clearSpokenPhraseLog = async () => { await pending; };
+  const started = await startNvdaWith(reader, fakeIo());
+  await assert.rejects(nvdaCommand(started, "next", undefined, 20), /NVDA next timed out/);
+  for (const later of [
+    () => nvdaCommand(started, "press", "Tab", 20),
+    () => nvdaListen(started, "x", 1000, 20),
+    () => nvdaPassNextKey(started, 20),
+  ]) await assert.rejects(later(), /an earlier NVDA command timed out/);
+  // A command that fails on its own, without timing out, leaves the reader usable.
+  const other = fakeReader();
+  other.next = async () => { throw new Error("NVDA is not running"); };
+  await assert.rejects(nvdaCommand(other, "next", undefined, 20), /not running/);
+  assert.deepEqual(await nvdaCommand(other, "press", "Tab", 20), ["Save, button"]);
+  // A new start makes the reader usable again.
+  pending = undefined;
+  await startNvda({ io: fakeIo(), platform: "win32", guidepup: { nvda: started } });
+  assert.deepEqual(await nvdaCommand(started, "press", "Tab", 20), ["Save, button"]);
 });
 
 test("stopping waits for nvda.exe to exit and reports one that never does", async () => {

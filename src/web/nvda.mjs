@@ -26,10 +26,19 @@ export const NVDA_EXIT = { attempts: 40, pollMs: 250 };
 
 // Guidepup's start has timed out on hosted Windows machines now and then,
 // and a start after a stop has passed, so startup gets two attempts, each
-// under its own deadline, with a stop and the exit wait between them.
-export const NVDA_START = { attempts: 2, timeoutMs: 30000 };
+// under its own deadline, with a stop and the exit wait after each failure.
+// Guidepup's start waits up to 30 seconds for nvda.exe, twice, so the
+// deadline of a minute lets it finish its own retry. A start that misses
+// its deadline is still running inside Guidepup, which refuses another
+// start (and a stop) until it settles, so it gets `settleMs` more first.
+export const NVDA_START = { attempts: 2, timeoutMs: 60000, settleMs: 15000 };
 
 const sessions = new WeakMap();
+
+// A timed-out Guidepup action keeps running, and Guidepup's log reads and
+// clears wait for every action, with no limit. A reader with a timed-out
+// command therefore takes no more commands until it is started again.
+const stuck = new WeakSet();
 
 // The keys SendKeys may receive: letters, digits and these named keys, so
 // no caller text reaches the script.
@@ -77,18 +86,24 @@ export function systemIo() {
 
 const text = (value) => typeof value === "string" && value.trim().length > 0;
 
-// Rejects after `ms`. A timed-out Guidepup action is never retried or
-// promoted to complete.
-async function deadline(operation, ms, label) {
+// Rejects after `ms`, calling `onTimeout` first. A timed-out Guidepup action
+// is never retried or promoted to complete.
+async function deadline(operation, ms, label, onTimeout = () => {}) {
   let timer;
   try {
     return await Promise.race([
       operation,
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${label} timed out; capture is incomplete`)), ms); }),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => { onTimeout(); reject(new Error(`${label} timed out; capture is incomplete`)); }, ms);
+      }),
     ]);
   } finally {
     clearTimeout(timer);
   }
+}
+
+function refuseStuck(reader) {
+  if (stuck.has(reader)) throw new Error("an earlier NVDA command timed out and may still be running; stop and start NVDA before sending another");
 }
 
 function speechLog(phrases) {
@@ -98,36 +113,62 @@ function speechLog(phrases) {
 
 // Starts NVDA through Guidepup on a dedicated Windows desktop. An NVDA that
 // is already running is never replaced: capture would take over someone's
-// session, and Guidepup's stop would end it.
+// session, and Guidepup's stop would end it. Every failed attempt, the last
+// one included, is stopped and waited out, so a failed start does not leave
+// nvda.exe running for the next one to refuse.
 export async function startNvda({
-  io = systemIo(), platform = process.platform, guidepup, attempts = NVDA_START.attempts, timeoutMs = NVDA_START.timeoutMs,
+  io = systemIo(), platform = process.platform, guidepup,
+  attempts = NVDA_START.attempts, timeoutMs = NVDA_START.timeoutMs, settleMs = NVDA_START.settleMs,
 } = {}) {
   if (platform !== "win32") throw new Error("Experimental NVDA capture requires a dedicated Windows desktop; use --screen-reader none for structural checks");
   if (io.nvdaRunning()) throw new Error("NVDA is already running; use a dedicated test desktop so capture does not replace an existing screen-reader session");
   const { nvda } = guidepup ?? (await webDependency("@guidepup/guidepup"));
   const errors = [];
   for (let attempt = 1; attempt <= attempts; attempt++) {
+    const start = nvda.start({ capture: true });
     try {
-      await deadline(nvda.start({ capture: true }), timeoutMs, "NVDA startup");
+      await deadline(start, timeoutMs, "NVDA startup");
       sessions.set(nvda, { io });
+      stuck.delete(nvda);
       return nvda;
     } catch (error) {
       errors.push(error);
-      if (attempt < attempts) await stopAfterFailedStart(nvda, io);
+    }
+    // A start that is still pending can be neither stopped nor retried.
+    if (!(await settles(start, settleMs))) {
+      throw new AggregateError(errors, `NVDA startup was still pending ${settleMs} ms after its deadline; dedicated test desktop needs recovery`);
+    }
+    if (!(await stopAfterFailedStart(nvda, io)) && attempt === attempts) {
+      throw new AggregateError(errors, `NVDA did not start in ${attempts} attempts, and nvda.exe did not exit; dedicated test desktop needs recovery`);
     }
   }
   throw new AggregateError(errors, `NVDA did not start in ${attempts} attempts`);
 }
 
-// A start that failed may have left nvda.exe running; stop it, ignoring a
-// reader that refuses because it never started, and wait for it to exit.
+// Whether `operation` settles, either way, within `ms`.
+async function settles(operation, ms) {
+  try {
+    await deadline(operation.then(() => {}, () => {}), ms, "NVDA startup settling");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// A start that failed, or succeeded after its deadline, may have left
+// nvda.exe running; stop it, ignoring a reader that refuses because it
+// never started, and wait for it to exit. Returns whether it exited.
 async function stopAfterFailedStart(nvda, io) {
   try {
     await deadline(nvda.stop(), 10000, "NVDA stop after a failed start");
   } catch {
     // Nothing to stop, or a stop that hung; the exit wait decides.
   }
-  for (let attempt = 0; attempt < NVDA_EXIT.attempts && io.nvdaRunning(); attempt++) await io.sleep(NVDA_EXIT.pollMs);
+  for (let attempt = 0; attempt < NVDA_EXIT.attempts; attempt++) {
+    if (!io.nvdaRunning()) return true;
+    await io.sleep(NVDA_EXIT.pollMs);
+  }
+  return !io.nvdaRunning();
 }
 
 // Send one command and return its captured speech. `press` sends a key,
@@ -138,6 +179,7 @@ export async function nvdaCommand(reader, command, argument, timeoutMs) {
   if ((command === "press" || command === "type") && !text(argument)) {
     throw new Error(`NVDA ${command} requires ${command === "press" ? "a key" : "text"}`);
   }
+  refuseStuck(reader);
   await reader.clearSpokenPhraseLog();
   const typed = command === "type" || (command === "press" && isTypedCharacter(argument));
   const action = typed
@@ -145,7 +187,7 @@ export async function nvdaCommand(reader, command, argument, timeoutMs) {
     : command === "press"
       ? reader.press(argument, { capture: true })
       : reader[command]({ capture: true });
-  await deadline(action, timeoutMs, `NVDA ${command}`);
+  await deadline(action, timeoutMs, `NVDA ${command}`, () => stuck.add(reader));
   return speechLog(await reader.spokenPhraseLog());
 }
 
@@ -161,6 +203,7 @@ export async function nvdaListen(reader, key, milliseconds, timeoutMs) {
   if (!Number.isInteger(milliseconds) || milliseconds < LISTEN_MS.min || milliseconds > LISTEN_MS.max) {
     throw new Error(`NVDA listen window must be an integer from ${LISTEN_MS.min} to ${LISTEN_MS.max} ms`);
   }
+  refuseStuck(reader);
   await reader.clearSpokenPhraseLog();
   await deadline(
     reader.capture(async () => {
@@ -169,6 +212,7 @@ export async function nvdaListen(reader, key, milliseconds, timeoutMs) {
     }, { capture: true }),
     milliseconds + timeoutMs,
     `NVDA press ${key} with listen window`,
+    () => stuck.add(reader),
   );
   return speechLog(await reader.spokenPhraseLog());
 }
@@ -177,11 +221,13 @@ export async function nvdaListen(reader, key, milliseconds, timeoutMs) {
 // would otherwise take in browse mode; the key itself follows as a `press`.
 // Returns the capture around the command. Never retried.
 export async function nvdaPassNextKey(reader, timeoutMs) {
+  refuseStuck(reader);
   await reader.clearSpokenPhraseLog();
   await deadline(
     reader.perform(reader.keyboardCommands.ignoreNextKeyCombination, { capture: true }),
     timeoutMs,
     "NVDA pass next key",
+    () => stuck.add(reader),
   );
   return speechLog(await reader.spokenPhraseLog());
 }
