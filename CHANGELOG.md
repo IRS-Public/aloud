@@ -129,9 +129,10 @@ build drafts through one findings contract and one level policy.
   of the adapter, and its report job, which drafts every run with known
   bugs off with `aloud acr` at the commit its screen reader jobs pin and
   keeps the drafts only from full runs, in place of the proposed matrix
-  and release jobs. It records that the harness now imports the Safari and
-  VoiceOver driver, and `docs/web.md` records that driver's hosted
-  validation.
+  and release jobs. It records that the harness now drives NVDA, Safari
+  and VoiceOver through aloud's drivers, with a 60-second NVDA start
+  attempt, and `docs/web.md` records the VoiceOver driver's reviewed
+  hosted run.
 - **`standard-interpretation` finding status.** A passing status for a
   criterion the standard's own published interpretation says is always
   satisfied for the content: WCAG 2.0 and 2.1's 4.1.1 Parsing on HTML,
@@ -171,9 +172,9 @@ build drafts through one findings contract and one level policy.
 - **Experimental Safari + VoiceOver web driver**
   (`aloud web --screen-reader voiceover`, `src/web/voiceover.mjs`,
   `src/web/safari.mjs`), parallel to the NVDA driver. It runs only on a
-  disposable GitHub-hosted macOS runner that opts in, and has not yet
-  passed a hosted run. `dependencies.mjs` gains `axeCoreSource`. The driver
-  carries the USWDS harness's failure context (`captureContext`: the
+  disposable GitHub-hosted macOS runner that opts in; its hosted fixture
+  workflow has passed repeatedly. `dependencies.mjs` gains `axeCoreSource`.
+  The driver carries the USWDS harness's failure context (`captureContext`: the
   command, the speech its settle discarded, the cursor item), types a lone
   punctuation character through the reader, can tell VoiceOver to pass the
   next key to Safari (`voiceOverPassNextKey`), lets a settle run an action

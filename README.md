@@ -20,7 +20,7 @@ web checks run without a screen reader by default.
   `--voiceover real --no-gate` and labels traversal as partial.
 - **Web (experimental)**: Chromium page checks, screenshots, and structural
   snapshots, with an opt-in NVDA command-capture adapter for Windows and an
-  unvalidated Safari + VoiceOver adapter for disposable GitHub-hosted macOS
+  opt-in Safari + VoiceOver adapter validated on disposable GitHub-hosted macOS
   runners. Web evidence is report-only. [Setup and validation status](docs/web.md).
 
 Around the capture:
@@ -44,10 +44,15 @@ Around the capture:
   a manual review) into a draft OpenACR that lists every criterion and
   never shows a silent pass: `aloud acr`, a library, and a
   [GitHub Action](docs/ci.md#draft-an-openacr-with-the-github-action).
+- **Shared screen-reader drivers.** `@irs-public/aloud/web/nvda` and
+  `/web/voiceover` start, command, and stop NVDA and VoiceOver for browser
+  tests. The [USWDS accessibility harness](docs/harness-integration.md)
+  imports them at a reviewed commit for its own screen-reader suites.
 
 Both mobile audit legs have passed real CI runs on the IRS mobile app project
 it was built for. Browser validation covers Chromium fixtures and the public
-TodoMVC React app, including repeated NVDA runs on Windows.
+TodoMVC React app, including repeated NVDA runs on Windows, and the Safari +
+VoiceOver fixtures on GitHub-hosted macOS runners.
 
 ## Why
 
@@ -230,6 +235,12 @@ generating speech. Use the [web config](examples/aloud.web.config.example.json)
 and [scenario manifest](examples/screens-web.example.json) to capture named
 page states and assert keyboard focus.
 
+| Mode | Runs on | Browser | Captured screen-reader output |
+| --- | --- | --- | --- |
+| Default structural audit | macOS, Windows, or Linux | Chromium | None |
+| `--screen-reader nvda` | Dedicated Windows desktop | Chromium | NVDA through Guidepup |
+| `--screen-reader voiceover` | Disposable GitHub-hosted macOS runner (opt-in) | Safari | VoiceOver through Guidepup |
+
 On a dedicated Windows desktop, `--screen-reader nvda` adds Guidepup-formatted
 NVDA command output and speech assertions. Follow the
 [NVDA setup instructions](docs/web.md#nvda-command-capture) first. Chromium
@@ -238,8 +249,9 @@ including NVDA on Windows; [recorded results and limits](docs/web.md#validation-
 describe the tested scope.
 
 `--screen-reader voiceover` drives Safari and VoiceOver instead. It runs only
-on a disposable GitHub-hosted macOS runner that opts in, and has not yet
-passed a hosted run; see [VoiceOver command capture](docs/web.md#voiceover-command-capture-safari).
+on a disposable GitHub-hosted macOS runner that opts in. Its hosted fixture
+workflow has passed repeatedly; see
+[VoiceOver command capture](docs/web.md#voiceover-command-capture-safari).
 
 Web evidence is **report-only**: browser baselines and regression gates are
 disabled, and every web OpenACR component remains `not-evaluated`.
@@ -404,12 +416,17 @@ Working today, proven in CI:
 New in 0.2.0 (unreleased; see the [changelog](CHANGELOG.md)):
 
 - The shared findings -> OpenACR engine (`aloud acr`, the library, and the
-  GitHub Action), with a conservative level policy and a
-  [harness adapter](docs/harness-integration.md).
+  GitHub Action), with a conservative level policy, a
+  `standard-interpretation` status (4.1.1 Parsing on HTML), and a
+  [harness adapter](docs/harness-integration.md) that follows the harness's
+  current report statuses.
 - One rule catalog, WCAG 2.5.8 at its 24-unit minimum, accepted baseline
   reasons, and provenance on every evidence file.
-- An experimental Safari + VoiceOver web driver, awaiting its first hosted
-  run.
+- An experimental Safari + VoiceOver web driver, passing its fixtures on
+  hosted macOS runners ([recorded run](docs/web.md#validation-and-promotion)).
+- The NVDA and VoiceOver drivers as library exports, carrying the USWDS
+  harness's refinements; the harness runs its screen-reader suites through
+  them.
 
 Roadmap, in implementation order:
 
@@ -436,10 +453,10 @@ Roadmap, in implementation order:
    and overlap with tree findings. New results remain report-only.
    [Setup and coverage](docs/android-atf.md).
 6. **Web app evidence.** Experimental `aloud web` uses pinned Chromium and
-   axe-core, with a separate NVDA command-capture adapter. Repeated Windows
-   fixtures validate scripted command capture; browser gates still require
-   their own coverage policy. A Safari + VoiceOver adapter awaits its first
-   hosted acceptance run. [Scope and validation](docs/web.md).
+   axe-core, with separate NVDA and Safari + VoiceOver command-capture
+   adapters. Repeated Windows and hosted macOS fixtures validate scripted
+   command capture; browser gates still require their own coverage policy.
+   [Scope and validation](docs/web.md).
 
 Acceptance criteria and dependencies: [technical roadmap](docs/roadmap.md).
 External app results and limits: [Wikipedia mobile validation](docs/real-app-validation.md)

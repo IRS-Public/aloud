@@ -65,7 +65,9 @@ export function assertNativeDesktop({ env = process.env, platform = process.plat
   if (!allowed) {
     throw new Error(
       "Experimental VoiceOver capture runs only on a disposable GitHub-hosted macOS runner: " +
-      "it needs GITHUB_ACTIONS=true, RUNNER_ENVIRONMENT=github-hosted and ALOUD_ALLOW_NATIVE_DESKTOP=1",
+      "it needs GITHUB_ACTIONS=true, RUNNER_ENVIRONMENT=github-hosted and ALOUD_ALLOW_NATIVE_DESKTOP=1. " +
+      "Use --screen-reader none for structural checks on this machine; runner setup: " +
+      "https://github.com/IRS-Public/aloud/blob/main/docs/web.md#voiceover-command-capture-safari",
     );
   }
 }

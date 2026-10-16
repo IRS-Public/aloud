@@ -20,14 +20,22 @@ aloud at a reviewed commit and imports `src/web/nvda.mjs`,
 Safari and VoiceOver on macOS through the last two. aloud keeps those paths
 and their exports stable (they are also exported as
 `@irs-public/aloud/web/nvda`, `/web/dependencies` and `/web/voiceover`).
-aloud's Safari + VoiceOver driver (see [web.md](web.md#voiceover-command-capture-safari))
-is a port of the harness's own native driver, and carries its failure
-context (`captureContext`), typed punctuation, pass-next-key and
-host-refusal handling. The harness's screen reader job sets
-`ALOUD_ALLOW_NATIVE_DESKTOP=1` for aloud's guard, behind its own, and keeps
-on its side the sentinel focus each test starts from, a check that moves
-VoiceOver's cursor off the web content area before each command, its focus
-diagnostics, the command names in its failure messages and the NVDA path.
+Both of aloud's drivers are ports of the harness's own native driver. The
+Safari + VoiceOver driver (see [web.md](web.md#voiceover-command-capture-safari))
+carries its failure context (`captureContext`), typed punctuation,
+pass-next-key and host-refusal handling; the NVDA driver (see
+[web.md](web.md#nvda-command-capture)) carries its two start attempts,
+typing, timed listen (`nvdaListen`), pass-next-key and the wait for
+nvda.exe to exit. Since 2026-10-10 the harness pins a commit with both and
+drives both readers through them. It passes 60 seconds for each NVDA
+start attempt (`startNvda`'s `timeoutMs`), which aloud has since made the
+default, because a first start on a fresh hosted Windows machine overran
+the old 30-second one. The harness's
+screen reader job sets `ALOUD_ALLOW_NATIVE_DESKTOP=1` for aloud's guard,
+behind its own, and keeps on its side the Chromium browser NVDA reads, the
+sentinel focus each test starts from, a check that moves VoiceOver's cursor
+off the web content area before each command, its focus diagnostics, and
+the command names in its failure messages.
 
 ## What the adapter reads
 
