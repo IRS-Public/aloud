@@ -27,9 +27,10 @@ pass-next-key and host-refusal handling; the NVDA driver (see
 [web.md](web.md#nvda-command-capture)) carries its two start attempts,
 typing, timed listen (`nvdaListen`), pass-next-key and the wait for
 nvda.exe to exit. Since 2026-10-10 the harness pins a commit with both and
-drives both readers through them. It gives each NVDA start attempt 60
-seconds (`startNvda`'s `timeoutMs`) instead of the 30-second default, which
-a first start on a fresh hosted Windows machine has overrun. The harness's
+drives both readers through them. It passes 60 seconds for each NVDA
+start attempt (`startNvda`'s `timeoutMs`), which aloud has since made the
+default, because a first start on a fresh hosted Windows machine overran
+the old 30. The harness's
 screen reader job sets `ALOUD_ALLOW_NATIVE_DESKTOP=1` for aloud's guard,
 behind its own, and keeps on its side the Chromium browser NVDA reads, the
 sentinel focus each test starts from, a check that moves VoiceOver's cursor

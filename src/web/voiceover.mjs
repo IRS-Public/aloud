@@ -139,6 +139,15 @@ export function hostRefusal(output) {
     : undefined;
 }
 
+// Guidepup rethrows a failed start as "VoiceOver cannot be started" with
+// the reason, such as a refused Apple event, as its cause, so a failure is
+// read with its causes.
+function withCauses(error) {
+  const parts = [];
+  for (let each = error; each != null && parts.length < 5; each = each.cause) parts.push(each.message ?? String(each));
+  return parts.join(": ");
+}
+
 // `ps -axo pid=,lstart=,comm=` lines for VoiceOver, as pid -> "start command".
 // The start time is part of the identity, so a later process that reuses a
 // pid is never mistaken for this run's reader.
@@ -236,6 +245,14 @@ async function currentPhrase(io) {
   }
 }
 
+// A phrase read straight from VoiceOver, cleaned as Guidepup cleans the
+// phrases it captures (cleanSpokenPhrase): AppleScript's "missing value" is
+// no phrase, VoiceOver's modifier placeholder is named, and runs of
+// whitespace collapse.
+const cleanPhrase = (phrase) => typeof phrase === "string"
+  ? phrase.trim().replace(/^missing value$/, "").replaceAll("@VOModifier()", "Control-Option").replace(/\s\s+/g, " ")
+  : phrase;
+
 // After a silent capture, polls VoiceOver's last phrase for a change from
 // `baseline`, the phrase read before the command: up to LATE_SPEECH_MS for
 // the first new phrase, then until it has been quiet for SETTLE.quietMs, and
@@ -245,11 +262,11 @@ export async function awaitLateSpeech({ lastPhrase, now, sleep }, baseline) {
   if (!lastPhrase || baseline === undefined) return [];
   const heard = [];
   try {
-    let phrase = baseline;
+    let phrase = cleanPhrase(baseline);
     const started = now();
     let changed = started;
     for (;;) {
-      const next = await lastPhrase();
+      const next = cleanPhrase(await lastPhrase());
       if (next !== phrase) {
         phrase = next;
         changed = now();
@@ -317,7 +334,7 @@ export async function withAttempts(operation, { attempts, between, unrecoverable
       }
     }
   }
-  const reasons = errors.map((e) => e.message).join("; ");
+  const reasons = errors.map(withCauses).join("; ");
   throw Object.assign(
     new AggregateError(errors, unavailable ? `VoiceOver cannot start here, ${unavailable}: ${reasons}` : `VoiceOver did not start: ${reasons}`),
     { unavailable },
@@ -352,7 +369,7 @@ export async function startVoiceOver({ env = process.env, platform = process.pla
           await stopOwnedVoiceOver(await io.voiceOverProcesses(), io);
           await io.sleep(START_RETRY_PAUSE_MS);
         },
-        unrecoverable: (error) => hostRefusal(error.message),
+        unrecoverable: (error) => hostRefusal(withCauses(error)),
       },
     );
   } catch (error) {
@@ -369,7 +386,18 @@ export async function startVoiceOver({ env = process.env, platform = process.pla
     throw error;
   }
   // No reader existed before, so every VoiceOver process now is this run's.
-  const owned = await io.voiceOverProcesses();
+  let owned;
+  try {
+    owned = await io.voiceOverProcesses();
+  } catch (error) {
+    // The caller never receives this reader either, so Guidepup's stop ends it.
+    try {
+      await deadline(voiceOver.stop({ timeout: 3000, retries: 1 }), 10000, "VoiceOver cleanup");
+    } catch (stopError) {
+      throw new AggregateError([error, stopError], `${error.message}; cleanup after startup also failed`);
+    }
+    throw error;
+  }
   sessions.set(voiceOver, { io, owned, application: MacOSApplications.Safari, timedOut: false });
   return voiceOver;
 }

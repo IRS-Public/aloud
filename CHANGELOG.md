@@ -17,9 +17,10 @@ build drafts through one findings contract and one level policy.
   capture holds only the phrase its settle left, Guidepup's repeat of a
   capture that heard nothing, `voiceOverCommand` polls VoiceOver's last
   phrase for up to three seconds more and, once a new phrase arrives, until
-  a quiet second, and returns the late speech alone. Such a command takes up
-  to three seconds longer; a command whose capture has its own speech is
-  unchanged. New exports `LATE_SPEECH_MS`, `isSilentCapture` and
+  a quiet second, and returns the late speech alone, cleaned as Guidepup
+  cleans the phrases it captures (AppleScript's "missing value" is no
+  speech). Such a command takes up to three seconds longer; a command whose
+  capture has its own speech is unchanged. New exports `LATE_SPEECH_MS`, `isSilentCapture` and
   `awaitLateSpeech`.
 - **WCAG 2.5.8 target size is checked at its 24-unit minimum.** New error
   rules `native-target-size-minimum` (24dp) and `ios-target-size-minimum`
@@ -98,10 +99,15 @@ build drafts through one findings contract and one level policy.
   and typed lone punctuation, `nvdaListen` (a key sent through Windows
   inside one capture held open for a window), `nvdaPassNextKey`,
   `windowsKeyScript`, `isTypedCharacter`, a `startNvda` that gives
-  Guidepup's start two attempts under a 30 second deadline each, with a
-  stop and the exit wait between them, and takes options for tests, and a
+  Guidepup's start two attempts under a one-minute deadline each, lets a
+  start that missed its deadline settle for up to 15 seconds (Guidepup
+  refuses another start until then), stops NVDA and waits for nvda.exe to
+  exit after every failed attempt, the last included, and takes options
+  for tests, and a
   `stopNvda` that waits up to ten seconds for nvda.exe to exit, since the
-  next start refuses to replace a running NVDA. Ported from the USWDS
+  next start refuses to replace a running NVDA. A reader whose command
+  timed out refuses further commands until it is started again, since
+  Guidepup's log waits for the timed-out action. Ported from the USWDS
   accessibility harness, which becomes a thin layer over these exports.
   Unit tests in `test/web-nvda.test.mjs`.
 - **Harness guide: current report statuses and integration.** The example
@@ -173,7 +179,8 @@ build drafts through one findings contract and one level policy.
   punctuation character through the reader, can tell VoiceOver to pass the
   next key to Safari (`voiceOverPassNextKey`), lets a settle run an action
   inside its capture, and stops startup at once on a machine that refuses
-  Apple events (`hostRefusal`).
+  Apple events (`hostRefusal`, read from Guidepup's error and the causes
+  it wraps).
 - One shared report-platform helper and shared rule-engine helpers, so
   every entry point agrees on android, ios, or web.
 - **Documentation for the findings engine.** [docs/openacr.md](docs/openacr.md)
