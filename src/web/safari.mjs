@@ -168,6 +168,28 @@ export const javascriptScript = windowScript(
   "    set aloudScript to read (POSIX file (item 2 of argv)) as «class utf8»\n" +
   "    return do JavaScript aloudScript in current tab of w");
 
+// The preferences that decide Safari's Tab stops: full keyboard access, and
+// Safari's tab-to-links setting under each name it has had. Read only for
+// failure context, as [domain, key] pairs for `defaults read`.
+export const KEYBOARD_PREFERENCES = {
+  AppleKeyboardUIMode: ["-g", "AppleKeyboardUIMode"],
+  tabsToLinks: ["com.apple.Safari", "WebKitPreferences.tabsToLinks"],
+  WebKitTabToLinksPreferenceKey: ["com.apple.Safari", "WebKitTabToLinksPreferenceKey"],
+  WebKit2TabsToLinks: ["com.apple.Safari", "com.apple.Safari.ContentPageGroupIdentifier.WebKit2TabsToLinks"],
+};
+
+// One preference's value through `read`, which runs `defaults read` with the
+// arguments it is given: "unset" when defaults exits 1 (no such key), and
+// "unreadable: <reason>" for any other failure, so a diagnostic never
+// throws. Ported from the harness's focus diagnostics.
+export async function readPreference(read, domain, key) {
+  try {
+    return String(await read(["read", domain, key])).trim();
+  } catch (error) {
+    return error.code === 1 || error.status === 1 ? "unset" : `unreadable: ${error.message}`;
+  }
+}
+
 // The real Safari, through osascript. Page JavaScript travels in a temporary
 // file so large sources such as axe-core stay under argument limits.
 export function safariIo() {

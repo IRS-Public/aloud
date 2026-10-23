@@ -15,7 +15,8 @@ import {
   withAttempts,
 } from "../src/web/voiceover.mjs";
 import {
-  createSafari, domOutline, javascriptScript, pageResult, pageScript, preflightRequest, sameDocumentUrl,
+  KEYBOARD_PREFERENCES, createSafari, domOutline, javascriptScript, pageResult, pageScript, preflightRequest, readPreference,
+  sameDocumentUrl,
 } from "../src/web/safari.mjs";
 import { loadConfig } from "../src/config.mjs";
 import { READER_STEP_COMMANDS, WEB_DEFAULTS, validateWebConfig, webScreens } from "../src/web/config.mjs";
@@ -674,6 +675,19 @@ function element(tagName, attributes = {}, children = [], extra = {}) {
     get textContent() { return children.map((child) => child.textContent).join(""); },
   };
 }
+
+test("a preference read names an unset key and a failed read instead of throwing", async () => {
+  const seen = [];
+  const read = async (args) => { seen.push(args); return "2\n"; };
+  assert.equal(await readPreference(read, ...KEYBOARD_PREFERENCES.AppleKeyboardUIMode), "2");
+  assert.deepEqual(seen, [["read", "-g", "AppleKeyboardUIMode"]]);
+  const unset = async () => { throw Object.assign(new Error("does not exist"), { code: 1 }); };
+  assert.equal(await readPreference(unset, "com.apple.Safari", "WebKitTabToLinksPreferenceKey"), "unset");
+  const broken = async () => { throw Object.assign(new Error("spawn EACCES"), { code: "EACCES" }); };
+  assert.equal(await readPreference(broken, "com.apple.Safari", "WebKitTabToLinksPreferenceKey"), "unreadable: spawn EACCES");
+  assert.deepEqual(Object.keys(KEYBOARD_PREFERENCES),
+    ["AppleKeyboardUIMode", "tabsToLinks", "WebKitTabToLinksPreferenceKey", "WebKit2TabsToLinks"]);
+});
 
 test("the Safari DOM outline lists roles, names, and states and skips hidden content", () => {
   const label = element("LABEL", { for: "email" }, [text("Email address")]);
