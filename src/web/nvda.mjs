@@ -209,12 +209,14 @@ export async function settleNvda(reader, timeoutMs, { action = async () => {} } 
 // except a single character that is not a letter or a digit, which is typed
 // (see isTypedCharacter); `type` types text; any other command is one of
 // Guidepup's cursor commands. The returned capture's context is in
-// captureContext. Never retried.
-export async function nvdaCommand(reader, command, argument, timeoutMs) {
+// captureContext. With `{ settle: true }` it settles first (see settleNvda),
+// and the context keeps what that settle discarded. Never retried.
+export async function nvdaCommand(reader, command, argument, timeoutMs, { settle = false } = {}) {
   if ((command === "press" || command === "type") && !text(argument)) {
     throw new Error(`NVDA ${command} requires ${command === "press" ? "a key" : "text"}`);
   }
   refuseStuck(reader);
+  const settled = settle ? await settleNvda(reader, timeoutMs) : undefined;
   await reader.clearSpokenPhraseLog();
   const typed = command === "type" || (command === "press" && isTypedCharacter(argument));
   const action = typed
@@ -224,7 +226,7 @@ export async function nvdaCommand(reader, command, argument, timeoutMs) {
       : reader[command]({ capture: true });
   await deadline(action, timeoutMs, `NVDA ${command}`, () => stuck.add(reader));
   const label = typed ? `type ${JSON.stringify(argument)}` : command === "press" ? `press ${argument}` : command;
-  return recordContext(speechLog(await reader.spokenPhraseLog()), label);
+  return recordContext(speechLog(await reader.spokenPhraseLog()), label, settled);
 }
 
 // Press `key` through Windows inside one capture that stays open
@@ -232,14 +234,15 @@ export async function nvdaCommand(reader, command, argument, timeoutMs) {
 // its own captures after about a second of quiet, so an announcement a
 // product delays longer (a debounced live region) needs this window. The
 // key goes around Guidepup because a key sent through the reader waits
-// behind the open capture. Never retried.
-export async function nvdaListen(reader, key, milliseconds, timeoutMs) {
+// behind the open capture. `settle` works as in nvdaCommand. Never retried.
+export async function nvdaListen(reader, key, milliseconds, timeoutMs, { settle = false } = {}) {
   const io = sessions.get(reader)?.io ?? systemIo();
   if (!listenKey(key)) throw new Error(`NVDA listen key must be a letter, a digit or one of the named keys, not ${JSON.stringify(key)}`);
   if (!Number.isInteger(milliseconds) || milliseconds < LISTEN_MS.min || milliseconds > LISTEN_MS.max) {
     throw new Error(`NVDA listen window must be an integer from ${LISTEN_MS.min} to ${LISTEN_MS.max} ms`);
   }
   refuseStuck(reader);
+  const settled = settle ? await settleNvda(reader, timeoutMs) : undefined;
   await reader.clearSpokenPhraseLog();
   await deadline(
     reader.capture(async () => {
@@ -250,14 +253,16 @@ export async function nvdaListen(reader, key, milliseconds, timeoutMs) {
     `NVDA press ${key} with listen window`,
     () => stuck.add(reader),
   );
-  return recordContext(speechLog(await reader.spokenPhraseLog()), `press ${key} for ${milliseconds} ms`);
+  return recordContext(speechLog(await reader.spokenPhraseLog()), `press ${key} for ${milliseconds} ms`, settled);
 }
 
 // Tell NVDA to pass the next key to the browser untouched, for a key NVDA
 // would otherwise take in browse mode; the key itself follows as a `press`.
-// Returns the capture around the command. Never retried.
-export async function nvdaPassNextKey(reader, timeoutMs) {
+// Returns the capture around the command. `settle` works as in nvdaCommand.
+// Never retried.
+export async function nvdaPassNextKey(reader, timeoutMs, { settle = false } = {}) {
   refuseStuck(reader);
+  const settled = settle ? await settleNvda(reader, timeoutMs) : undefined;
   await reader.clearSpokenPhraseLog();
   await deadline(
     reader.perform(reader.keyboardCommands.ignoreNextKeyCombination, { capture: true }),
@@ -265,7 +270,7 @@ export async function nvdaPassNextKey(reader, timeoutMs) {
     "NVDA pass next key",
     () => stuck.add(reader),
   );
-  return recordContext(speechLog(await reader.spokenPhraseLog()), "pass next key");
+  return recordContext(speechLog(await reader.spokenPhraseLog()), "pass next key", settled);
 }
 
 // Stops Guidepup's reader, then waits for nvda.exe to exit, because the next
