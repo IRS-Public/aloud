@@ -175,6 +175,31 @@ export async function voiceOverCursor(reader, { focus, io = sessions.get(reader)
   return { item, phrase, ...page };
 }
 
+// Moves VoiceOver's cursor to keyboard focus when it sits on the web content
+// area while the page has a focused element (see onWebArea), with
+// VoiceOver's own command, and returns { before, after } readings; returns
+// undefined when the cursor was left alone. A cursor anywhere inside the
+// content is left alone, and so is a page whose focus is on its body, where
+// there is nothing to move to. A cursor still on the area after the move
+// throws, naming both readings: every reading command would repeat the
+// area's announcement. Never retried.
+export async function alignVoiceOverCursor(reader, { focus, timeoutMs, label = "the command" }) {
+  const state = session(reader);
+  const before = await voiceOverCursor(reader, { focus, io: state.io });
+  if (!before.focused || !onWebArea(before)) return undefined;
+  await deadline(
+    reader.perform(reader.keyboardCommands.moveCursorToKeyboardFocus, { capture: true, application: state.application }),
+    timeoutMs,
+    "VoiceOver cursor to keyboard focus",
+    state,
+  );
+  const after = await voiceOverCursor(reader, { focus, io: state.io });
+  if (onWebArea(after)) {
+    throw new Error(`VoiceOver's cursor stayed on the web content area after the move to keyboard focus, before ${label}: ${JSON.stringify({ before, after })}`);
+  }
+  return { before, after };
+}
+
 // Some hosted macOS machines refuse every Apple event to System Events for
 // the whole job (-1743 is errAEEventNotPermitted); a second attempt on the
 // same machine has never passed. Returns the reason when `output` shows that
