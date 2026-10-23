@@ -24,6 +24,7 @@ const ENTRIES = {
   "@irs-public/aloud/rules": "../src/rules/catalog.mjs",
   "@irs-public/aloud/web/nvda": "../src/web/nvda.mjs",
   "@irs-public/aloud/web/voiceover": "../src/web/voiceover.mjs",
+  "@irs-public/aloud/web/voiceover-setup": "../src/web/voiceover-setup.mjs",
   "@irs-public/aloud/web/dependencies": "../src/web/dependencies.mjs",
 };
 
@@ -55,6 +56,9 @@ describe("package exports", () => {
     for (const name of ["startVoiceOver", "voiceOverCommand", "settleVoiceOver", "stopVoiceOver"]) {
       assert.equal(typeof voiceover[name], "function", name);
     }
+    const setup = await import("@irs-public/aloud/web/voiceover-setup");
+    for (const name of ["setupVoiceOver", "setupRefusal"]) assert.equal(typeof setup[name], "function", name);
+    assert.equal(setup.SETUP_UNAVAILABLE, "VOICEOVER_SETUP_UNAVAILABLE");
   });
 
   it("exposes the rule catalog at ./rules", async () => {

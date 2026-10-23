@@ -1,5 +1,7 @@
 import { execFile, execFileSync } from "node:child_process";
 import { homedir } from "node:os";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { assertNativeDesktop, hostRefusal, stopOwnedVoiceOver, systemIo, withAttempts } from "./voiceover.mjs";
 
@@ -206,4 +208,17 @@ export async function setupVoiceOver({
   }
   if (errors.length === 1) throw errors[0];
   if (errors.length > 1) throw new AggregateError(errors, "VoiceOver setup and cleanup failed");
+}
+
+// `node src/web/voiceover-setup.mjs` sets up this runner with the pinned
+// Guidepup setup utility, as aloud's web VoiceOver workflow does. It exits
+// 1 on failure; a machine that cannot run VoiceOver has already printed
+// SETUP_UNAVAILABLE with the reason.
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  try {
+    await setupVoiceOver();
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
 }

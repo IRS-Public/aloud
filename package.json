@@ -26,6 +26,7 @@
     "./rules": "./src/rules/catalog.mjs",
     "./web/nvda": "./src/web/nvda.mjs",
     "./web/voiceover": "./src/web/voiceover.mjs",
+    "./web/voiceover-setup": "./src/web/voiceover-setup.mjs",
     "./web/dependencies": "./src/web/dependencies.mjs",
     "./src/*": "./src/*",
     "./bin/*": "./bin/*",
