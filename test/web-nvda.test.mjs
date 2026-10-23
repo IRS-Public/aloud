@@ -4,7 +4,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  NVDA_EXIT, NVDA_START, isTypedCharacter, nvdaCommand, nvdaListen, nvdaPassNextKey, startNvda, stopNvda, windowsKeyScript,
+  NVDA_EXIT, NVDA_SETTLE_MS, NVDA_START, isTypedCharacter, nvdaCommand, nvdaListen, nvdaPassNextKey, settleNvda, startNvda,
+  stopNvda, windowsKeyScript,
 } from "../src/web/nvda.mjs";
 
 function fakeIo({ running = false } = {}) {
@@ -142,6 +143,28 @@ test("a listen sends the key through Windows inside one capture held open for th
   assert.deepEqual(reader.calls.map(([name]) => name), ["clear", "capture"]);
   await assert.rejects(nvdaListen(started, "Tab", 2500, 1000), /listen key/);
   await assert.rejects(nvdaListen(started, "x", 500, 1000), /listen window/);
+});
+
+test("a settle waits a fixed time inside its own capture, after any action, and returns what it heard", async () => {
+  const reader = fakeReader(["Fixture page, document"]);
+  const io = fakeIo();
+  const started = await startNvdaWith(reader, io);
+  reader.calls.length = 0;
+  const order = [];
+  const sleep = io.sleep;
+  io.sleep = async (ms) => { order.push(`sleep ${ms}`); await sleep(ms); };
+  const settled = await settleNvda(started, 1000, { action: async () => { order.push("action"); } });
+  assert.deepEqual(settled, ["Fixture page, document"]);
+  assert.notEqual(settled, reader.log);
+  assert.deepEqual(reader.calls, [["clear"], ["capture", { capture: true }]]);
+  assert.deepEqual(order, ["action", `sleep ${NVDA_SETTLE_MS}`]);
+  reader.log = "not a log";
+  await assert.rejects(settleNvda(started, 1000), /invalid Guidepup speech log/);
+  // A settle that times out marks the reader like a command does.
+  reader.log = [];
+  started.capture = () => new Promise(() => {});
+  await assert.rejects(settleNvda(started, 10), /NVDA settle timed out/);
+  await assert.rejects(nvdaCommand(started, "next", undefined, 10), /an earlier NVDA command timed out/);
 });
 
 test("pass next key performs NVDA's ignore-next-key command inside a capture", async () => {

@@ -171,6 +171,29 @@ async function stopAfterFailedStart(nvda, io) {
   return !io.nvdaRunning();
 }
 
+// NVDA's capture restarts its own one-second wait on each phrase, so a
+// settle that waits a fixed SETTLE_MS inside a capture lets pending speech
+// finish there.
+export const NVDA_SETTLE_MS = 1500;
+
+// Let pending speech, such as a page load's, finish inside its own capture,
+// and return it, so it never lands in the next command's log. An `action`,
+// such as a navigation, runs inside the capture before the wait, so what it
+// makes NVDA say is discarded with the rest. Ported from the harness's
+// settle. Never retried.
+export async function settleNvda(reader, timeoutMs, { action = async () => {} } = {}) {
+  const io = sessions.get(reader)?.io ?? systemIo();
+  refuseStuck(reader);
+  return deadline((async () => {
+    await reader.clearSpokenPhraseLog();
+    await reader.capture(async () => {
+      await action();
+      await io.sleep(NVDA_SETTLE_MS);
+    }, { capture: true });
+    return speechLog(await reader.spokenPhraseLog());
+  })(), timeoutMs + NVDA_SETTLE_MS, "NVDA settle", () => stuck.add(reader));
+}
+
 // Send one command and return its captured speech. `press` sends a key,
 // except a single character that is not a letter or a digit, which is typed
 // (see isTypedCharacter); `type` types text; any other command is one of
