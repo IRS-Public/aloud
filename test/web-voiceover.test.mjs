@@ -437,12 +437,19 @@ test("a lone punctuation character is typed, and type sends text", async () => {
 
 test("pass next key settles, then performs VoiceOver's ignore-next-key command inside a capture", async () => {
   const io = fakeIo();
-  const voiceOver = fakeVoiceOver({ io });
+  const voiceOver = fakeVoiceOver({ io, log: ["Save email, button"], item: "Save email, button" });
   const reader = await start(io, voiceOver);
   voiceOver.calls.length = 0;
-  await voiceOverPassNextKey(reader, 1000);
+  const passed = await voiceOverPassNextKey(reader, 1000);
   assert.deepEqual(voiceOver.calls.map(([name]) => name), ["clear", "capture", "clear", "perform"]);
   assert.deepEqual(voiceOver.calls.at(-1), ["perform", "ignore-next-key", { capture: true, application: "Safari" }]);
+  // It returns its own capture, a copy, with context like any command.
+  assert.deepEqual(passed, ["Save email, button"]);
+  assert.notEqual(passed, voiceOver.log);
+  assert.deepEqual(captureContext(passed), { command: "pass next key", settled: ["Save email, button"], cursor: "Save email, button" });
+  voiceOver.log = "not a log";
+  await assert.rejects(voiceOverPassNextKey(reader, 1000), /invalid Guidepup speech log/);
+  voiceOver.log = [];
   await stopVoiceOver(reader);
   await assert.rejects(voiceOverPassNextKey(reader, 1000), /not started by startVoiceOver/);
 });
