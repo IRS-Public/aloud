@@ -241,7 +241,24 @@ such as a navigation, run inside the settle's capture), and `stopVoiceOver`,
 with the same guards. `captureContext(phrases)` gives, for a capture a
 command returned, the command that produced it, the speech its settle
 discarded, and the item under the VoiceOver cursor when it ended, for
-failure messages that say more than the words heard. `hostRefusal` names a
+failure messages that say more than the words heard.
+
+VoiceOver's cursor normally follows keyboard focus into Safari's web
+content, but now and then it stays on the web content area itself, after a
+page load or a key: VoiceOver announces the area ("<title> web content"),
+every reading command repeats that, and a key that changes a control's
+state is not announced. Give `voiceOverCommand`, `voiceOverListen` or
+`voiceOverPassNextKey` a `{ focus }` option, a function that returns the
+page's `{ title, focused }`, and before the command the driver reads the
+item under the cursor and VoiceOver's last phrase (`voiceOverCursor`) and,
+when either names the area (`onWebArea`) while an element other than the
+body has focus, moves the cursor to keyboard focus with VoiceOver's own
+command (`alignVoiceOverCursor`). The command's settle discards what the
+move made VoiceOver say, and the capture's context records the move as
+`cursorMove`. A cursor still on the area after the move fails the command
+with both readings. A cursor on a control or on the scroll area around the
+page is left alone, and so is a page focused on its body. `aloud web` passes
+the Safari page's focus. `hostRefusal` names a
 machine that refuses Apple events, on which startup stops after one attempt;
 Guidepup wraps that refusal in its "VoiceOver cannot be started", so startup
 reads each failure with its causes.
