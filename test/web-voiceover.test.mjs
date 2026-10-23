@@ -435,13 +435,14 @@ test("a lone punctuation character is typed, and type sends text", async () => {
   await stopVoiceOver(reader);
 });
 
-test("pass next key performs VoiceOver's ignore-next-key command inside a capture", async () => {
+test("pass next key settles, then performs VoiceOver's ignore-next-key command inside a capture", async () => {
   const io = fakeIo();
   const voiceOver = fakeVoiceOver({ io });
   const reader = await start(io, voiceOver);
   voiceOver.calls.length = 0;
   await voiceOverPassNextKey(reader, 1000);
-  assert.deepEqual(voiceOver.calls, [["perform", "ignore-next-key", { capture: true, application: "Safari" }]]);
+  assert.deepEqual(voiceOver.calls.map(([name]) => name), ["clear", "capture", "clear", "perform"]);
+  assert.deepEqual(voiceOver.calls.at(-1), ["perform", "ignore-next-key", { capture: true, application: "Safari" }]);
   await stopVoiceOver(reader);
   await assert.rejects(voiceOverPassNextKey(reader, 1000), /not started by startVoiceOver/);
 });

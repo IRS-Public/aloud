@@ -561,12 +561,15 @@ export async function voiceOverListen(reader, key, milliseconds, timeoutMs, { fo
 
 // Tell VoiceOver to pass the next key combination to Safari untouched, for
 // a key VoiceOver would otherwise take. Sent through Guidepup inside its
-// own capture; the key itself follows as a `press`. Ported from the
-// harness's passNextKey. `focus` works as in voiceOverCommand. Never
+// own capture; the key itself follows as a `press`. Like every command it
+// settles first, so earlier speech never lands in that capture. Ported from
+// the harness's passNextKey. `focus` works as in voiceOverCommand. Never
 // retried.
 export async function voiceOverPassNextKey(reader, timeoutMs, { focus } = {}) {
   const state = session(reader);
   if (focus) await alignVoiceOverCursor(reader, { focus, timeoutMs, label: "the pass-through key" });
+  await settleVoiceOver(reader, timeoutMs);
+  await reader.clearSpokenPhraseLog();
   await deadline(
     reader.perform(reader.keyboardCommands.ignoreNextKeyCombination, { capture: true, application: state.application }),
     timeoutMs,
