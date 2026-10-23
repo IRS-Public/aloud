@@ -931,6 +931,28 @@ test("a VoiceOver capture drives Safari and VoiceOver end to end with fakes and 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("a Safari page without keyboard focus fails with Safari's focus diagnostics", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "aloud-web-voiceover-focus-"));
+  const { io: safariIo } = fakeSafari();
+  // Every document reports that it does not own keyboard focus.
+  const javascript = safariIo.javascript;
+  safariIo.javascript = (id, source) => javascript(id, source.replace("document.hasFocus()", "false"));
+  const io = fakeIo();
+  const voiceOver = fakeVoiceOver({ io });
+  const screens = join(dir, "screens.json");
+  writeFileSync(screens, JSON.stringify([{ id: "voiceover", screens: [{ id: "form", url: "http://127.0.0.1:3000/", steps: [
+    { action: "press", key: "Tab" },
+  ] }] }]));
+  try {
+    const cfg = loadConfig(undefined, { out: dir, web: { screens, screenReader: "voiceover", timeoutMs: 1000 } });
+    await assert.rejects(captureWeb(cfg, { flow: ["voiceover"], dependencies: {
+      platform: "darwin",
+      safari: createSafari(safariIo),
+      startReader: () => startVoiceOver({ env: HOSTED, platform: "darwin", io, guidepup: guidepup(voiceOver) }),
+    } }), /browser document does not own keyboard focus: \{"keyboardPreferences":\{"AppleKeyboardUIMode":"2",.*"frontmostApplication":"Safari"\}/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 // ── review fixes ──
 
 test("the page JavaScript AppleScript never names a variable after Safari's source property", () => {
