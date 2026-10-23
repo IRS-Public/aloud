@@ -107,6 +107,11 @@ build drafts through one findings contract and one level policy.
 
 ### Added
 
+- **NVDA settle and capture context.** `settleNvda` lets pending speech
+  finish inside its own capture (`NVDA_SETTLE_MS`, 1.5 s); NVDA commands
+  run it first when given `{ settle: true }`, and `captureContext` from
+  `nvda.mjs` names each capture's command and the speech its settle
+  discarded. Without the option NVDA commands are unchanged.
 - **Safari focus diagnostics.** The Safari page gains
   `focusDiagnostics()`, and aloud web's focus errors on Safari carry it:
   keyboard preferences (`KEYBOARD_PREFERENCES`, `readPreference`), the page

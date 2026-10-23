@@ -78,8 +78,15 @@ The driver is also a library: `@irs-public/aloud/web/nvda` exports
 `startNvda`, `nvdaCommand` (`press`, `type` and Guidepup's cursor
 commands), `nvdaListen` (a letter, a digit or a named key sent through
 Windows inside one capture held open for a window of 1000 to 30000 ms),
-`nvdaPassNextKey` and `stopNvda`, which waits for nvda.exe to exit;
-the operating system is reached through an injectable `io`. `startNvda`
+`nvdaPassNextKey`, `settleNvda` and `stopNvda`, which waits for nvda.exe
+to exit; the operating system is reached through an injectable `io`.
+`settleNvda` lets pending speech finish inside its own capture, a fixed
+1.5 seconds (`NVDA_SETTLE_MS`) since NVDA's capture restarts its own wait
+on each phrase, and returns it; `nvdaCommand`, `nvdaListen` and
+`nvdaPassNextKey` settle first when given `{ settle: true }`.
+`captureContext(phrases)` gives, for a capture one of them returned, the
+command that produced it and the speech its settle discarded, the shape
+the VoiceOver driver's `captureContext` has without the cursor item. `startNvda`
 gives Guidepup's start two attempts of up to a minute each (`timeoutMs`),
 long enough for Guidepup's own two 30-second waits for nvda.exe. Guidepup
 refuses another start, and a stop, while one is pending, so a start that
