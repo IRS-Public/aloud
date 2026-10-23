@@ -33,11 +33,14 @@ default, because a first start on a fresh hosted Windows machine overran
 the old 30-second one. The harness's
 screen reader job sets `ALOUD_ALLOW_NATIVE_DESKTOP=1` for aloud's guard,
 behind its own, and keeps on its side the Chromium browser NVDA reads, the
-sentinel focus each test starts from, its focus diagnostics, and the
-command names in its failure messages. The check that moves VoiceOver's
-cursor off the web content area before each command was the harness's
-too; aloud's VoiceOver commands now make it when given the page's focus
-(see [web.md](web.md#voiceover-command-capture-safari)).
+sentinel focus each test starts from, and the command names in its failure
+messages. Four more pieces began in the harness and are now aloud's: the
+check that moves VoiceOver's cursor off the web content area before each
+command (given the page's focus, see
+[web.md](web.md#voiceover-command-capture-safari)), the Safari page's
+`focusDiagnostics()`, the NVDA settle and capture context, and the
+VoiceOver runner setup with its `VOICEOVER_SETUP_UNAVAILABLE` marker
+(`src/web/voiceover-setup.mjs`), which the harness's rerun workflow matches.
 
 ## What the adapter reads
 
