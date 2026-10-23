@@ -282,6 +282,29 @@ test("setup attempts recover between failures and keep every error", async () =>
   const stopped = await withAttempts(async () => { throw new Error("start"); },
     { attempts: 3, between: async () => { throw new Error("recovery"); } }).catch((e) => e);
   assert.deepEqual(stopped.errors.map((e) => e.message), ["start", "recovery"]);
+  assert.equal(stopped.unavailable, undefined);
+});
+
+test("setup attempts log each failure, word their error, and read a failed recovery for a reason", async () => {
+  const logged = [];
+  const failed = await withAttempts(async (n) => { throw Object.assign(new Error(`attempt ${n}`), { code: 1 }); }, {
+    attempts: 2, log: (entry) => logged.push(entry),
+    messages: { failed: "VoiceOver setup did not succeed", unavailable: "VoiceOver setup cannot pass here" },
+  }).catch((e) => e);
+  assert.deepEqual(logged, [
+    { attempt: 1, attempts: 2, message: "attempt 1", code: 1, signal: undefined, status: undefined, unavailable: undefined },
+    { attempt: 2, attempts: 2, message: "attempt 2", code: 1, signal: undefined, status: undefined, unavailable: undefined },
+  ]);
+  assert.match(failed.message, /^VoiceOver setup did not succeed: attempt 1; attempt 2$/);
+  // A recovery that fails for a reason no attempt can fix names the machine.
+  const stuck = await withAttempts(async () => { throw new Error("setup"); }, {
+    attempts: 3,
+    between: async () => { throw new Error("VoiceOver remained active"); },
+    unrecoverable: (error) => (/remained active/.test(error.message) ? "VoiceOver on this machine cannot be stopped" : undefined),
+    messages: { failed: "VoiceOver setup did not succeed", unavailable: "VoiceOver setup cannot pass here" },
+  }).catch((e) => e);
+  assert.equal(stuck.unavailable, "VoiceOver on this machine cannot be stopped");
+  assert.match(stuck.message, /^VoiceOver setup cannot pass here, VoiceOver on this machine cannot be stopped: setup; VoiceOver remained active$/);
 });
 
 test("VoiceOver refuses to replace an existing session and never starts Guidepup", async () => {
