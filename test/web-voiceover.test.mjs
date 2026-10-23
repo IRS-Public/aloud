@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   LATE_SPEECH_MS, SETTLE, assertNativeDesktop, awaitLateSpeech, awaitQuiet, captureContext, hostRefusal, isSilentCapture,
-  isTypedCharacter, matchingOwnedProcesses,
+  isTypedCharacter, matchingOwnedProcesses, onWebArea,
   parseVoiceOverProcesses, resetVoiceOverTimeoutForTests, VOICEOVER_COMMANDS, macosKeyScript, safariKey, settleVoiceOver,
   speechLog, startVoiceOver, stopOwnedVoiceOver, stopVoiceOver, voiceOverCommand, voiceOverListen, voiceOverPassNextKey,
   withAttempts,
@@ -111,6 +111,20 @@ test("speech logs must be arrays of strings and come back as copies", () => {
   assert.deepEqual(copy, log);
   assert.notEqual(copy, log);
   for (const bad of [undefined, null, "Saved", [1], ["ok", null]]) assert.throws(() => speechLog(bad), /invalid Guidepup speech log/);
+});
+
+test("a cursor reading names the web content area by its item or by the area's announcement", () => {
+  const title = "Checkbox accessibility test";
+  assert.equal(onWebArea({ item: "List accessibility test web content", title }), true);
+  assert.equal(onWebArea({ item: "scroll area", phrase: "Checkbox accessibility test, web content", title }), true);
+  // Without the page title the phrase cannot be matched.
+  assert.equal(onWebArea({ item: "scroll area", phrase: "Checkbox accessibility test, web content" }), false);
+  // A cursor on a control, on the scroll area, or with no reading is left alone.
+  assert.equal(onWebArea({ item: "HTML content" }), false);
+  assert.equal(onWebArea({ item: "scroll area", phrase: "Before list button", title }), false);
+  assert.equal(onWebArea({ item: "Frederick Douglass unchecked checkbox", phrase: "Frederick Douglass, unchecked, checkbox", title }), false);
+  assert.equal(onWebArea({ title }), false);
+  assert.equal(onWebArea(), false);
 });
 
 test("VoiceOver processes are identified by pid and start time", () => {

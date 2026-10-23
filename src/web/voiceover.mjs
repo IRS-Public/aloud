@@ -129,6 +129,22 @@ async function recordContext(reader, phrases, command, settled) {
   return phrases;
 }
 
+// Cursor readings compared as letters and digits only, lower case, since
+// VoiceOver's item text and its spoken phrase punctuate the same words
+// differently ("Checkbox test web content", "Checkbox test, web content").
+const words = (value) => String(value ?? "").toLowerCase().replace(/[’']/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+// Whether a VoiceOver cursor reading names the web content area itself: the
+// item under the cursor ends in "web content", or VoiceOver's last phrase is
+// the area's announcement, the page title followed by "web content".
+// Without the title only the item counts. A cursor on a control, or on the
+// scroll area around the page, does not. Ported from the harness's
+// onWebArea.
+export function onWebArea({ item, phrase, title } = {}) {
+  if (/\bweb content$/.test(words(item))) return true;
+  return title !== undefined && words(phrase) === words(`${title} web content`);
+}
+
 // Some hosted macOS machines refuse every Apple event to System Events for
 // the whole job (-1743 is errAEEventNotPermitted); a second attempt on the
 // same machine has never passed. Returns the reason when `output` shows that
