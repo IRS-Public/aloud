@@ -1,4 +1,5 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
+import { homedir } from "node:os";
 import { promisify } from "node:util";
 import { assertNativeDesktop, hostRefusal, stopOwnedVoiceOver, systemIo, withAttempts } from "./voiceover.mjs";
 
@@ -52,7 +53,67 @@ export function setupIo() {
     error: (...parts) => console.error(...parts),
     stdout: (text) => process.stdout.write(text),
     stderr: (text) => process.stderr.write(text),
+    // Diagnostics only: a command's output, or why it was unavailable.
+    read: (file, args, timeout = 10000) => {
+      try {
+        return execFileSync(file, args, { encoding: "utf8", timeout, stdio: ["ignore", "pipe", "pipe"] });
+      } catch (error) {
+        return `unavailable: ${error.message.split("\n")[0]}`;
+      }
+    },
+    pid: process.pid,
+    home: homedir(),
   };
+}
+
+// The lines of tccd's log that belong to Apple event requests for System
+// Events. A decision's lines share a msgID, and only its request line names
+// the service, so every line of each such request is kept. Without a match
+// the raw tail is kept, so an unexpected format still shows.
+export function appleEventLines(lines) {
+  const messageId = (line) => line.match(/msgID=([\w.:-]+)/)?.[1];
+  const requests = new Set(lines.filter((line) => /kTCCServiceAppleEvents|systemevents/.test(line)).map(messageId).filter(Boolean));
+  return requests.size ? lines.filter((line) => requests.has(messageId(line))) : lines.slice(-40);
+}
+
+// tccd logs, for each Apple event it decides, the process it held
+// responsible (AUTHREQ_ATTRIBUTION) and its answer (AUTHREQ_RESULT). Hosted
+// machines on the same image sometimes refuse System Events even though
+// every client in the process chain has a grant, so these decisions are
+// logged after a passing setup as well as a failing one; comparing the two
+// names what differs.
+export function appleEventDecisions(io, phase) {
+  const log = io.read("sudo", ["-n", "log", "show", "--last", "15m", "--info", "--style", "compact",
+    "--predicate", 'subsystem == "com.apple.TCC" AND eventMessage CONTAINS "AUTHREQ"'], 60000).split("\n");
+  io.error("VoiceOver Apple event decisions", JSON.stringify({
+    phase,
+    tccd: io.read("pgrep", ["-lx", "tccd"]).trim().split("\n"),
+    consoleUser: io.read("stat", ["-f", "%Su", "/dev/console"]).trim(),
+    decisions: appleEventLines(log).slice(-60),
+  }));
+}
+
+// macOS attributes an Apple event to the process it holds responsible, and
+// Guidepup grants System Events control only to a fixed list of runner
+// processes. When setup is refused on one hosted machine and not another,
+// this logs the setup process's ancestry and the grants actually written,
+// so the log names the client that is missing, then tccd's decisions.
+export function permissionDiagnostics(io) {
+  const ancestry = [];
+  for (let pid = io.pid; pid > 1 && ancestry.length < 15;) {
+    const [parent, ...command] = io.read("ps", ["-o", "ppid=,args=", "-p", `${pid}`]).trim().split(/\s+/);
+    if (!/^\d+$/.test(parent)) break;
+    ancestry.push({ pid, command: command.join(" ").slice(0, 200) });
+    pid = Number(parent);
+  }
+  const grants = Object.fromEntries([
+    ["system", "/Library/Application Support/com.apple.TCC/TCC.db"],
+    ["user", `${io.home}/Library/Application Support/com.apple.TCC/TCC.db`],
+  ].map(([name, database]) => [name, io.read("sudo", ["-n", "sqlite3", database,
+    "SELECT client, client_type, auth_value, auth_reason, csreq IS NULL, indirect_object_code_identity IS NULL FROM access " +
+    "WHERE service = 'kTCCServiceAppleEvents' AND indirect_object_identifier = 'com.apple.systemevents'"]).trim().split("\n")]));
+  io.error("VoiceOver setup permissions", JSON.stringify({ ancestry, grants }));
+  appleEventDecisions(io, "setup failed");
 }
 
 // Prepares this disposable macOS runner for VoiceOver capture: Guidepup's
@@ -112,6 +173,12 @@ export async function setupVoiceOver({
       messages: { failed: "VoiceOver setup did not succeed", unavailable: "VoiceOver setup cannot pass on this machine" },
     });
     await snapshot("after setup");
+    // Diagnostics never fail a setup that passed.
+    try {
+      appleEventDecisions(io, "setup passed");
+    } catch (error) {
+      io.error("VoiceOver Apple event decisions unavailable", error.message);
+    }
     try {
       await guidepupStep(["install"], timeouts.installMs);
     } catch (error) {
@@ -121,6 +188,12 @@ export async function setupVoiceOver({
   } catch (error) {
     errors.push(error);
     if (error.unavailable) marker(error.unavailable);
+    // Diagnostics never replace the setup error or skip the cleanup.
+    try {
+      permissionDiagnostics(io);
+    } catch (diagnosticError) {
+      io.error("VoiceOver setup permissions unavailable", diagnosticError.message);
+    }
   }
   // A reader still running after the final cleanup, such as one macOS
   // started again as soon as the cleanup stopped it, names the machine too.

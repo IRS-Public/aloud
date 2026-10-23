@@ -3,7 +3,9 @@
 // stops processes, or changes a preference.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SETUP_UNAVAILABLE, setupRefusal, setupVoiceOver } from "../src/web/voiceover-setup.mjs";
+import {
+  SETUP_UNAVAILABLE, appleEventDecisions, appleEventLines, permissionDiagnostics, setupRefusal, setupVoiceOver,
+} from "../src/web/voiceover-setup.mjs";
 
 test("a setup failure names a machine no further attempt can help", () => {
   assert.equal(SETUP_UNAVAILABLE, "VOICEOVER_SETUP_UNAVAILABLE");
@@ -46,9 +48,15 @@ function fakeRunner(steps) {
     error: (...parts) => io.printed.push(["error", parts.join(" ")]),
     stdout: (text) => text && io.printed.push(["stdout", text]),
     stderr: (text) => text && io.printed.push(["stderr", text]),
+    // Diagnostic commands answer from `answers`, keyed by the command name.
+    answers: {},
+    read: (file, args) => (io.answers[file] ?? (() => `unavailable: no ${file}`))(args),
+    pid: 900,
+    home: "/runner-home",
   };
   return io;
 }
+const printedAs = (io, label) => io.printed.filter(([, text]) => text.startsWith(label)).map(([, text]) => JSON.parse(text.slice(label.length + 1)));
 const startsVoiceOver = (pid) => (io) => { io.table.set(pid, `Tue Oct 20 10:00:0${pid % 10} 2026 ${VO}`); };
 const fails = (stdout, stderr = "") => () => { throw Object.assign(new Error("Command failed: guidepup"), { code: 1, stdout, stderr }); };
 const passes = (stdout) => () => ({ stdout, stderr: "" });
@@ -129,4 +137,58 @@ test("a VoiceOver macOS restarts after the final cleanup names the machine", asy
   io.kill = (pid, signal) => { io.killed.push([pid, signal]); io.table.delete(pid); io.table.set(pid + 1, `restarted ${VO}`); };
   await assert.rejects(setup(io), /^Error: VoiceOver remained active after disposable setup$/);
   assert.deepEqual(markers(io), [`${SETUP_UNAVAILABLE}: VoiceOver on this machine cannot be stopped`]);
+});
+
+test("tccd's log is cut to the lines of each Apple event request for System Events", () => {
+  const lines = [
+    "10:00:01 tccd AUTHREQ_CTX: msgID=401.1, function=TCCAccessRequest, service=kTCCServiceAppleEvents, target=com.apple.systemevents",
+    "10:00:01 tccd AUTHREQ_ATTRIBUTION: msgID=401.1, attribution={responsible={TCCDProcess: identifier=node}}",
+    "10:00:01 tccd AUTHREQ_RESULT: msgID=401.1, authValue=0, authReason=5",
+    "10:00:02 tccd AUTHREQ_CTX: msgID=402.7, function=TCCAccessRequest, service=kTCCServiceAccessibility",
+    "10:00:02 tccd AUTHREQ_RESULT: msgID=402.7, authValue=2",
+  ];
+  assert.deepEqual(appleEventLines(lines), lines.slice(0, 3));
+  // An unexpected format keeps the raw tail instead.
+  const other = Array.from({ length: 50 }, (_, n) => `line ${n}`);
+  assert.deepEqual(appleEventLines(other), other.slice(-40));
+});
+
+test("permission diagnostics log the process ancestry, the System Events grants and tccd's decisions", () => {
+  const io = fakeRunner([]);
+  const parents = { 900: "800 node setup.mjs", 800: "700 bash -e step.sh", 700: "1 Runner.Worker" };
+  io.answers.ps = (args) => parents[args.at(-1)] ?? "";
+  io.answers.sudo = (args) => (args[1] === "sqlite3" ? `com.github.runner|0|2|4|1|1\n` : "msgID=1.1 kTCCServiceAppleEvents\nmsgID=1.1 AUTHREQ_RESULT authValue=0");
+  io.answers.pgrep = () => "120 tccd\n";
+  io.answers.stat = () => "runner\n";
+  permissionDiagnostics(io);
+  const [{ ancestry, grants }] = printedAs(io, "VoiceOver setup permissions");
+  assert.deepEqual(ancestry, [
+    { pid: 900, command: "node setup.mjs" }, { pid: 800, command: "bash -e step.sh" }, { pid: 700, command: "Runner.Worker" },
+  ]);
+  assert.deepEqual(grants, { system: ["com.github.runner|0|2|4|1|1"], user: ["com.github.runner|0|2|4|1|1"] });
+  const [decisions] = printedAs(io, "VoiceOver Apple event decisions");
+  assert.deepEqual(decisions, {
+    phase: "setup failed", tccd: ["120 tccd"], consoleUser: "runner",
+    decisions: ["msgID=1.1 kTCCServiceAppleEvents", "msgID=1.1 AUTHREQ_RESULT authValue=0"],
+  });
+  // A command that cannot run is named in place of its output.
+  const bare = fakeRunner([]);
+  appleEventDecisions(bare, "setup passed");
+  assert.deepEqual(printedAs(bare, "VoiceOver Apple event decisions")[0].tccd, ["unavailable: no pgrep"]);
+});
+
+test("setup logs Apple event decisions after it passes, and permissions after it fails, without changing the outcome", async () => {
+  const passing = fakeRunner([passes("setup done\n"), passes("installed\n")]);
+  await setup(passing);
+  assert.deepEqual(printedAs(passing, "VoiceOver Apple event decisions").map(({ phase }) => phase), ["setup passed"]);
+  assert.deepEqual(printedAs(passing, "VoiceOver setup permissions"), []);
+  const failing = fakeRunner([fails("", "Not authorized to send Apple events to System Events. (-1743)")]);
+  await assert.rejects(setup(failing), /refuses Apple events/);
+  assert.deepEqual(printedAs(failing, "VoiceOver Apple event decisions").map(({ phase }) => phase), ["setup failed"]);
+  assert.equal(printedAs(failing, "VoiceOver setup permissions").length, 1);
+  // Diagnostics that throw are logged and never fail a passing setup.
+  const broken = fakeRunner([passes("setup done\n"), passes("installed\n")]);
+  broken.read = () => { throw new Error("no shell"); };
+  await setup(broken);
+  assert.ok(broken.printed.some(([, text]) => text === "VoiceOver Apple event decisions unavailable no shell"));
 });
