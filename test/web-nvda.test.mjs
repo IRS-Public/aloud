@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  NVDA_EXIT, NVDA_SETTLE_MS, NVDA_START, isTypedCharacter, nvdaCommand, nvdaListen, nvdaPassNextKey, settleNvda, startNvda,
+  NVDA_EXIT, NVDA_SETTLE_MS, NVDA_START, captureContext, isTypedCharacter, nvdaCommand, nvdaListen, nvdaPassNextKey, settleNvda, startNvda,
   stopNvda, windowsKeyScript,
 } from "../src/web/nvda.mjs";
 
@@ -165,6 +165,19 @@ test("a settle waits a fixed time inside its own capture, after any action, and 
   started.capture = () => new Promise(() => {});
   await assert.rejects(settleNvda(started, 10), /NVDA settle timed out/);
   await assert.rejects(nvdaCommand(started, "next", undefined, 10), /an earlier NVDA command timed out/);
+});
+
+test("each NVDA capture remembers the command that produced it", async () => {
+  const reader = fakeReader();
+  const started = await startNvdaWith(reader, fakeIo());
+  assert.deepEqual(captureContext(await nvdaCommand(started, "press", "Tab", 1000)), { command: "press Tab" });
+  assert.deepEqual(captureContext(await nvdaCommand(started, "press", ":", 1000)), { command: 'type ":"' });
+  assert.deepEqual(captureContext(await nvdaCommand(started, "type", "hello", 1000)), { command: 'type "hello"' });
+  assert.deepEqual(captureContext(await nvdaCommand(started, "next", undefined, 1000)), { command: "next" });
+  assert.deepEqual(captureContext(await nvdaListen(started, "x", 1500, 1000)), { command: "press x for 1500 ms" });
+  assert.deepEqual(captureContext(await nvdaPassNextKey(started, 1000)), { command: "pass next key" });
+  // Keyed by the returned array: an equal copy has no context.
+  assert.equal(captureContext([...reader.log]), undefined);
 });
 
 test("pass next key performs NVDA's ignore-next-key command inside a capture", async () => {

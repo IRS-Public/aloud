@@ -106,6 +106,17 @@ function refuseStuck(reader) {
   if (stuck.has(reader)) throw new Error("an earlier NVDA command timed out and may still be running; stop and start NVDA before sending another");
 }
 
+// Failure context for each capture a command returned, keyed by the
+// returned array: the command and, when it settled first, the speech that
+// settle discarded. The same shape as voiceover.mjs's captureContext,
+// without the cursor item NVDA does not report.
+const contexts = new WeakMap();
+export const captureContext = (phrases) => contexts.get(phrases);
+function recordContext(phrases, command, settled) {
+  contexts.set(phrases, { command, ...(settled && { settled }) });
+  return phrases;
+}
+
 function speechLog(phrases) {
   if (!Array.isArray(phrases) || !phrases.every((s) => typeof s === "string")) throw new Error("invalid Guidepup speech log");
   return [...phrases];
@@ -197,7 +208,8 @@ export async function settleNvda(reader, timeoutMs, { action = async () => {} } 
 // Send one command and return its captured speech. `press` sends a key,
 // except a single character that is not a letter or a digit, which is typed
 // (see isTypedCharacter); `type` types text; any other command is one of
-// Guidepup's cursor commands. Never retried.
+// Guidepup's cursor commands. The returned capture's context is in
+// captureContext. Never retried.
 export async function nvdaCommand(reader, command, argument, timeoutMs) {
   if ((command === "press" || command === "type") && !text(argument)) {
     throw new Error(`NVDA ${command} requires ${command === "press" ? "a key" : "text"}`);
@@ -211,7 +223,8 @@ export async function nvdaCommand(reader, command, argument, timeoutMs) {
       ? reader.press(argument, { capture: true })
       : reader[command]({ capture: true });
   await deadline(action, timeoutMs, `NVDA ${command}`, () => stuck.add(reader));
-  return speechLog(await reader.spokenPhraseLog());
+  const label = typed ? `type ${JSON.stringify(argument)}` : command === "press" ? `press ${argument}` : command;
+  return recordContext(speechLog(await reader.spokenPhraseLog()), label);
 }
 
 // Press `key` through Windows inside one capture that stays open
@@ -237,7 +250,7 @@ export async function nvdaListen(reader, key, milliseconds, timeoutMs) {
     `NVDA press ${key} with listen window`,
     () => stuck.add(reader),
   );
-  return speechLog(await reader.spokenPhraseLog());
+  return recordContext(speechLog(await reader.spokenPhraseLog()), `press ${key} for ${milliseconds} ms`);
 }
 
 // Tell NVDA to pass the next key to the browser untouched, for a key NVDA
@@ -252,7 +265,7 @@ export async function nvdaPassNextKey(reader, timeoutMs) {
     "NVDA pass next key",
     () => stuck.add(reader),
   );
-  return speechLog(await reader.spokenPhraseLog());
+  return recordContext(speechLog(await reader.spokenPhraseLog()), "pass next key");
 }
 
 // Stops Guidepup's reader, then waits for nvda.exe to exit, because the next
