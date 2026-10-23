@@ -594,6 +594,9 @@ function fakeSafari({ language = "en-US", chrome = [0, 80], screen, status = 200
     },
     screenshot: async (path, bounds) => { world.shot = { path, bounds }; writeFileSync(path, "fixture image"); },
     fetch: async (url) => ({ ok: !url.includes("missing"), status: url.includes("missing") ? 404 : 200 }),
+    preference: async (domain, key) => (key === "AppleKeyboardUIMode" ? "2" : "unset"),
+    frontWindow: async () => world.windows.at(-1),
+    frontmostApplication: async () => "Safari",
     axeSource: () => ({
       version: "4.13.0",
       source: `window.axe = { version: "${axeVersion}", run: async () => ({ ...${JSON.stringify(AXE_RESULT)}, url: document.URL }) }`,
@@ -675,6 +678,27 @@ function element(tagName, attributes = {}, children = [], extra = {}) {
     get textContent() { return children.map((child) => child.textContent).join(""); },
   };
 }
+
+test("Safari focus diagnostics name the keyboard settings, the page, and the front window", async () => {
+  const { io } = fakeSafari();
+  const context = await (await createSafari(io).launch()).newContext({});
+  const page = await context.newPage();
+  await page.goto("http://127.0.0.1:3000/form");
+  assert.deepEqual(await page.focusDiagnostics(), {
+    keyboardPreferences: { AppleKeyboardUIMode: "2", tabsToLinks: "unset", WebKitTabToLinksPreferenceKey: "unset", WebKit2TabsToLinks: "unset" },
+    pageUrl: "http://127.0.0.1:3000/form",
+    ownedWindow: "7",
+    frontSafariWindow: "7",
+    frontmostApplication: "Safari",
+  });
+  // A reading that fails is named, never thrown.
+  io.frontmostApplication = async () => { throw new Error("Not authorized to send Apple events to System Events"); };
+  io.preference = async () => { throw new Error("defaults missing"); };
+  const failed = await page.focusDiagnostics();
+  assert.equal(failed.frontmostApplication, "unreadable: Not authorized to send Apple events to System Events");
+  assert.equal(failed.keyboardPreferences.AppleKeyboardUIMode, "unreadable: defaults missing");
+  await context.close();
+});
 
 test("a preference read names an unset key and a failed read instead of throwing", async () => {
   const seen = [];
