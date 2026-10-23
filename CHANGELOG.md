@@ -111,7 +111,7 @@ build drafts through one findings contract and one level policy.
   `focusDiagnostics()`, and aloud web's focus errors on Safari carry it:
   keyboard preferences (`KEYBOARD_PREFERENCES`, `readPreference`), the page
   URL, the owned and front windows and the frontmost application. Ported
-  from the USWDS harness, which keeps its own copy until it moves to this.
+  from the USWDS harness.
 - **NVDA driver: the harness refinements.** `src/web/nvda.mjs` gains an
   injectable `io` (tasklist, cscript, timers), `nvdaCommand` with `type`
   and typed lone punctuation, `nvdaListen` (a key sent through Windows
