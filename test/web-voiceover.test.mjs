@@ -176,6 +176,46 @@ test("a cursor on the web content area moves to keyboard focus; any other cursor
   await assert.rejects(alignVoiceOverCursor(reader, { focus: focused, timeoutMs: 1000 }), /not started/);
 });
 
+test("with a focus reading, commands move the cursor off the web area before their settle", async () => {
+  const io = fakeIo({ phrases: ["List test, web content"] });
+  const voiceOver = fakeVoiceOver({ io, item: "List test web content", log: ["Show more, button"] });
+  const reader = await start(io, voiceOver);
+  const focus = async () => ({ title: "List test", focused: true });
+  const toFocus = async (command, options) => {
+    voiceOver.calls.push(["perform", command, options]);
+    voiceOver.item = "Show more button";
+    io.lastPhrase = async () => "Show more, button";
+  };
+  voiceOver.perform = toFocus;
+  voiceOver.calls.length = 0;
+  const pressed = await voiceOverCommand(reader, "press", "Space", 1000, { focus });
+  assert.deepEqual(voiceOver.calls.map(([name]) => name), ["perform", "clear", "capture", "clear", "press"]);
+  assert.equal(captureContext(pressed).cursorMove.before.item, "List test web content");
+  assert.equal(captureContext(pressed).cursorMove.after.item, "Show more button");
+  // Already inside the content: no move and no cursorMove in the context.
+  voiceOver.calls.length = 0;
+  const next = await voiceOverCommand(reader, "next", undefined, 1000, { focus });
+  assert.equal(voiceOver.calls[0][0], "clear");
+  assert.equal("cursorMove" in captureContext(next), false);
+  // The listen window and pass-through key check the cursor too.
+  for (const send of [
+    () => voiceOverListen(reader, "x", 1500, 1000, { focus }),
+    () => voiceOverPassNextKey(reader, 1000, { focus }),
+  ]) {
+    voiceOver.item = "List test web content";
+    io.lastPhrase = async () => "List test, web content";
+    voiceOver.calls.length = 0;
+    await send();
+    assert.deepEqual(voiceOver.calls[0], ["perform", "cursor-to-focus", { capture: true, application: "Safari" }]);
+  }
+  // Without focus the cursor is never read or moved.
+  voiceOver.item = "List test web content";
+  voiceOver.calls.length = 0;
+  await voiceOverCommand(reader, "next", undefined, 1000);
+  assert.equal(voiceOver.calls.some(([name]) => name === "perform"), false);
+  await stopVoiceOver(reader);
+});
+
 test("VoiceOver processes are identified by pid and start time", () => {
   const ps = [
     `  501 Tue Sep 29 10:00:00 2026     ${VO}`,
