@@ -145,6 +145,36 @@ export function onWebArea({ item, phrase, title } = {}) {
   return title !== undefined && words(phrase) === words(`${title} web content`);
 }
 
+// Where VoiceOver's cursor is: the item under it, VoiceOver's last phrase,
+// and, from `focus`, the page's title and whether an element other than the
+// body has keyboard focus. A reading that fails is named in place of its
+// value, never thrown: this is a check before a command and the context of
+// its failure. A page that refuses scripts gives no title and no focus.
+export async function voiceOverCursor(reader, { focus, io = sessions.get(reader)?.io } = {}) {
+  let page = { title: undefined, focused: false };
+  if (focus) {
+    try {
+      const { title, focused } = await focus();
+      page = { title: typeof title === "string" ? title : undefined, focused: focused === true };
+    } catch {
+      // The phrase check needs the title; without it only the item counts.
+    }
+  }
+  let phrase;
+  try {
+    phrase = io?.lastPhrase ? cleanPhrase(await io.lastPhrase()) : undefined;
+  } catch (error) {
+    phrase = `unavailable (${error.message})`;
+  }
+  let item;
+  try {
+    item = await reader.itemText();
+  } catch (error) {
+    item = `unavailable (${error.message})`;
+  }
+  return { item, phrase, ...page };
+}
+
 // Some hosted macOS machines refuse every Apple event to System Events for
 // the whole job (-1743 is errAEEventNotPermitted); a second attempt on the
 // same machine has never passed. Returns the reason when `output` shows that

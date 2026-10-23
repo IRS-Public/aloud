@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   LATE_SPEECH_MS, SETTLE, assertNativeDesktop, awaitLateSpeech, awaitQuiet, captureContext, hostRefusal, isSilentCapture,
-  isTypedCharacter, matchingOwnedProcesses, onWebArea,
+  isTypedCharacter, matchingOwnedProcesses, onWebArea, voiceOverCursor,
   parseVoiceOverProcesses, resetVoiceOverTimeoutForTests, VOICEOVER_COMMANDS, macosKeyScript, safariKey, settleVoiceOver,
   speechLog, startVoiceOver, stopOwnedVoiceOver, stopVoiceOver, voiceOverCommand, voiceOverListen, voiceOverPassNextKey,
   withAttempts,
@@ -125,6 +125,26 @@ test("a cursor reading names the web content area by its item or by the area's a
   assert.equal(onWebArea({ item: "Frederick Douglass unchecked checkbox", phrase: "Frederick Douglass, unchecked, checkbox", title }), false);
   assert.equal(onWebArea({ title }), false);
   assert.equal(onWebArea(), false);
+});
+
+test("a cursor reading names what failed to read instead of throwing", async () => {
+  const io = fakeIo({ phrases: ["Before list, button"] });
+  const reader = fakeVoiceOver({ io, item: "Before list button" });
+  const focus = async () => ({ title: "List test", focused: true });
+  assert.deepEqual(await voiceOverCursor(reader, { focus, io }),
+    { item: "Before list button", phrase: "Before list, button", title: "List test", focused: true });
+  // No focus function, or one that throws: no title and no focus.
+  const blank = { item: "Before list button", phrase: "Before list, button", title: undefined, focused: false };
+  assert.deepEqual(await voiceOverCursor(reader, { io }), blank);
+  assert.deepEqual(await voiceOverCursor(reader, { io, focus: async () => { throw new Error("JavaScript refused"); } }), blank);
+  // AppleScript's "missing value" is no phrase; failed reads are named.
+  io.lastPhrase = async () => "missing value";
+  assert.equal((await voiceOverCursor(reader, { io })).phrase, "");
+  io.lastPhrase = async () => { throw new Error("osascript timed out"); };
+  reader.itemText = async () => { throw new Error("no item"); };
+  const failed = await voiceOverCursor(reader, { io });
+  assert.equal(failed.phrase, "unavailable (osascript timed out)");
+  assert.equal(failed.item, "unavailable (no item)");
 });
 
 test("VoiceOver processes are identified by pid and start time", () => {
