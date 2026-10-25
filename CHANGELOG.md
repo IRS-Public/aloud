@@ -21,6 +21,11 @@ build drafts through one findings contract and one level policy.
   library commands do this only when given a `{ focus }` option. New
   exports `onWebArea`, `voiceOverCursor` and `alignVoiceOverCursor`;
   `captureContext` adds `cursorMove` when the cursor was moved.
+- **VoiceOver's pass-next-key command settles and returns its capture.**
+  `voiceOverPassNextKey` lets pending speech finish first, as every other
+  command does, and returns the speech captured around VoiceOver's
+  ignore-next-key command, with `captureContext`, where it returned
+  nothing before.
 - **A silent VoiceOver capture waits for late speech.** When a command's
   capture holds only the phrase its settle left, Guidepup's repeat of a
   capture that heard nothing, `voiceOverCommand` polls VoiceOver's last

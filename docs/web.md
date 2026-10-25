@@ -236,7 +236,8 @@ started in that process.
 The driver is also a library: `@irs-public/aloud/web/voiceover` exports
 `startVoiceOver`, `voiceOverCommand` (`press`, `type`, and the cursor
 commands), `voiceOverListen`, `voiceOverPassNextKey` (VoiceOver passes the
-next key to Safari untouched), `settleVoiceOver` (with an optional action,
+next key to Safari untouched; like the other commands it settles first and
+returns its capture), `settleVoiceOver` (with an optional action,
 such as a navigation, run inside the settle's capture), and `stopVoiceOver`,
 with the same guards. `captureContext(phrases)` gives, for a capture a
 command returned, the command that produced it, the speech its settle
