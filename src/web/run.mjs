@@ -93,8 +93,17 @@ export async function captureWeb(cfg, { flow = [], screenId = "current", depende
       run.environment.screenReaderVersion = reader.version;
       run.environment.guidepup = WEB_VERSIONS["@guidepup/guidepup"];
     }
-    const command = (name, argument) => readerKit.command(reader, name, argument, web.timeoutMs);
     const page = await context.newPage();
+    // VoiceOver's cursor can stay on the web content area, where it repeats
+    // the area's name and announces no state change; with the page's focus
+    // the driver moves it to keyboard focus before each command.
+    const options = web.screenReader === "voiceover"
+      ? { focus: () => page.evaluate(() => ({
+        title: document.title,
+        focused: Boolean(document.activeElement && document.activeElement !== document.body),
+      })) }
+      : undefined;
+    const command = (name, argument) => readerKit.command(reader, name, argument, web.timeoutMs, options);
     // The structural snapshot and axe scan for this browser. Safari has no
     // accessibility snapshot for scripts, so it records a DOM outline.
     const snapshot = safari ? () => page.structuralSnapshot() : () => page.locator("body").ariaSnapshot();
@@ -133,7 +142,7 @@ export async function captureWeb(cfg, { flow = [], screenId = "current", depende
           else if (action.action === "press") {
             // Safari receives Option+Tab for Tab; record the key actually sent.
             if (web.screenReader === "voiceover") step.sentKey = safariKey(action.key);
-            if (reader && action.listenMs) step.speech = await readerKit.listen(reader, action.key, action.listenMs, web.timeoutMs);
+            if (reader && action.listenMs) step.speech = await readerKit.listen(reader, action.key, action.listenMs, web.timeoutMs, options);
             else if (reader) step.speech = await command("press", action.key);
             else await page.keyboard.press(action.key);
           } else if (action.action === "click") await page.locator(action.selector).click();

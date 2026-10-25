@@ -13,6 +13,14 @@ build drafts through one findings contract and one level policy.
 
 ### Behavior changes
 
+- **aloud web moves VoiceOver's cursor off the web content area.** Before
+  each VoiceOver step it reads the item under the cursor and VoiceOver's
+  last phrase and, when either names the web content area while an element
+  has focus, moves the cursor to keyboard focus with VoiceOver's own
+  command. A cursor still on the area afterwards fails the step. The
+  library commands do this only when given a `{ focus }` option. New
+  exports `onWebArea`, `voiceOverCursor` and `alignVoiceOverCursor`;
+  `captureContext` adds `cursorMove` when the cursor was moved.
 - **A silent VoiceOver capture waits for late speech.** When a command's
   capture holds only the phrase its settle left, Guidepup's repeat of a
   capture that heard nothing, `voiceOverCommand` polls VoiceOver's last

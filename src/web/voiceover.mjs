@@ -112,11 +112,13 @@ export const isTypedCharacter = (key) => typeof key === "string" && key.length =
 // (after a silent settle Guidepup can repeat the previous phrase, so this is
 // context, not proof of late speech) and the item under the VoiceOver cursor
 // when the capture ended, which tells a cursor that moved silently from one
-// that never moved. Ported from the harness's settledBefore and cursorAfter.
+// that never moved, plus `cursorMove` when the cursor was first moved off the
+// web content area (see alignVoiceOverCursor). Ported from the harness's
+// settledBefore and cursorAfter.
 const contexts = new WeakMap();
 export const captureContext = (phrases) => contexts.get(phrases);
 
-async function recordContext(reader, phrases, command, settled) {
+async function recordContext(reader, phrases, command, settled, cursorMove) {
   let cursor;
   if (typeof reader.itemText === "function") {
     try {
@@ -125,8 +127,79 @@ async function recordContext(reader, phrases, command, settled) {
       cursor = `unavailable (${error.message})`;
     }
   }
-  contexts.set(phrases, { command, settled, cursor });
+  contexts.set(phrases, { command, settled, cursor, ...(cursorMove && { cursorMove }) });
   return phrases;
+}
+
+// Cursor readings compared as letters and digits only, lower case, since
+// VoiceOver's item text and its spoken phrase punctuate the same words
+// differently ("Checkbox test web content", "Checkbox test, web content").
+const words = (value) => String(value ?? "").toLowerCase().replace(/[’']/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+// Whether a VoiceOver cursor reading names the web content area itself: the
+// item under the cursor ends in "web content", or VoiceOver's last phrase is
+// the area's announcement, the page title followed by "web content".
+// Without the title only the item counts. A cursor on a control, or on the
+// scroll area around the page, does not. Ported from the harness's
+// onWebArea.
+export function onWebArea({ item, phrase, title } = {}) {
+  if (/\bweb content$/.test(words(item))) return true;
+  return title !== undefined && words(phrase) === words(`${title} web content`);
+}
+
+// Where VoiceOver's cursor is: the item under it, VoiceOver's last phrase,
+// and, from `focus`, the page's title and whether an element other than the
+// body has keyboard focus. A reading that fails is named in place of its
+// value, never thrown: this is a check before a command and the context of
+// its failure. A page that refuses scripts gives no title and no focus.
+export async function voiceOverCursor(reader, { focus, io = sessions.get(reader)?.io } = {}) {
+  let page = { title: undefined, focused: false };
+  if (focus) {
+    try {
+      const { title, focused } = await focus();
+      page = { title: typeof title === "string" ? title : undefined, focused: focused === true };
+    } catch {
+      // The phrase check needs the title; without it only the item counts.
+    }
+  }
+  let phrase;
+  try {
+    phrase = io?.lastPhrase ? cleanPhrase(await io.lastPhrase()) : undefined;
+  } catch (error) {
+    phrase = `unavailable (${error.message})`;
+  }
+  let item;
+  try {
+    item = await reader.itemText();
+  } catch (error) {
+    item = `unavailable (${error.message})`;
+  }
+  return { item, phrase, ...page };
+}
+
+// Moves VoiceOver's cursor to keyboard focus when it sits on the web content
+// area while the page has a focused element (see onWebArea), with
+// VoiceOver's own command, and returns { before, after } readings; returns
+// undefined when the cursor was left alone. A cursor anywhere inside the
+// content is left alone, and so is a page whose focus is on its body, where
+// there is nothing to move to. A cursor still on the area after the move
+// throws, naming both readings: every reading command would repeat the
+// area's announcement. Never retried.
+export async function alignVoiceOverCursor(reader, { focus, timeoutMs, label = "the command" }) {
+  const state = session(reader);
+  const before = await voiceOverCursor(reader, { focus, io: state.io });
+  if (!before.focused || !onWebArea(before)) return undefined;
+  await deadline(
+    reader.perform(reader.keyboardCommands.moveCursorToKeyboardFocus, { capture: true, application: state.application }),
+    timeoutMs,
+    "VoiceOver cursor to keyboard focus",
+    state,
+  );
+  const after = await voiceOverCursor(reader, { focus, io: state.io });
+  if (onWebArea(after)) {
+    throw new Error(`VoiceOver's cursor stayed on the web content area after the move to keyboard focus, before ${label}: ${JSON.stringify({ before, after })}`);
+  }
+  return { before, after };
 }
 
 // Some hosted macOS machines refuse every Apple event to System Events for
@@ -428,8 +501,10 @@ export async function settleVoiceOver(reader, timeoutMs, { action = async () => 
 // that is not a letter or a digit, which is typed (see isTypedCharacter);
 // `type` types text; cursor commands act on VoiceOver's current item and take
 // no application. The returned capture's context is in captureContext.
-// Never retried.
-export async function voiceOverCommand(reader, command, argument, timeoutMs) {
+// With `focus`, a function returning the page's { title, focused }, the
+// cursor is first moved off the web content area (see alignVoiceOverCursor)
+// and the settle discards what the move made VoiceOver say. Never retried.
+export async function voiceOverCommand(reader, command, argument, timeoutMs, { focus } = {}) {
   const state = session(reader);
   if (command === "press" || command === "type") {
     if (!text(argument)) throw new Error(`VoiceOver ${command} requires ${command === "press" ? "a key" : "text"}`);
@@ -438,24 +513,25 @@ export async function voiceOverCommand(reader, command, argument, timeoutMs) {
   } else if (argument !== undefined) {
     throw new Error(`VoiceOver ${command} takes no argument`);
   }
+  const typed = command === "type" || (command === "press" && isTypedCharacter(argument));
+  const sent = command === "press" && !typed ? safariKey(argument) : argument;
+  const label = typed ? `type ${JSON.stringify(argument)}` : command === "press" ? `press ${sent}` : command;
+  const cursorMove = focus ? await alignVoiceOverCursor(reader, { focus, timeoutMs, label }) : undefined;
   const settled = await settleVoiceOver(reader, timeoutMs);
   const baseline = await currentPhrase(state.io);
   await reader.clearSpokenPhraseLog();
-  const typed = command === "type" || (command === "press" && isTypedCharacter(argument));
-  const sent = command === "press" && !typed ? safariKey(argument) : argument;
   const action = typed
     ? reader.type(argument, { capture: true, application: state.application })
     : command === "press"
       ? reader.press(sent, { capture: true, application: state.application })
       : reader[command]({ capture: true });
   await deadline(action, timeoutMs, `VoiceOver ${command}`, state);
-  const label = typed ? `type ${JSON.stringify(argument)}` : command === "press" ? `press ${sent}` : command;
   let phrases = speechLog(await reader.spokenPhraseLog());
   if (isSilentCapture(phrases, settled)) {
     const late = await awaitLateSpeech(state.io, baseline);
     if (late.length) phrases = late;
   }
-  return recordContext(reader, phrases, label, settled);
+  return recordContext(reader, phrases, label, settled, cursorMove);
 }
 
 // Press `key` through the operating system inside one capture that stays
@@ -463,14 +539,16 @@ export async function voiceOverCommand(reader, command, argument, timeoutMs) {
 // ends its own captures after about a second of quiet, so an announcement a
 // product delays longer (a debounced live region) needs this window. The
 // key goes around Guidepup because a key sent through the reader waits
-// behind the open capture. Ported from the harness's pressAndListen. Never
-// retried.
-export async function voiceOverListen(reader, key, milliseconds, timeoutMs) {
+// behind the open capture. Ported from the harness's pressAndListen. `focus`
+// works as in voiceOverCommand. Never retried.
+export async function voiceOverListen(reader, key, milliseconds, timeoutMs, { focus } = {}) {
   const state = session(reader);
   macosKeyScript(key);
   if (!Number.isInteger(milliseconds) || milliseconds < LISTEN_MS.min || milliseconds > LISTEN_MS.max) {
     throw new Error(`VoiceOver listen window must be an integer from ${LISTEN_MS.min} to ${LISTEN_MS.max} ms`);
   }
+  const label = `press ${key} for ${milliseconds} ms`;
+  const cursorMove = focus ? await alignVoiceOverCursor(reader, { focus, timeoutMs, label }) : undefined;
   const settled = await settleVoiceOver(reader, timeoutMs);
   await reader.clearSpokenPhraseLog();
   const listen = reader.capture(async () => {
@@ -478,15 +556,17 @@ export async function voiceOverListen(reader, key, milliseconds, timeoutMs) {
     await state.io.sleep(milliseconds);
   }, { capture: true });
   await deadline(listen, milliseconds + timeoutMs, `VoiceOver press ${key} with listen window`, state);
-  return recordContext(reader, speechLog(await reader.spokenPhraseLog()), `press ${key} for ${milliseconds} ms`, settled);
+  return recordContext(reader, speechLog(await reader.spokenPhraseLog()), label, settled, cursorMove);
 }
 
 // Tell VoiceOver to pass the next key combination to Safari untouched, for
 // a key VoiceOver would otherwise take. Sent through Guidepup inside its
 // own capture; the key itself follows as a `press`. Ported from the
-// harness's passNextKey. Never retried.
-export async function voiceOverPassNextKey(reader, timeoutMs) {
+// harness's passNextKey. `focus` works as in voiceOverCommand. Never
+// retried.
+export async function voiceOverPassNextKey(reader, timeoutMs, { focus } = {}) {
   const state = session(reader);
+  if (focus) await alignVoiceOverCursor(reader, { focus, timeoutMs, label: "the pass-through key" });
   await deadline(
     reader.perform(reader.keyboardCommands.ignoreNextKeyCombination, { capture: true, application: state.application }),
     timeoutMs,

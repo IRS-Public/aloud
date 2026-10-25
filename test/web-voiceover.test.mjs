@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   LATE_SPEECH_MS, SETTLE, assertNativeDesktop, awaitLateSpeech, awaitQuiet, captureContext, hostRefusal, isSilentCapture,
-  isTypedCharacter, matchingOwnedProcesses,
+  alignVoiceOverCursor, isTypedCharacter, matchingOwnedProcesses, onWebArea, voiceOverCursor,
   parseVoiceOverProcesses, resetVoiceOverTimeoutForTests, VOICEOVER_COMMANDS, macosKeyScript, safariKey, settleVoiceOver,
   speechLog, startVoiceOver, stopOwnedVoiceOver, stopVoiceOver, voiceOverCommand, voiceOverListen, voiceOverPassNextKey,
   withAttempts,
@@ -73,7 +73,7 @@ function fakeVoiceOver({ io, startFailures = 0, log = ["Button, Save"], item = "
     press: async (key, options) => { calls.push(["press", key, options]); },
     type: async (characters, options) => { calls.push(["type", characters, options]); },
     perform: async (command, options) => { calls.push(["perform", command, options]); },
-    keyboardCommands: { ignoreNextKeyCombination: "ignore-next-key" },
+    keyboardCommands: { ignoreNextKeyCombination: "ignore-next-key", moveCursorToKeyboardFocus: "cursor-to-focus" },
     next: async (options) => { calls.push(["next", options]); },
     interact: async (options) => { calls.push(["interact", options]); },
     // The item under the VoiceOver cursor; not a recorded call, so the
@@ -111,6 +111,109 @@ test("speech logs must be arrays of strings and come back as copies", () => {
   assert.deepEqual(copy, log);
   assert.notEqual(copy, log);
   for (const bad of [undefined, null, "Saved", [1], ["ok", null]]) assert.throws(() => speechLog(bad), /invalid Guidepup speech log/);
+});
+
+test("a cursor reading names the web content area by its item or by the area's announcement", () => {
+  const title = "Checkbox accessibility test";
+  assert.equal(onWebArea({ item: "List accessibility test web content", title }), true);
+  assert.equal(onWebArea({ item: "scroll area", phrase: "Checkbox accessibility test, web content", title }), true);
+  // Without the page title the phrase cannot be matched.
+  assert.equal(onWebArea({ item: "scroll area", phrase: "Checkbox accessibility test, web content" }), false);
+  // A cursor on a control, on the scroll area, or with no reading is left alone.
+  assert.equal(onWebArea({ item: "HTML content" }), false);
+  assert.equal(onWebArea({ item: "scroll area", phrase: "Before list button", title }), false);
+  assert.equal(onWebArea({ item: "Frederick Douglass unchecked checkbox", phrase: "Frederick Douglass, unchecked, checkbox", title }), false);
+  assert.equal(onWebArea({ title }), false);
+  assert.equal(onWebArea(), false);
+});
+
+test("a cursor reading names what failed to read instead of throwing", async () => {
+  const io = fakeIo({ phrases: ["Before list, button"] });
+  const reader = fakeVoiceOver({ io, item: "Before list button" });
+  const focus = async () => ({ title: "List test", focused: true });
+  assert.deepEqual(await voiceOverCursor(reader, { focus, io }),
+    { item: "Before list button", phrase: "Before list, button", title: "List test", focused: true });
+  // No focus function, or one that throws: no title and no focus.
+  const blank = { item: "Before list button", phrase: "Before list, button", title: undefined, focused: false };
+  assert.deepEqual(await voiceOverCursor(reader, { io }), blank);
+  assert.deepEqual(await voiceOverCursor(reader, { io, focus: async () => { throw new Error("JavaScript refused"); } }), blank);
+  // AppleScript's "missing value" is no phrase; failed reads are named.
+  io.lastPhrase = async () => "missing value";
+  assert.equal((await voiceOverCursor(reader, { io })).phrase, "");
+  io.lastPhrase = async () => { throw new Error("osascript timed out"); };
+  reader.itemText = async () => { throw new Error("no item"); };
+  const failed = await voiceOverCursor(reader, { io });
+  assert.equal(failed.phrase, "unavailable (osascript timed out)");
+  assert.equal(failed.item, "unavailable (no item)");
+});
+
+test("a cursor on the web content area moves to keyboard focus; any other cursor stays", async () => {
+  const io = fakeIo({ phrases: ["List test, web content"] });
+  const voiceOver = fakeVoiceOver({ io, item: "scroll area" });
+  const reader = await start(io, voiceOver);
+  const focused = async () => ({ title: "List test", focused: true });
+  voiceOver.calls.length = 0;
+  voiceOver.perform = async (command, options) => {
+    voiceOver.calls.push(["perform", command, options]);
+    voiceOver.item = "Before list button";
+    io.lastPhrase = async () => "Before list, button";
+  };
+  const moved = await alignVoiceOverCursor(reader, { focus: focused, timeoutMs: 1000 });
+  assert.deepEqual(voiceOver.calls, [["perform", "cursor-to-focus", { capture: true, application: "Safari" }]]);
+  assert.equal(moved.before.phrase, "List test, web content");
+  assert.equal(moved.after.item, "Before list button");
+  // On a control, or with focus on the body: nothing is sent.
+  voiceOver.calls.length = 0;
+  assert.equal(await alignVoiceOverCursor(reader, { focus: focused, timeoutMs: 1000 }), undefined);
+  voiceOver.item = "List test web content";
+  assert.equal(await alignVoiceOverCursor(reader, { focus: async () => ({ title: "List test", focused: false }), timeoutMs: 1000 }), undefined);
+  assert.deepEqual(voiceOver.calls, []);
+  // A cursor still on the area after the move fails, naming both readings.
+  voiceOver.perform = async (command, options) => { voiceOver.calls.push(["perform", command, options]); };
+  await assert.rejects(alignVoiceOverCursor(reader, { focus: focused, timeoutMs: 1000, label: "press Tab" }),
+    /stayed on the web content area after the move to keyboard focus, before press Tab: .*"before":.*"after":/);
+  await stopVoiceOver(reader);
+  await assert.rejects(alignVoiceOverCursor(reader, { focus: focused, timeoutMs: 1000 }), /not started/);
+});
+
+test("with a focus reading, commands move the cursor off the web area before their settle", async () => {
+  const io = fakeIo({ phrases: ["List test, web content"] });
+  const voiceOver = fakeVoiceOver({ io, item: "List test web content", log: ["Show more, button"] });
+  const reader = await start(io, voiceOver);
+  const focus = async () => ({ title: "List test", focused: true });
+  const toFocus = async (command, options) => {
+    voiceOver.calls.push(["perform", command, options]);
+    voiceOver.item = "Show more button";
+    io.lastPhrase = async () => "Show more, button";
+  };
+  voiceOver.perform = toFocus;
+  voiceOver.calls.length = 0;
+  const pressed = await voiceOverCommand(reader, "press", "Space", 1000, { focus });
+  assert.deepEqual(voiceOver.calls.map(([name]) => name), ["perform", "clear", "capture", "clear", "press"]);
+  assert.equal(captureContext(pressed).cursorMove.before.item, "List test web content");
+  assert.equal(captureContext(pressed).cursorMove.after.item, "Show more button");
+  // Already inside the content: no move and no cursorMove in the context.
+  voiceOver.calls.length = 0;
+  const next = await voiceOverCommand(reader, "next", undefined, 1000, { focus });
+  assert.equal(voiceOver.calls[0][0], "clear");
+  assert.equal("cursorMove" in captureContext(next), false);
+  // The listen window and pass-through key check the cursor too.
+  for (const send of [
+    () => voiceOverListen(reader, "x", 1500, 1000, { focus }),
+    () => voiceOverPassNextKey(reader, 1000, { focus }),
+  ]) {
+    voiceOver.item = "List test web content";
+    io.lastPhrase = async () => "List test, web content";
+    voiceOver.calls.length = 0;
+    await send();
+    assert.deepEqual(voiceOver.calls[0], ["perform", "cursor-to-focus", { capture: true, application: "Safari" }]);
+  }
+  // Without focus the cursor is never read or moved.
+  voiceOver.item = "List test web content";
+  voiceOver.calls.length = 0;
+  await voiceOverCommand(reader, "next", undefined, 1000);
+  assert.equal(voiceOver.calls.some(([name]) => name === "perform"), false);
+  await stopVoiceOver(reader);
 });
 
 test("VoiceOver processes are identified by pid and start time", () => {
