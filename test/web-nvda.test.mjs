@@ -4,7 +4,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  NVDA_EXIT, NVDA_START, isTypedCharacter, nvdaCommand, nvdaListen, nvdaPassNextKey, startNvda, stopNvda, windowsKeyScript,
+  NVDA_EXIT, NVDA_SETTLE_MS, NVDA_START, captureContext, isTypedCharacter, nvdaCommand, nvdaListen, nvdaPassNextKey, settleNvda, startNvda,
+  stopNvda, windowsKeyScript,
 } from "../src/web/nvda.mjs";
 
 function fakeIo({ running = false } = {}) {
@@ -142,6 +143,64 @@ test("a listen sends the key through Windows inside one capture held open for th
   assert.deepEqual(reader.calls.map(([name]) => name), ["clear", "capture"]);
   await assert.rejects(nvdaListen(started, "Tab", 2500, 1000), /listen key/);
   await assert.rejects(nvdaListen(started, "x", 500, 1000), /listen window/);
+});
+
+test("a settle waits a fixed time inside its own capture, after any action, and returns what it heard", async () => {
+  const reader = fakeReader(["Fixture page, document"]);
+  const io = fakeIo();
+  const started = await startNvdaWith(reader, io);
+  reader.calls.length = 0;
+  const order = [];
+  const sleep = io.sleep;
+  io.sleep = async (ms) => { order.push(`sleep ${ms}`); await sleep(ms); };
+  const settled = await settleNvda(started, 1000, { action: async () => { order.push("action"); } });
+  assert.deepEqual(settled, ["Fixture page, document"]);
+  assert.notEqual(settled, reader.log);
+  assert.deepEqual(reader.calls, [["clear"], ["capture", { capture: true }]]);
+  assert.deepEqual(order, ["action", `sleep ${NVDA_SETTLE_MS}`]);
+  reader.log = "not a log";
+  await assert.rejects(settleNvda(started, 1000), /invalid Guidepup speech log/);
+  // A settle that times out marks the reader like a command does.
+  reader.log = [];
+  started.capture = () => new Promise(() => {});
+  await assert.rejects(settleNvda(started, 10), /NVDA settle timed out/);
+  await assert.rejects(nvdaCommand(started, "next", undefined, 10), /an earlier NVDA command timed out/);
+});
+
+test("each NVDA capture remembers the command that produced it", async () => {
+  const reader = fakeReader();
+  const started = await startNvdaWith(reader, fakeIo());
+  assert.deepEqual(captureContext(await nvdaCommand(started, "press", "Tab", 1000)), { command: "press Tab" });
+  assert.deepEqual(captureContext(await nvdaCommand(started, "press", ":", 1000)), { command: 'type ":"' });
+  assert.deepEqual(captureContext(await nvdaCommand(started, "type", "hello", 1000)), { command: 'type "hello"' });
+  assert.deepEqual(captureContext(await nvdaCommand(started, "next", undefined, 1000)), { command: "next" });
+  assert.deepEqual(captureContext(await nvdaListen(started, "x", 1500, 1000)), { command: "press x for 1500 ms" });
+  assert.deepEqual(captureContext(await nvdaPassNextKey(started, 1000)), { command: "pass next key" });
+  // Keyed by the returned array: an equal copy has no context.
+  assert.equal(captureContext([...reader.log]), undefined);
+});
+
+test("with settle, NVDA commands settle first and keep what the settle discarded", async () => {
+  const reader = fakeReader(["Save, button"]);
+  const io = fakeIo();
+  const started = await startNvdaWith(reader, io);
+  for (const [send, last] of [
+    [() => nvdaCommand(started, "press", "Tab", 1000, { settle: true }), "press"],
+    [() => nvdaListen(started, "x", 1500, 1000, { settle: true }), "capture"],
+    [() => nvdaPassNextKey(started, 1000, { settle: true }), "perform"],
+  ]) {
+    reader.calls.length = 0;
+    io.slept.length = 0;
+    const phrases = await send();
+    assert.deepEqual(reader.calls.map(([name]) => name), ["clear", "capture", "clear", last]);
+    assert.equal(io.slept[0], NVDA_SETTLE_MS);
+    assert.deepEqual(captureContext(phrases).settled, ["Save, button"]);
+  }
+  // Without it nothing settles and the context has no settled speech.
+  reader.calls.length = 0;
+  const plain = await nvdaCommand(started, "next", undefined, 1000);
+  assert.deepEqual(reader.calls.map(([name]) => name), ["clear", "next"]);
+  assert.equal("settled" in captureContext(plain), false);
 });
 
 test("pass next key performs NVDA's ignore-next-key command inside a capture", async () => {
