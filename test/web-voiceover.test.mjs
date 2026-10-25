@@ -15,7 +15,8 @@ import {
   withAttempts,
 } from "../src/web/voiceover.mjs";
 import {
-  createSafari, domOutline, javascriptScript, pageResult, pageScript, preflightRequest, sameDocumentUrl,
+  KEYBOARD_PREFERENCES, createSafari, domOutline, javascriptScript, pageResult, pageScript, preflightRequest, readPreference,
+  sameDocumentUrl,
 } from "../src/web/safari.mjs";
 import { loadConfig } from "../src/config.mjs";
 import { READER_STEP_COMMANDS, WEB_DEFAULTS, validateWebConfig, webScreens } from "../src/web/config.mjs";
@@ -593,6 +594,9 @@ function fakeSafari({ language = "en-US", chrome = [0, 80], screen, status = 200
     },
     screenshot: async (path, bounds) => { world.shot = { path, bounds }; writeFileSync(path, "fixture image"); },
     fetch: async (url) => ({ ok: !url.includes("missing"), status: url.includes("missing") ? 404 : 200 }),
+    preference: async (domain, key) => (key === "AppleKeyboardUIMode" ? "2" : "unset"),
+    frontWindow: async () => world.windows.at(-1),
+    frontmostApplication: async () => "Safari",
     axeSource: () => ({
       version: "4.13.0",
       source: `window.axe = { version: "${axeVersion}", run: async () => ({ ...${JSON.stringify(AXE_RESULT)}, url: document.URL }) }`,
@@ -674,6 +678,40 @@ function element(tagName, attributes = {}, children = [], extra = {}) {
     get textContent() { return children.map((child) => child.textContent).join(""); },
   };
 }
+
+test("Safari focus diagnostics name the keyboard settings, the page, and the front window", async () => {
+  const { io } = fakeSafari();
+  const context = await (await createSafari(io).launch()).newContext({});
+  const page = await context.newPage();
+  await page.goto("http://127.0.0.1:3000/form");
+  assert.deepEqual(await page.focusDiagnostics(), {
+    keyboardPreferences: { AppleKeyboardUIMode: "2", tabsToLinks: "unset", WebKitTabToLinksPreferenceKey: "unset", WebKit2TabsToLinks: "unset" },
+    pageUrl: "http://127.0.0.1:3000/form",
+    ownedWindow: "7",
+    frontSafariWindow: "7",
+    frontmostApplication: "Safari",
+  });
+  // A reading that fails is named, never thrown.
+  io.frontmostApplication = async () => { throw new Error("Not authorized to send Apple events to System Events"); };
+  io.preference = async () => { throw new Error("defaults missing"); };
+  const failed = await page.focusDiagnostics();
+  assert.equal(failed.frontmostApplication, "unreadable: Not authorized to send Apple events to System Events");
+  assert.equal(failed.keyboardPreferences.AppleKeyboardUIMode, "unreadable: defaults missing");
+  await context.close();
+});
+
+test("a preference read names an unset key and a failed read instead of throwing", async () => {
+  const seen = [];
+  const read = async (args) => { seen.push(args); return "2\n"; };
+  assert.equal(await readPreference(read, ...KEYBOARD_PREFERENCES.AppleKeyboardUIMode), "2");
+  assert.deepEqual(seen, [["read", "-g", "AppleKeyboardUIMode"]]);
+  const unset = async () => { throw Object.assign(new Error("does not exist"), { code: 1 }); };
+  assert.equal(await readPreference(unset, "com.apple.Safari", "WebKitTabToLinksPreferenceKey"), "unset");
+  const broken = async () => { throw Object.assign(new Error("spawn EACCES"), { code: "EACCES" }); };
+  assert.equal(await readPreference(broken, "com.apple.Safari", "WebKitTabToLinksPreferenceKey"), "unreadable: spawn EACCES");
+  assert.deepEqual(Object.keys(KEYBOARD_PREFERENCES),
+    ["AppleKeyboardUIMode", "tabsToLinks", "WebKitTabToLinksPreferenceKey", "WebKit2TabsToLinks"]);
+});
 
 test("the Safari DOM outline lists roles, names, and states and skips hidden content", () => {
   const label = element("LABEL", { for: "email" }, [text("Email address")]);
@@ -890,6 +928,28 @@ test("a VoiceOver capture drives Safari and VoiceOver end to end with fakes and 
     assert.ok(voiceOver.calls.some(([name]) => name === "stop"));
     assert.deepEqual(world.closed, ["7"]);
     assert.ok(existsSync(join(out, "index.html")));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a Safari page without keyboard focus fails with Safari's focus diagnostics", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "aloud-web-voiceover-focus-"));
+  const { io: safariIo } = fakeSafari();
+  // Every document reports that it does not own keyboard focus.
+  const javascript = safariIo.javascript;
+  safariIo.javascript = (id, source) => javascript(id, source.replace("document.hasFocus()", "false"));
+  const io = fakeIo();
+  const voiceOver = fakeVoiceOver({ io });
+  const screens = join(dir, "screens.json");
+  writeFileSync(screens, JSON.stringify([{ id: "voiceover", screens: [{ id: "form", url: "http://127.0.0.1:3000/", steps: [
+    { action: "press", key: "Tab" },
+  ] }] }]));
+  try {
+    const cfg = loadConfig(undefined, { out: dir, web: { screens, screenReader: "voiceover", timeoutMs: 1000 } });
+    await assert.rejects(captureWeb(cfg, { flow: ["voiceover"], dependencies: {
+      platform: "darwin",
+      safari: createSafari(safariIo),
+      startReader: () => startVoiceOver({ env: HOSTED, platform: "darwin", io, guidepup: guidepup(voiceOver) }),
+    } }), /browser document does not own keyboard focus: \{"keyboardPreferences":\{"AppleKeyboardUIMode":"2",.*"frontmostApplication":"Safari"\}/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

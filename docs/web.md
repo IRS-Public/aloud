@@ -183,6 +183,12 @@ changes what the evidence can say:
   is ignored on hosted runners, so `Tab` and `Shift+Tab` are sent as
   `Option+Tab` and `Option+Shift+Tab`; each step records the key actually
   sent as `sentKey`.
+- When the Safari document does not own keyboard focus, or loses it before
+  a step, the error carries the page's `focusDiagnostics()`: full keyboard
+  access and Safari's tab-to-links preferences (`KEYBOARD_PREFERENCES`, read
+  with `readPreference`; "unset" when a key is absent), the page URL, the
+  owned window's id beside Safari's front window, and the frontmost
+  application. A reading that fails is named in place of its value.
 - `voiceover` steps send a VoiceOver cursor command: `next`, `previous`,
   `nextHeading`, `nextLandmark`, `nextLink`, `act`, `interact`, or
   `stopInteracting`. `speechIncludes` works on these and on `press` steps.

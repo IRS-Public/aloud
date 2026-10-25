@@ -104,6 +104,13 @@ export async function captureWeb(cfg, { flow = [], screenId = "current", depende
       })) }
       : undefined;
     const command = (name, argument) => readerKit.command(reader, name, argument, web.timeoutMs, options);
+    // A focus failure, with Safari's focus diagnostics when the page has them.
+    const focusError = async (message) => {
+      if (!page.focusDiagnostics) return new Error(message);
+      let context;
+      try { context = await page.focusDiagnostics(); } catch (error) { context = { diagnosticsError: error.message }; }
+      return new Error(`${message}: ${JSON.stringify(context)}`);
+    };
     // The structural snapshot and axe scan for this browser. Safari has no
     // accessibility snapshot for scripts, so it records a DOM outline.
     const snapshot = safari ? () => page.structuralSnapshot() : () => page.locator("body").ariaSnapshot();
@@ -123,7 +130,7 @@ export async function captureWeb(cfg, { flow = [], screenId = "current", depende
         await page.locator("body").waitFor({ state: "attached" });
         if (reader) {
           await page.bringToFront();
-          if (!await page.evaluate(() => document.hasFocus())) throw new Error("browser document does not own keyboard focus");
+          if (!await page.evaluate(() => document.hasFocus())) throw await focusError("browser document does not own keyboard focus");
           // NVDA starts at the top of the document with Control+Home.
           // VoiceOver has no equivalent key that Aloud has validated, so no
           // command is sent: it records what VoiceOver said while it settled
@@ -137,7 +144,7 @@ export async function captureWeb(cfg, { flow = [], screenId = "current", depende
           const step = { sequence, action, completed: false, speech: [], focused: null, assertionsPassed: false };
           capture.steps.push(step);
           json(file, capture);
-          if (reader && !await page.evaluate(() => document.hasFocus())) throw new Error("browser document lost keyboard focus");
+          if (reader && !await page.evaluate(() => document.hasFocus())) throw await focusError("browser document lost keyboard focus");
           if (action.action === web.screenReader) step.speech = await command(action.command);
           else if (action.action === "press") {
             // Safari receives Option+Tab for Tab; record the key actually sent.

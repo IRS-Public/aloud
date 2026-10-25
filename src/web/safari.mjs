@@ -168,6 +168,28 @@ export const javascriptScript = windowScript(
   "    set aloudScript to read (POSIX file (item 2 of argv)) as «class utf8»\n" +
   "    return do JavaScript aloudScript in current tab of w");
 
+// The preferences that decide Safari's Tab stops: full keyboard access, and
+// Safari's tab-to-links setting under each name it has had. Read only for
+// failure context, as [domain, key] pairs for `defaults read`.
+export const KEYBOARD_PREFERENCES = {
+  AppleKeyboardUIMode: ["-g", "AppleKeyboardUIMode"],
+  tabsToLinks: ["com.apple.Safari", "WebKitPreferences.tabsToLinks"],
+  WebKitTabToLinksPreferenceKey: ["com.apple.Safari", "WebKitTabToLinksPreferenceKey"],
+  WebKit2TabsToLinks: ["com.apple.Safari", "com.apple.Safari.ContentPageGroupIdentifier.WebKit2TabsToLinks"],
+};
+
+// One preference's value through `read`, which runs `defaults read` with the
+// arguments it is given: "unset" when defaults exits 1 (no such key), and
+// "unreadable: <reason>" for any other failure, so a diagnostic never
+// throws. Ported from the harness's focus diagnostics.
+export async function readPreference(read, domain, key) {
+  try {
+    return String(await read(["read", domain, key])).trim();
+  } catch (error) {
+    return error.code === 1 || error.status === 1 ? "unset" : `unreadable: ${error.message}`;
+  }
+}
+
 // The real Safari, through osascript. Page JavaScript travels in a temporary
 // file so large sources such as axe-core stay under argument limits.
 export function safariIo() {
@@ -206,6 +228,11 @@ export function safariIo() {
       run("/usr/sbin/screencapture", ["-x", "-R", `${left},${top},${right - left},${bottom - top}`, path], { timeout: 15000 }),
     fetch: (url, options) => fetch(url, options),
     axeSource: axeCoreSource,
+    // Failure context only; see focusDiagnostics.
+    preference: (domain, key) => readPreference(async (args) =>
+      (await run("/usr/bin/defaults", args, { encoding: "utf8", timeout: 5000 })).stdout, domain, key),
+    frontWindow: () => osascript('tell application "Safari" to return id of front window'),
+    frontmostApplication: () => osascript('tell application "System Events" to return name of first application process whose frontmost is true'),
   };
 }
 
@@ -330,6 +357,26 @@ async function openContext(io, { locale, viewport, storageState } = {}) {
       return { ok: () => ok, status: () => status || preflight.status };
     },
     screenshot: async ({ path }) => io.screenshot(path, await io.bounds(id)),
+    // Why keyboard focus may be missing: Safari's keyboard preferences, the
+    // page URL, this window's id beside Safari's front window, and the
+    // frontmost application. For failure messages only, so a reading that
+    // fails is named instead of thrown.
+    focusDiagnostics: async () => {
+      const reading = async (read) => {
+        try { return await read(); } catch (error) { return `unreadable: ${error.message}`; }
+      };
+      const keyboardPreferences = {};
+      for (const [name, [domain, key]] of Object.entries(KEYBOARD_PREFERENCES)) {
+        keyboardPreferences[name] = await reading(() => io.preference(domain, key));
+      }
+      return {
+        keyboardPreferences,
+        pageUrl: await reading(() => evaluate(() => document.URL)),
+        ownedWindow: id,
+        frontSafariWindow: await reading(() => io.frontWindow()),
+        frontmostApplication: await reading(() => io.frontmostApplication()),
+      };
+    },
     structuralSnapshot: () => evaluate(domOutline),
     // Inject the pinned axe-core and run it in the page. Results come back
     // through a page variable because `do JavaScript` cannot await.
