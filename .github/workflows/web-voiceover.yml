@@ -10,6 +10,7 @@ on:
   pull_request:
     paths:
       - 'src/web/voiceover.mjs'
+      - 'src/web/voiceover-setup.mjs'
       - 'src/web/safari.mjs'
       - 'test/web-voiceover-smoke.mjs'
       - 'test/web-fixture/**'
@@ -31,11 +32,12 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci
-      # Hosted macOS machines sometimes fail Guidepup's TCC or Do Not Disturb
-      # writes on the first try; the USWDS harness allows a second attempt.
+      # Guidepup's setup and install, with a cleanup and a second attempt
+      # when a hosted machine fails its TCC or Do Not Disturb writes. A
+      # machine that cannot run VoiceOver at all prints
+      # VOICEOVER_SETUP_UNAVAILABLE with the reason.
       - name: Set up VoiceOver
-        run: npx --yes @guidepup/setup@0.25.3 setup --ci || npx --yes @guidepup/setup@0.25.3 setup --ci
-      - run: npx --yes @guidepup/setup@0.25.3 install
+        run: node src/web/voiceover-setup.mjs
       # Aloud observes its Safari window through Apple Events. Full keyboard
       # access lets Tab reach buttons and checkboxes; Safari's tab-to-links
       # preference is left off, and aloud sends Option+Tab to reach links.

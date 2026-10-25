@@ -164,12 +164,31 @@ Safari's "Allow JavaScript from Apple Events", and full keyboard access:
 
 ```sh
 npm install --save-dev @guidepup/guidepup@0.34.0 @axe-core/playwright@4.13.0
-npx --yes @guidepup/setup@0.25.3 setup --ci
-npx --yes @guidepup/setup@0.25.3 install
+export ALOUD_ALLOW_NATIVE_DESKTOP=1
+node node_modules/@irs-public/aloud/src/web/voiceover-setup.mjs
 defaults write com.apple.Safari AllowJavaScriptFromAppleEvents -bool true
 defaults write NSGlobalDomain AppleKeyboardUIMode -int 2
-ALOUD_ALLOW_NATIVE_DESKTOP=1 npx aloud web --url http://127.0.0.1:3000 --screen-reader voiceover
+npx aloud web --url http://127.0.0.1:3000 --screen-reader voiceover
 ```
+
+The setup step (`setupVoiceOver`, from `@irs-public/aloud/web/voiceover-setup`)
+runs Guidepup's `setup --ci` (preferences, permissions, Do Not Disturb)
+through `npx --yes @guidepup/setup@0.25.3`, or a command you pass as
+`guidepup`, behind the same guard. It refuses to run beside an existing
+VoiceOver session. Hosted machines sometimes fail Guidepup's permission or
+Do Not Disturb writes on the first try, so setup gets a second attempt after
+it stops every VoiceOver the first one started (matched by process id and
+start time), then runs `install`. On some machines no attempt can pass:
+they refuse every Apple event to System Events, their VoiceOver cannot be
+stopped, or GitHub's release host rate-limited their Guidepup download
+(`setupRefusal`). On those, setup stops early and prints
+`VOICEOVER_SETUP_UNAVAILABLE: <reason>` (`SETUP_UNAVAILABLE`), which a workflow
+can match to rerun the job on a fresh machine. The final cleanup runs even
+when setup failed, and a VoiceOver still running after it names the machine
+too. The job log gets tccd's Apple event decisions after a passing setup,
+and, after a failing one, the setup process's ancestry and the System
+Events grants as well, so comparing a refusing machine's log with a passing
+one names the missing client.
 
 These commands belong in a workflow step: GitHub sets `GITHUB_ACTIONS` and
 `RUNNER_ENVIRONMENT` on its hosted runners, so the last command is refused

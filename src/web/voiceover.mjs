@@ -385,9 +385,14 @@ async function deadline(operation, ms, label, state) {
 // Runs `operation` up to `attempts` times, recovering with `between` after
 // each failure. A failed recovery stops further attempts, and so does a
 // failure `unrecoverable` gives a reason for (another attempt on this
-// machine cannot help); that reason is kept as `unavailable` on the thrown
-// AggregateError, with every error.
-export async function withAttempts(operation, { attempts, between, unrecoverable = () => undefined }) {
+// machine cannot help); a recovery that fails for such a reason names the
+// machine too. The reason is kept as `unavailable` on the thrown
+// AggregateError, with every error. `log` receives each failed attempt, for
+// a job log; `messages` words the thrown error.
+export async function withAttempts(operation, {
+  attempts, between = async () => {}, unrecoverable = () => undefined, log = () => {},
+  messages = { failed: "VoiceOver did not start", unavailable: "VoiceOver cannot start here" },
+}) {
   const errors = [];
   let unavailable;
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -396,6 +401,7 @@ export async function withAttempts(operation, { attempts, between, unrecoverable
     } catch (error) {
       errors.push(error);
       unavailable = unrecoverable(error);
+      log({ attempt, attempts, message: error.message, code: error.code, signal: error.signal, status: error.status, unavailable });
     }
     if (unavailable) break;
     if (attempt < attempts) {
@@ -403,13 +409,14 @@ export async function withAttempts(operation, { attempts, between, unrecoverable
         await between(attempt);
       } catch (error) {
         errors.push(error);
+        unavailable = unrecoverable(error);
         break;
       }
     }
   }
   const reasons = errors.map(withCauses).join("; ");
   throw Object.assign(
-    new AggregateError(errors, unavailable ? `VoiceOver cannot start here, ${unavailable}: ${reasons}` : `VoiceOver did not start: ${reasons}`),
+    new AggregateError(errors, unavailable ? `${messages.unavailable}, ${unavailable}: ${reasons}` : `${messages.failed}: ${reasons}`),
     { unavailable },
   );
 }

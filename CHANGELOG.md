@@ -107,6 +107,15 @@ build drafts through one findings contract and one level policy.
 
 ### Added
 
+- **VoiceOver runner setup.** `src/web/voiceover-setup.mjs`
+  (`@irs-public/aloud/web/voiceover-setup`, or run with node) runs Guidepup's
+  setup with a cleanup and a second attempt, then its install. It names a
+  machine that cannot run VoiceOver with `VOICEOVER_SETUP_UNAVAILABLE`
+  (`setupRefusal`), cleans up even after a failure, and logs Apple event
+  and permission diagnostics. The web VoiceOver workflow uses it.
+  `withAttempts` gains `log` and `messages`, and a recovery that fails for
+  an unrecoverable reason now names the machine. Ported from the USWDS
+  harness.
 - **NVDA settle and capture context.** `settleNvda` lets pending speech
   finish inside its own capture (`NVDA_SETTLE_MS`, 1.5 s); NVDA commands
   run it first when given `{ settle: true }`, and `captureContext` from
