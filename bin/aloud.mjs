@@ -89,6 +89,7 @@ Usage: aloud <command> [flags]
 Commands:
   demo         Try aloud with no device: replay the bundled sample capture through the
                real checks and report into ./aloud-demo-report [--out <dir>]
+  android-ready Observe bounded device/foreground readiness (--out <dir>, optional --target <package>)
   android      Run the Android leg: TalkBack transcript pass + tree pass + report + gate
   ios          Run the iOS leg: computed VoiceOver transcript + tree checks + report + gate
   web          Experimental Chromium page checks and optional NVDA or VoiceOver command evidence
@@ -421,6 +422,9 @@ switch (command) {
     break;
   case "web":
     runWeb(rest);
+    break;
+  case "android-ready":
+    run(process.execPath, [join(ALOUD_HOME, "src/android/readiness.mjs"), ...rest]);
     break;
   case "android":
   case "ios":
