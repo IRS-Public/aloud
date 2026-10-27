@@ -24,8 +24,10 @@ aloud android-interaction \
 ```
 
 The example expects the native acceptance fixture's `radio-en` screen, with three
-radio choices followed by a disabled choice. Adapt the fixed sequence and exact
-speech assertions to the app and language under test. A different focus order
+radio choices followed by a disabled choice. On Android 14, its native radio
+state description is “selected” or “not selected”, while the checked value
+is a separate boolean. Adapt the fixed sequence and exact speech assertions to
+the app, screen-reader configuration and language under test. A different focus order
 should fail the assertions, not silently choose another control.
 
 Steps use TalkBack's own `first`, `next`, `previous` and `activate` gesture
@@ -35,8 +37,9 @@ window or unexpected focus change stops the sequence.
 
 `expect` can require `checkable`, `checked`, `stateDescription` and case-insensitive literal
 `speechIncludes` / `speechExcludes` strings. Pair a positive checked-state
-phrase with exclusion of its opposite (for example, exclude “not checked”);
-“checked” alone also occurs inside “not checked”. Speech checks use the utterances for that action,
+phrase with exclusion of its opposites (the example excludes “not selected”
+and “unselected”); “selected” alone also occurs inside both opposite phrases.
+Speech checks use the utterances for that action,
 not a concatenated whole-screen transcript. Use independent assertions for
 the initial amount, activation announcement and refocus announcement; speech
 from an earlier action cannot satisfy a later check.

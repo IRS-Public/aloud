@@ -55,7 +55,7 @@ public class MainActivity extends Activity {
           : "$" + amounts[i] + " — within " + days[i] + " days");
       String label = spanish ? spanishSpeech[i] + " dentro de " + days[i] + " días"
           : speech[i] + " within " + days[i] + " days";
-      option.setContentDescription(label + (i == 0 && contrarySpeech ? ", not checked" : ""));
+      option.setContentDescription(label + (i == 0 && contrarySpeech ? ", not selected" : ""));
       option.setMinHeight(dp(64));
       group.addView(option);
     }

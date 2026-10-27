@@ -47,10 +47,11 @@
         "checkable": true,
         "checked": true,
         "speechIncludes": [
-          "checked"
+          "selected"
         ],
         "speechExcludes": [
-          "not checked"
+          "not selected",
+          "unselected"
         ]
       }
     },
@@ -71,10 +72,11 @@
         "checked": true,
         "speechIncludes": [
           "1257 dollars and 93 cents",
-          "checked"
+          "selected"
         ],
         "speechExcludes": [
-          "not checked"
+          "not selected",
+          "unselected"
         ]
       }
     },
@@ -104,10 +106,11 @@
         "checkable": true,
         "checked": true,
         "speechIncludes": [
-          "checked"
+          "selected"
         ],
         "speechExcludes": [
-          "not checked"
+          "not selected",
+          "unselected"
         ]
       }
     },
@@ -128,10 +131,11 @@
         "checked": true,
         "speechIncludes": [
           "1268 dollars and 37 cents",
-          "checked"
+          "selected"
         ],
         "speechExcludes": [
-          "not checked"
+          "not selected",
+          "unselected"
         ]
       }
     },
@@ -161,10 +165,11 @@
         "checkable": true,
         "checked": true,
         "speechIncludes": [
-          "checked"
+          "selected"
         ],
         "speechExcludes": [
-          "not checked"
+          "not selected",
+          "unselected"
         ]
       }
     },
@@ -185,10 +190,11 @@
         "checked": true,
         "speechIncludes": [
           "1257 dollars and 93 cents",
-          "checked"
+          "selected"
         ],
         "speechExcludes": [
-          "not checked"
+          "not selected",
+          "unselected"
         ]
       }
     }

@@ -1,5 +1,5 @@
 // Native acceptance: pinned companion + logging TTS + synthetic fixture on Android 14 userdebug.
-// Spanish amounts are content; the emulator's English TalkBack state words stay independent.
+// Spanish amounts are content; Android 14's English RadioButton state description is "selected".
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -25,11 +25,11 @@ const amounts = {
 function journey(language) {
   const [first, middle, last] = amounts[language];
   const move = (action, amount, checked) => ({ action, expect: {
-    checkable: true, checked, speechIncludes: [amount, ...(checked ? ["checked"] : [])],
-    ...(checked ? { speechExcludes: ["not checked"] } : {}),
+    checkable: true, checked, speechIncludes: [amount, ...(checked ? ["selected"] : [])],
+    ...(checked ? { speechExcludes: ["not selected", "unselected"] } : {}),
   } });
   const activate = () => ({ action: "activate", expect: {
-    checkable: true, checked: true, speechIncludes: ["checked"], speechExcludes: ["not checked"],
+    checkable: true, checked: true, speechIncludes: ["selected"], speechExcludes: ["not selected", "unselected"],
   } });
   return { id: `radio-${language}`, steps: [
     move("first", first, false), move("next", middle, false), move("next", last, false),
@@ -128,15 +128,15 @@ try {
     { action: "first", expect: { checked: false, speechIncludes: [amounts.en[0]] } },
     { action: "activate", expect: { checked: true } },
     { action: "next", expect: { checked: false, speechIncludes: [amounts.en[1]] } },
-    { action: "previous", expect: { checked: true, speechIncludes: [amounts.en[0], "checked"],
-      speechExcludes: ["not checked"] } },
+    { action: "previous", expect: { checked: true, speechIncludes: [amounts.en[0], "selected"],
+      speechExcludes: ["not selected", "unselected"] } },
   ] }, "radio-contrary");
   assert.equal(contrary.commands.at(-1).after.checked, true);
-  assert.ok(contrary.commands.at(-1).speech.some((utterance) => /not checked/i.test(utterance.text)),
+  assert.ok(contrary.commands.at(-1).speech.some((utterance) => /not selected/i.test(utterance.text)),
     "contrary speech must actually be observed, not inferred from the node state");
   const unrelated = await rejectScenario({ id: "unrelated-event", steps: [
     { action: "first", expect: { checked: false, speechIncludes: [amounts.en[0]] } },
-    { action: "activate", expect: { checked: true, speechIncludes: ["checked"] } },
+    { action: "activate", expect: { checked: true, speechIncludes: ["selected"], speechExcludes: ["not selected", "unselected"] } },
   ] }, "radio-unrelated");
   const activation = unrelated.commands.at(-1);
   assert.equal(activation.action, "activate");
