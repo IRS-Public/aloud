@@ -108,6 +108,7 @@ export async function waitForAndroidReady({ out, target, timeoutMs = 60_000, com
   }
   let stableKey, previousAt;
   while (now() < probeDeadline) {
+    const commandCount = evidence.commands.length;
     const values = {};
     for (const [name, args] of [
       ["boot", ["shell", "getprop", "sys.boot_completed"]],
@@ -116,6 +117,9 @@ export async function waitForAndroidReady({ out, target, timeoutMs = 60_000, com
       ["activities", ["shell", "dumpsys", "activity", "activities"]],
       ...(target ? [["pid", ["shell", "pidof", target]]] : []),
     ]) values[name] = await command(name, args, probeDeadline);
+    // A sub-millisecond remainder can skip every command. It is not a new
+    // observation and must not erase the last actual device result.
+    if (evidence.commands.length === commandCount) break;
     const observation = { elapsedMs: Math.round(now() - started), ...assessReadiness(values, target) };
     evidence.observations.push(observation);
     evidence.status = observation.status; evidence.reason = observation.reason;

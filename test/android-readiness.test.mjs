@@ -188,3 +188,31 @@ test("resumed aliases must identify the same ActivityRecord and task, not just c
   assert.equal(parseResumedActivity(activityDump().replace(/t10}\n$/, "t20}\n")), null);
   assert.equal(parseResumedActivity(activityDump().replaceAll(" t10", "")), null);
 });
+
+test("fractional deadline with no new adb reads preserves the last observed obstruction", async (t) => {
+  let clock;
+  const h = harness(t, (args, _opts, current) => {
+    clock = current;
+    if (args.join(" ") === "shell dumpsys window") return windowDump({ pkg: "com.android.settings" });
+    if (args.join(" ") === "shell dumpsys activity activities") return activityDump("com.android.settings");
+  }, { sleep: async () => { clock.advance(4499.5 - clock.time); } });
+  const e = await h.run();
+  assert.equal(e.status, "not-ready");
+  assert.equal(e.reason, "target-not-foreground");
+  assert.ok(e.observations.every((o) => o.reason === "target-not-foreground"));
+  assert.ok(e.commands.some((c) => c.name === "failure-screen" && c.ok));
+});
+
+test("a real failed probe after an observed obstruction still returns unknown", async (t) => {
+  let failed = false;
+  const h = harness(t, (args) => {
+    if (failed && args.join(" ") === "shell getprop sys.boot_completed") throw new Error("device unavailable");
+    if (args.join(" ") === "shell dumpsys window") return windowDump({ pkg: "com.android.settings" });
+    if (args.join(" ") === "shell dumpsys activity activities") return activityDump("com.android.settings");
+    if (args.includes("pidof")) { failed = true; return "1234"; }
+  });
+  const e = await h.run();
+  assert.equal(e.observations[0].reason, "target-not-foreground");
+  assert.equal(e.status, "unknown");
+  assert.equal(e.reason, "boot-incomplete-or-unreadable");
+});
