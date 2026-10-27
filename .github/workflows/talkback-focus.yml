@@ -78,6 +78,8 @@ jobs:
           "$ANDROID_HOME/platform-tools/adb" install -r -g .aloud-cache/logging-tts.apk
       - name: Check TalkBack focus traversal
         run: node test/android-focus-smoke.mjs
+      - name: Check TalkBack radio activation and refocus journeys
+        run: node test/android-interaction-smoke.mjs
       - name: Check native ATF capture and cleanup
         run: node test/android-atf-smoke.mjs
       - name: Check logging TTS traversal and cleanup
@@ -90,6 +92,7 @@ jobs:
           name: talkback-focus-evidence
           path: |
             aloud-report/focus-smoke
+            aloud-report/interaction-smoke
             aloud-report/tts-smoke
             aloud-report/tts-engine-smoke
             aloud-report/atf-smoke

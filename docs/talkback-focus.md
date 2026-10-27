@@ -1,5 +1,9 @@
 # TalkBack focus traversal
 
+For explicit activation and per-action state/speech assertions, use
+[Android interaction evidence](android-interactions.md). Ordinary traversal
+does not activate controls.
+
 `aloud android --talkback focus` opts into the pinned TalkBack gesture pipeline.
 Build the test companion first (JDK 17, Gradle 8.14.3, Android SDK 36):
 

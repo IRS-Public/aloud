@@ -13,6 +13,8 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -27,6 +29,46 @@ public class MainActivity extends Activity {
     button.setMinimumHeight(140); return button;
   }
   private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
+  private void radios(LinearLayout body, boolean spanish, boolean unrelatedClick, boolean contrarySpeech) {
+    RadioGroup group = new RadioGroup(this);
+    group.setOrientation(LinearLayout.VERTICAL);
+    TextView status = new TextView(this);
+    status.setText("Unrelated status: ready");
+    int[] days = {30, 60, 90};
+    String[] amounts = {"1,257.93", "1,263.14", "1,268.37"};
+    String[] spanishAmounts = {"1257,93", "1263,14", "1268,37"};
+    String[] speech = {"1257 dollars and 93 cents", "1263 dollars and 14 cents", "1268 dollars and 37 cents"};
+    String[] spanishSpeech = {"1257 dólares con 93 centavos", "1263 dólares con 14 centavos", "1268 dólares con 37 centavos"};
+    for (int i = 0; i < days.length; i++) {
+      RadioButton option;
+      if (i == 0 && unrelatedClick) {
+        option = new RadioButton(this) {
+          @Override public boolean performClick() {
+            // A different node changing must not count as this radio being activated.
+            status.setText("Unrelated status: changed");
+            return true;
+          }
+        };
+      } else option = new RadioButton(this);
+      option.setId(nextId++);
+      option.setText(spanish ? spanishAmounts[i] + " US$ — dentro de " + days[i] + " días"
+          : "$" + amounts[i] + " — within " + days[i] + " days");
+      String label = spanish ? spanishSpeech[i] + " dentro de " + days[i] + " días"
+          : speech[i] + " within " + days[i] + " days";
+      option.setContentDescription(label + (i == 0 && contrarySpeech ? ", not checked" : ""));
+      option.setMinHeight(dp(64));
+      group.addView(option);
+    }
+    RadioButton disabled = new RadioButton(this);
+    disabled.setId(nextId++);
+    disabled.setText(spanish ? "1284,05 US$ — dentro de 180 días" : "$1,284.05 — within 180 days");
+    disabled.setContentDescription(spanish ? "1284 dólares con 5 centavos dentro de 180 días"
+        : "1284 dollars and 5 cents within 180 days");
+    disabled.setMinHeight(dp(64)); disabled.setEnabled(false); group.addView(disabled);
+    group.clearCheck();
+    body.addView(group);
+    if (unrelatedClick) body.addView(status);
+  }
   private void atf(LinearLayout body, boolean bad, boolean dynamic) {
     body.setFocusableInTouchMode(true); body.requestFocus();
     body.setAccessibilityPaneTitle("Account options");
@@ -65,7 +107,9 @@ public class MainActivity extends Activity {
     super.onCreate(saved);
     String mode = getIntent().getStringExtra("mode");
     LinearLayout body = column(); setContentView(body);
-    if ("atf-empty".equals(mode)) {
+    if (mode != null && mode.startsWith("radio-")) {
+      radios(body, "radio-es".equals(mode), "radio-unrelated".equals(mode), "radio-contrary".equals(mode));
+    } else if ("atf-empty".equals(mode)) {
       TextView staticText = new TextView(this); staticText.setText("Read-only status"); body.addView(staticText);
     } else if (mode != null && mode.startsWith("atf-")) {
       atf(body, "atf-bad".equals(mode), "atf-dynamic".equals(mode));

@@ -24,6 +24,7 @@
     "./acr": "./src/acr/index.mjs",
     "./findings.schema.json": "./src/acr/findings.schema.json",
     "./rules": "./src/rules/catalog.mjs",
+    "./android/interaction": "./src/android/talkback-interaction.mjs",
     "./web/nvda": "./src/web/nvda.mjs",
     "./web/voiceover": "./src/web/voiceover.mjs",
     "./web/voiceover-setup": "./src/web/voiceover-setup.mjs",

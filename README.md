@@ -154,6 +154,9 @@ your project root.
 
 ### Android
 
+For explicit radio activation and per-action state/speech assertions, see
+[Android interaction evidence](docs/android-interactions.md).
+
 You need a running emulator with a `google_apis` (userdebug) image, and a
 TalkBack APK (Google ships no prebuilt one, so aloud builds it from source
 at a pinned commit and caches it):
