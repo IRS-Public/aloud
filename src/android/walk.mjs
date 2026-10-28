@@ -43,6 +43,7 @@ import {
 } from "./adb.mjs";
 import { createFocusCapturer, focusTranscript } from "./talkback-focus.mjs";
 import { createAtfCapturer } from "./atf-capture.mjs";
+import { waitForAndroidReady } from "./readiness.mjs";
 import { atfTreeNodes, validateAtfEvidence } from "./atf-evidence.mjs";
 import { dedupeConsecutive, segmentTranscript } from "./transcript.mjs";
 import { parseUiDump, runChecks, validateUiCapture } from "./ui-tree.mjs";
@@ -187,6 +188,12 @@ async function walk() {
     // the proven loop); for the other modes the walker owns the settle.
     if (NAV_MODE !== "bridge") await sleep(screen.settleMs ?? 2500);
 
+    if (captureFocus || captureAtf) {
+      const readinessOut = join(OUT, "readiness", screen.id);
+      const readiness = await waitForAndroidReady({ out: readinessOut, target: appPackage });
+      if (readiness.status !== "ready") throw new Error(
+        `screen "${screen.id}": Android environment ${readiness.status} (${readiness.reason}); evidence: ${readinessOut}`);
+    }
     if (PASS === "transcript") {
       if (captureFocus) {
         const talkBackFocus = await captureFocus(screen.id);

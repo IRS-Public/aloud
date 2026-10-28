@@ -38,7 +38,7 @@ dump_diagnostics() {
   ls -l /dev/kvm 2>&1 || echo "/dev/kvm missing"
   "$SDK/emulator/emulator" -accel-check 2>&1 || true
   echo "── adb devices ──"
-  "$ADB" devices -l 2>&1 || true
+  timeout 5s "$ADB" devices -l 2>&1 || true
   echo "── emulator.log (last 100 lines) ──"
   tail -100 "$EMU_LOG" 2>/dev/null || echo "no emulator.log"
 }
@@ -58,19 +58,33 @@ EMU_PID=$!
 # and ate the whole job budget). Poll instead, and fail loudly with the
 # emulator log the moment the process is gone or the deadline passes.
 booted=""
-for i in $(seq 1 120); do
+deadline=$((SECONDS + 600))
+next_log=$((SECONDS + 60))
+while [ "$SECONDS" -lt "$deadline" ]; do
   if ! kill -0 "$EMU_PID" 2>/dev/null; then
     echo "emulator process died during startup"
     dump_diagnostics
     exit 1
   fi
-  boot=$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') || true
+  remaining=$((deadline - SECONDS))
+  call_timeout=5
+  [ "$remaining" -lt "$call_timeout" ] && call_timeout="$remaining"
+  [ "$call_timeout" -le 0 ] && break
+  boot=$(timeout "${call_timeout}s" "$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') || true
   if [ "$boot" = "1" ]; then
     booted=1
     break
   fi
-  [ $((i % 12)) -eq 0 ] && echo "still waiting for boot (${i}0s); emulator.log tail:" && tail -3 "$EMU_LOG" 2>/dev/null
-  sleep 5
+  if [ "$SECONDS" -ge "$next_log" ]; then
+    echo "still waiting for boot; emulator.log tail:"
+    tail -3 "$EMU_LOG" 2>/dev/null || true
+    next_log=$((SECONDS + 60))
+  fi
+  remaining=$((deadline - SECONDS))
+  [ "$remaining" -le 0 ] && break
+  pause=5
+  [ "$remaining" -lt "$pause" ] && pause="$remaining"
+  sleep "$pause"
 done
 if [ -z "$booted" ]; then
   echo "emulator failed to boot within 10 minutes"
