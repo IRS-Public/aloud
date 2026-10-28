@@ -81,7 +81,7 @@ jobs:
         run: |
           mkdir -p aloud-report/real-app-ios/crashes
           find ~/Library/Logs/DiagnosticReports -maxdepth 1 -name 'Wikipedia*.ips' -exec cp {} aloud-report/real-app-ios/crashes/ \;
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: wikipedia-ios-evidence
@@ -145,7 +145,7 @@ jobs:
         run: node test/real-app/android.mjs
         env:
           ALOUD_WIKIPEDIA_APK: ${{ runner.temp }}/wikipedia.apk
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: wikipedia-android-evidence
