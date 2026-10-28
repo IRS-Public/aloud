@@ -76,32 +76,29 @@ rm -rf "$IOS_OUT"
 mkdir -p "$IOS_OUT"
 
 echo "── simulator ──"
-if ! xcrun simctl list devices booted | grep -q Booted; then
-  UDID=$(xcrun simctl list devices available -j | python3 -c "
-import json,sys
-devs=[d for v in json.load(sys.stdin)['devices'].values() for d in v if 'iPhone' in d['name']]
-print(devs[-1]['udid'] if devs else '')")
-  [ -n "$UDID" ] || { echo "no available iPhone simulator"; exit 1; }
-  echo "booting $UDID"
-  xcrun simctl boot "$UDID"
-  xcrun simctl bootstatus "$UDID"
+SIM_ARGS=()
+if [ "$NAV_MODE" != "current-screen" ] || [ -n "$APP" ]; then
+  SIM_ARGS=(--allow-boot)
 fi
+UDID=$(node "$ALOUD_HOME/src/ios/simulator.mjs" ${SIM_ARGS[@]+"${SIM_ARGS[@]}"})
+export ALOUD_IOS_UDID="$UDID"
+echo "using $UDID"
 
 if [ -n "$APP" ]; then
   echo "── install $APP ──"
-  xcrun simctl install booted "$APP"
+  xcrun simctl install "$UDID" "$APP"
   if [ "$NAV_MODE" = "current-screen" ]; then
     # Launch only when this run explicitly installed a build. Otherwise the
     # walker must keep the screen the user already selected.
-    xcrun simctl launch booted "$(cfgget 'c.app?.ios?.bundleId')"
+    xcrun simctl launch "$UDID" "$(cfgget 'c.app?.ios?.bundleId')"
   fi
 fi
 
 # idb reads come back EMPTY unless the simulator's app-accessibility flag is
 # on (idb docs: ApplicationAccessibilityEnabled in com.apple.Accessibility).
 # Preempt rather than debug an all-silent audit.
-xcrun simctl spawn booted defaults write com.apple.Accessibility ApplicationAccessibilityEnabled -bool true || true
-xcrun simctl spawn booted defaults write com.apple.Accessibility AccessibilityEnabled -bool true || true
+xcrun simctl spawn "$UDID" defaults write com.apple.Accessibility ApplicationAccessibilityEnabled -bool true || true
+xcrun simctl spawn "$UDID" defaults write com.apple.Accessibility AccessibilityEnabled -bool true || true
 
 APP_SERVER_PID=""
 cleanup() {

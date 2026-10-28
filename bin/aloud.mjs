@@ -45,7 +45,7 @@ const OPTIONS = {
     headed: { type: "boolean" }, "no-gate": { type: "boolean" } },
   android: { ...LEG_OPTIONS, apk: { type: "string" }, pass: { type: "string" },
     talkback: { type: "string" }, "talkback-max-steps": { type: "string" }, tts: { type: "string" }, atf: { type: "boolean" } },
-  ios: { ...LEG_OPTIONS, app: { type: "string" }, "apple-audit": { type: "boolean" },
+  ios: { ...LEG_OPTIONS, app: { type: "string" }, udid: { type: "string" }, "apple-audit": { type: "boolean" },
     voiceover: { type: "string" }, "voiceover-max-steps": { type: "string" } },
   report: {
     ...GLOBAL_OPTIONS,
@@ -145,6 +145,7 @@ Leg flags (android, ios):
   --atf                        Android native node capture and report-only ATF checks
   --tts system|logging         Android TTS mode (logging requires focus; emits silence)
   --apple-audit                 iOS only: add report-only Apple accessibility audit evidence
+  --udid <id>                   iOS simulator (required when multiple simulators are booted)
   --voiceover computed|real     iOS speech source (default: computed; real needs Xcode 27)
   --voiceover-max-steps N       Maximum forward moves for real speech (1–100, default: 20)
 
@@ -276,6 +277,7 @@ function runLeg(platform, argv) {
     if (values["talkback-max-steps"] !== undefined) setPath(overrides, ["android", "talkBackMaxSteps"], Number(values["talkback-max-steps"]));
   }
   if (platform === "ios") setPath(overrides, ["ios", "appleAudit"], values["apple-audit"]);
+  if (platform === "ios") setPath(overrides, ["ios", "udid"], values.udid);
   if (platform === "ios") setPath(overrides, ["ios", "voiceOver"], values.voiceover);
   if (platform === "ios" && values["voiceover-max-steps"] !== undefined) {
     setPath(overrides, ["ios", "voiceOverMaxSteps"], Number(values["voiceover-max-steps"]));

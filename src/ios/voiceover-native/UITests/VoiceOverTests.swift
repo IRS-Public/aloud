@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 
 final class VoiceOverTests: XCTestCase {
   private struct CaptureFailure: Error {
@@ -67,14 +68,18 @@ final class VoiceOverTests: XCTestCase {
     if !wasEnabled { try service.enable() }
     var steps: [[String: Any]] = []
     func recordStep(_ step: [String: Any]) throws {
-      steps.append(step)
+      var timedStep = step
+      timedStep["timestampMs"] = Int(Date().timeIntervalSince1970 * 1000)
+      steps.append(timedStep)
       // Keep speech already received in the log even if a later native
       // operation fails. Only the final capture marker is reportable data.
-      let data = try JSONSerialization.data(withJSONObject: step, options: [.sortedKeys])
+      let data = try JSONSerialization.data(withJSONObject: timedStep, options: [.sortedKeys])
       print("ALOUD-VOICEOVER-STEP:\(requestID):\(data.base64EncodedString())")
+      fflush(stdout)
     }
     var reason = "step-limit"
     let started = ProcessInfo.processInfo.systemUptime
+    let startedAtMs = Int(Date().timeIntervalSince1970 * 1000)
     // Current focus plus at most maxSteps forward moves. Neither repeated
     // speech nor noSpeech proves the end: Output has no focus/end identity.
     for sequence in 0...maxSteps {
@@ -133,6 +138,7 @@ final class VoiceOverTests: XCTestCase {
     let result: [String: Any] = [
       "schemaVersion": 1, "source": "voiceover", "status": "captured",
       "requestId": requestID, "screen": screen, "bundleId": bundleID,
+      "startedAtMs": startedAtMs, "finishedAtMs": Int(Date().timeIntervalSince1970 * 1000),
       "runtime": ProcessInfo.processInfo.operatingSystemVersionString,
       "voiceOverWasEnabled": wasEnabled, "voiceOverRestored": service.isEnabled == wasEnabled,
       "coverage": ["complete": false, "start": "current-focus", "reason": reason,
@@ -150,5 +156,6 @@ final class VoiceOverTests: XCTestCase {
     attachment.lifetime = .keepAlways
     add(attachment)
     print("ALOUD-VOICEOVER:\(requestID):\(data.base64EncodedString())")
+    fflush(stdout)
   }
 }

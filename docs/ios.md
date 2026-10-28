@@ -8,6 +8,14 @@ Two speech sources are available:
   opt-in with `--voiceover real --no-gate`. Captures are explicitly partial;
   complete traversal has not been established.
 
+Select the prepared simulator with `--udid <simulator-UDID>` or top-level
+`"ios": { "udid": "<simulator-UDID>" }`. With multiple booted simulators,
+an omitted selector fails before changing the app or accessibility settings.
+Installation, navigation, screenshots, trees, and native capture use that same
+device. An unavailable selected device never falls back to another simulator.
+Current-screen mode without `--app` requires an already booted device so the
+screen prepared by the caller is preserved.
+
 ## Computed VoiceOver (default)
 
 `aloud ios --app path/to/YourApp.app` boots a simulator if none is booted,
@@ -190,10 +198,20 @@ Under `<report-root>/ios/voiceover/`:
 
 - `<screen>.json`: unchanged utterances and step order, request/screen/app
   identities, runtime, Xcode version, simulator UDID, service restoration,
-  and explicit stopping reason.
+  explicit stopping reason, and epoch millisecond timestamps for the native
+  capture boundaries (`startedAtMs`, `finishedAtMs`) and steps (`timestampMs`).
 - `<screen>.log` and `<screen>.xcresult`: native diagnostics and attachments.
 - `toolchain.log`, `generate.log`, `build.log`, `harness/`, and `build/`:
   build evidence and generated harness.
+
+The log streams during capture. Each flushed
+`ALOUD-VOICEOVER-STEP:<requestId>:<base64 JSON>` line records a completed
+native step. Dynamic-content tests can observe a forward step, change the
+app, and require a later native timestamp after that change. The CLI's
+initial “Real VoiceOver” message precedes XCTest startup and cannot establish
+that a change overlapped native speech. Progress markers are diagnostic;
+only the validated final capture is reportable evidence. Older captures
+without timestamps remain valid but cannot establish this timing.
 
 Per-screen transcripts carry `source: "voiceover"` and the full capture
 record. `summary.json` includes `transcriptSource` and VoiceOver coverage
@@ -223,7 +241,8 @@ must select a versioned policy explicitly.
 `node test/ios-voiceover-smoke.mjs` builds a separate SwiftUI fixture,
 navigates away from its launch screen, and captures repeated labels,
 modal content, scrollable rows, and changing values. It also verifies an
-unavailable target fails. The `VoiceOver smoke` workflow uses GitHub's
+unavailable target fails and observes a native step in the growing log
+before later native speech. The `VoiceOver smoke` workflow uses GitHub's
 [`xcode-27` runner](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md).
 Native captures retain the actual toolchain version; a preview runner does
 not establish GA support automatically.

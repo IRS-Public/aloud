@@ -3,7 +3,43 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { Worker } from "node:worker_threads";
 import { createVoiceOverCapturer } from "../src/ios/voiceover-capture.mjs";
+
+// The capturer is synchronous. Observe its growing log from another thread
+// so the native smoke proves that progress is published before XCTest ends.
+function observeProgress(logPath, receiptPath) {
+  const worker = new Worker(`
+    const { parentPort, workerData } = require("node:worker_threads");
+    const { readFileSync, writeFileSync } = require("node:fs");
+    const started = Date.now();
+    const finish = (receipt) => {
+      clearInterval(timer);
+      writeFileSync(workerData.receiptPath, JSON.stringify(receipt, null, 2) + "\\n");
+      parentPort.postMessage(receipt);
+    };
+    const timer = setInterval(() => {
+      if (Date.now() - started > 300000) return finish({ error: "native progress timed out" });
+      try {
+        const log = readFileSync(workerData.logPath, "utf8");
+        if (log.includes("ALOUD-VOICEOVER:")) return finish({ error: "final capture arrived before observable progress" });
+        for (const line of log.split("\\n").slice(0, -1)) {
+          const marker = line.match(/ALOUD-VOICEOVER-STEP:([^:]+):([A-Za-z0-9+/]+=*)/);
+          if (!marker) continue;
+          const step = JSON.parse(Buffer.from(marker[2], "base64").toString("utf8"));
+          if (step.sequence >= 1) return finish({ requestId: marker[1], step, observedAtMs: Date.now() });
+        }
+      } catch (error) {
+        if (error.code !== "ENOENT") finish({ error: error.message });
+      }
+    }, 50);
+  `, { eval: true, workerData: { logPath, receiptPath } });
+  const receipt = new Promise((resolveReceipt, reject) => {
+    worker.once("message", resolveReceipt);
+    worker.once("error", reject);
+  });
+  return { worker, receipt };
+}
 
 const cases = ["repeated", "modal", "scroll", "dynamic"];
 const selected = process.env.ALOUD_VO_SMOKE_CASE;
@@ -46,7 +82,19 @@ for (const mode of selected ? [selected] : cases) {
   ], { encoding: "utf8", timeout: 300_000, maxBuffer: 64 * 1024 * 1024,
     env: { ...process.env, TEST_RUNNER_ALOUD_VO_FIXTURE_MODE: mode } });
   writeFileSync(join(out, `voiceover/prepare-${mode}.log`), prepLog);
-  const result = capturer.capture(mode);
+  const observer = observeProgress(join(out, `voiceover/${mode}.log`), join(out, `voiceover/${mode}-progress.json`));
+  let result;
+  try {
+    result = capturer.capture(mode);
+    const progress = await observer.receipt;
+    assert.equal(progress.error, undefined, progress.error);
+    assert.equal(progress.requestId, result.requestId, "progress must identify this capture");
+    assert.deepEqual(progress.step, result.steps[progress.step.sequence], "live progress must match the final raw step");
+    assert.ok(result.steps.some((step) => step.sequence > progress.step.sequence && step.timestampMs > progress.observedAtMs),
+      "native speech must continue after progress was observed outside XCTest");
+  } finally {
+    await observer.worker.terminate();
+  }
   assert.equal(result.coverage.complete, false);
   assert.equal(result.voiceOverRestored, true);
   assert.equal(result.voiceOverWasEnabled, mode === "repeated", "must preserve the fixture's initial VoiceOver state");

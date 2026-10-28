@@ -2,7 +2,7 @@
 // identity, so every bounded capture explicitly has partial coverage.
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { cpSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, cpSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateScreenId } from "../screen-id.mjs";
@@ -61,9 +61,23 @@ export function validateVoiceOverCapture(result, expected) {
   if (!Array.isArray(result.steps) || result.steps.length > maxSteps + 1) {
     throw new Error("invalid VoiceOver step records");
   }
+  const hasTiming = result.startedAtMs !== undefined || result.finishedAtMs !== undefined;
+  if (hasTiming && (!count(result.startedAtMs) || !count(result.finishedAtMs) ||
+      result.startedAtMs === 0 || result.finishedAtMs < result.startedAtMs)) {
+    throw new Error("invalid VoiceOver capture timestamps");
+  }
+  let previousTimestamp = result.startedAtMs;
   for (const [i, step] of result.steps.entries()) {
     if (!record(step) || step.sequence !== i || step.action !== (i === 0 ? "current" : "forward")) {
       throw new Error("VoiceOver step sequence is incomplete or out of order");
+    }
+    if (hasTiming || step.timestampMs !== undefined) {
+      if (!count(step.timestampMs) || step.timestampMs === 0 ||
+          (previousTimestamp !== undefined && step.timestampMs < previousTimestamp) ||
+          (hasTiming && step.timestampMs > result.finishedAtMs)) {
+        throw new Error("invalid VoiceOver step timestamp");
+      }
+      previousTimestamp = step.timestampMs;
     }
     if (step.readErrors !== undefined && (i !== 0 || !Array.isArray(step.readErrors) ||
         step.readErrors.length > (step.utterance === null ? 3 : 2) || !step.readErrors.every(speechError))) {
@@ -110,16 +124,22 @@ export function createVoiceOverCapturer({ out, udid, bundleId, maxSteps = 20, ru
   cpSync(HARNESS, projectDir, { recursive: true });
   const command = (tool, args, name, env = {}) => {
     const logPath = join(evidenceDir, `${name}.log`);
+    // Native step markers must be observable while XCTest is still running.
+    // Direct descriptors also retain output if execution fails or times out.
+    const logFd = openSync(logPath, "w");
     try {
-      const output = String(run(tool, args, {
+      const output = run(tool, args, {
         cwd: projectDir, env: { ...process.env, ...env }, encoding: "utf8",
-        stdio: "pipe", timeout: 300_000, maxBuffer: 64 * 1024 * 1024,
-      }) ?? "");
-      writeFileSync(logPath, output);
-      return output;
+        stdio: ["ignore", logFd, logFd], timeout: 300_000, maxBuffer: 64 * 1024 * 1024,
+      });
+      // Injected runners may return their output instead of using descriptors.
+      if (output !== undefined && output !== null) appendFileSync(logPath, String(output));
+      return readFileSync(logPath, "utf8");
     } catch (err) {
-      writeFileSync(logPath, `${err.stdout ?? ""}\n${err.stderr ?? ""}\n${err.message}`);
+      appendFileSync(logPath, `\n${err.stdout ?? ""}\n${err.stderr ?? ""}\n${err.message}`);
       throw new Error(`VoiceOver ${tool} failed — see ${logPath}`, { cause: err });
+    } finally {
+      closeSync(logFd);
     }
   };
   const xcode = command("xcodebuild", ["-version"], "toolchain").trim();

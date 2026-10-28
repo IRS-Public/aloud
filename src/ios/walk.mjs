@@ -18,6 +18,7 @@ import { loadNavigator } from "../nav/index.mjs";
 import { computeTranscript, normalizeElements, runIosChecks, validateIosCapture } from "./tree.mjs";
 import { createAppleAuditor } from "./apple-audit.mjs";
 import { createVoiceOverCapturer } from "./voiceover-capture.mjs";
+import { selectSimulator } from "./simulator.mjs";
 import { collectProvenance } from "../provenance.mjs";
 import { aloudOutputPaths } from "../config.mjs";
 
@@ -72,11 +73,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function bootedUdid() {
   const list = JSON.parse(simctl("list", "devices", "booted", "-j"));
-  const dev = Object.values(list.devices)
-    .flat()
-    .find((d) => d.state === "Booted");
-  if (!dev) throw new Error("no booted simulator — boot one first (src/ios/run.sh does this)");
-  return dev.udid;
+  return selectSimulator(list, { udid: process.env.ALOUD_IOS_UDID || cfg.ios?.udid }).udid;
 }
 
 const SHOTS_DIR = join(OUT, "shots");
@@ -127,6 +124,14 @@ async function walk() {
   const loaded = await loadNavigator(NAV_MODE);
   const createNavigator = typeof loaded === "function" ? loaded : loaded.createNavigator;
   const nav = await createNavigator(ctx);
+  if (voiceOverCapturer) {
+    // Retain the requested batch before its first navigation. A later
+    // report must not silently omit an interrupted screen or treat a lost
+    // real-speech transcript as an ordinary passing tree-only capture.
+    writeFileSync(join(OUT, "capture-requirements.json"), JSON.stringify({
+      schemaVersion: 1, voiceOver: true, voiceOverScreens: nav.screens.map((screen) => screen.id),
+    }));
+  }
   // bridge: polls the dev bridge until the app is drivable, then settles.
   await nav.start();
 
