@@ -1,0 +1,202 @@
+{
+  "id": "radio-en",
+  "steps": [
+    {
+      "action": "first",
+      "expect": {
+        "checkable": true,
+        "checked": false,
+        "speechIncludes": [
+          "1257 dollars and 93 cents"
+        ]
+      }
+    },
+    {
+      "action": "next",
+      "expect": {
+        "checkable": true,
+        "checked": false,
+        "speechIncludes": [
+          "1263 dollars and 14 cents"
+        ]
+      }
+    },
+    {
+      "action": "next",
+      "expect": {
+        "checkable": true,
+        "checked": false,
+        "speechIncludes": [
+          "1268 dollars and 37 cents"
+        ]
+      }
+    },
+    {
+      "action": "first",
+      "expect": {
+        "checkable": true,
+        "checked": false,
+        "speechIncludes": [
+          "1257 dollars and 93 cents"
+        ]
+      }
+    },
+    {
+      "action": "activate",
+      "expect": {
+        "checkable": true,
+        "checked": true,
+        "speechIncludes": [
+          "selected"
+        ],
+        "speechExcludes": [
+          "not selected",
+          "unselected"
+        ]
+      }
+    },
+    {
+      "action": "next",
+      "expect": {
+        "checkable": true,
+        "checked": false,
+        "speechIncludes": [
+          "1263 dollars and 14 cents"
+        ]
+      }
+    },
+    {
+      "action": "previous",
+      "expect": {
+        "checkable": true,
+        "checked": true,
+        "speechIncludes": [
+          "1257 dollars and 93 cents",
+          "selected"
+        ],
+        "speechExcludes": [
+          "not selected",
+          "unselected"
+        ]
+      }
+    },
+    {
+      "action": "next",
+      "expect": {
+        "checkable": true,
+        "checked": false,
+        "speechIncludes": [
+          "1263 dollars and 14 cents"
+        ]
+      }
+    },
+    {
+      "action": "next",
+      "expect": {
+        "checkable": true,
+        "checked": false,
+        "speechIncludes": [
+          "1268 dollars and 37 cents"
+        ]
+      }
+    },
+    {
+      "action": "activate",
+      "expect": {
+        "checkable": true,
+        "checked": true,
+        "speechIncludes": [
+          "selected"
+        ],
+        "speechExcludes": [
+          "not selected",
+          "unselected"
+        ]
+      }
+    },
+    {
+      "action": "previous",
+      "expect": {
+        "checkable": true,
+        "checked": false,
+        "speechIncludes": [
+          "1263 dollars and 14 cents"
+        ]
+      }
+    },
+    {
+      "action": "next",
+      "expect": {
+        "checkable": true,
+        "checked": true,
+        "speechIncludes": [
+          "1268 dollars and 37 cents",
+          "selected"
+        ],
+        "speechExcludes": [
+          "not selected",
+          "unselected"
+        ]
+      }
+    },
+    {
+      "action": "previous",
+      "expect": {
+        "checkable": true,
+        "checked": false,
+        "speechIncludes": [
+          "1263 dollars and 14 cents"
+        ]
+      }
+    },
+    {
+      "action": "previous",
+      "expect": {
+        "checkable": true,
+        "checked": false,
+        "speechIncludes": [
+          "1257 dollars and 93 cents"
+        ]
+      }
+    },
+    {
+      "action": "activate",
+      "expect": {
+        "checkable": true,
+        "checked": true,
+        "speechIncludes": [
+          "selected"
+        ],
+        "speechExcludes": [
+          "not selected",
+          "unselected"
+        ]
+      }
+    },
+    {
+      "action": "next",
+      "expect": {
+        "checkable": true,
+        "checked": false,
+        "speechIncludes": [
+          "1263 dollars and 14 cents"
+        ]
+      }
+    },
+    {
+      "action": "previous",
+      "expect": {
+        "checkable": true,
+        "checked": true,
+        "speechIncludes": [
+          "1257 dollars and 93 cents",
+          "selected"
+        ],
+        "speechExcludes": [
+          "not selected",
+          "unselected"
+        ]
+      }
+    }
+  ]
+}

@@ -33,6 +33,13 @@ const LEG_OPTIONS = {
 };
 
 const OPTIONS = {
+  "android-interaction": {
+    help: { type: "boolean" },
+    scenario: { type: "string" },
+    package: { type: "string" },
+    out: { type: "string" },
+    tts: { type: "string" },
+  },
   web: { ...GLOBAL_OPTIONS, url: { type: "string" }, screens: { type: "string" }, flow: { type: "string" },
     "screen-id": { type: "string" }, "screen-reader": { type: "string" }, "storage-state": { type: "string" },
     headed: { type: "boolean" }, "no-gate": { type: "boolean" } },
@@ -91,6 +98,8 @@ Commands:
                real checks and report into ./aloud-demo-report [--out <dir>]
   android-ready Observe bounded device/foreground readiness (--out <dir>, optional --target <package>)
   android      Run the Android leg: TalkBack transcript pass + tree pass + report + gate
+  android-interaction
+               Run an explicit TalkBack action scenario on an already prepared test device
   ios          Run the iOS leg: computed VoiceOver transcript + tree checks + report + gate
   web          Experimental Chromium page checks and optional NVDA or VoiceOver command evidence
                (report-only)
@@ -113,6 +122,13 @@ Commands:
 Global flags:
   --config <file>   Config file (default: ./aloud.config.json if present)
   --out <dir>       Report root (default: aloud-report)
+
+Android interaction flags:
+  --scenario <file>             JSON action sequence with optional state/speech assertions
+  --package <package>           Already running target app, in its current window
+  --out <dir>                   Evidence root (default: aloud-report/interactions)
+  --tts system|logging          Speech-request listener or independent silent TTS receipts
+                               Does not install, enable or configure TalkBack/TTS
 
 Leg flags (android, ios):
   --apk <path> / --app <path>   Install this build first
@@ -157,6 +173,29 @@ Web flags:
 function fail(msg) {
   console.error(msg);
   process.exit(1);
+}
+
+async function runAndroidInteraction(argv) {
+  const { values } = parse("android-interaction", argv);
+  if (values.help) { console.log(USAGE); return; }
+  if (!values.scenario || !values.package) {
+    fail("aloud android-interaction: --scenario and --package are required");
+  }
+  if (values.tts !== undefined && !["system", "logging"].includes(values.tts)) {
+    fail("aloud android-interaction: --tts must be system or logging");
+  }
+  try {
+    const { createInteractionCapturer, validateInteractionScenario } =
+      await import("../src/android/talkback-interaction.mjs");
+    const scenario = validateInteractionScenario(JSON.parse(readFileSync(resolve(values.scenario), "utf8")));
+    const out = resolve(values.out ?? "aloud-report/interactions");
+    const capture = await createInteractionCapturer({ out, target: values.package,
+      loggingTts: values.tts === "logging" })(scenario);
+    console.log(JSON.stringify({ scenario: scenario.id, out,
+      observationComplete: capture.observationComplete, assertions: capture.assertions,
+      complete: capture.complete }));
+    if (!capture.complete) process.exitCode = 1;
+  } catch (error) { fail(`aloud android-interaction: ${error.message}`); }
 }
 
 function aloudVersion() {
@@ -429,6 +468,9 @@ switch (command) {
   case "android":
   case "ios":
     runLeg(command, rest);
+    break;
+  case "android-interaction":
+    await runAndroidInteraction(rest);
     break;
   case "talkback":
     runTalkback(rest);

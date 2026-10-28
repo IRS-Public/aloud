@@ -23,7 +23,7 @@ export function parseFocusResponse(output, expected) {
   return value;
 }
 
-export function validateFocusResponse(value, expected) {
+export function validateFocusResponse(value, expected, { interaction = false } = {}) {
   for (const key of ["requestId", "screen", "target", "sequence", "action"]) {
     if (value?.[key] !== expected[key]) throw new Error(`TalkBack companion ${key} mismatch`);
   }
@@ -31,7 +31,8 @@ export function validateFocusResponse(value, expected) {
       !isText(value.session) || !isText(value.runtime) || !Number.isSafeInteger(value.pid) || value.pid <= 0 ||
       !Number.isSafeInteger(value.sequence) || value.sequence < 0 ||
       !Number.isInteger(value.windowId) || !Number.isSafeInteger(value.elapsedMs) || value.elapsedMs < 0 ||
-      !statuses.includes(value.status) || !Array.isArray(value.signals) ||
+      !(statuses.includes(value.status) || (interaction &&
+        ["observed", "activation-target-mismatch", "activation-target-changed", "event-limit"].includes(value.status))) || !Array.isArray(value.signals) ||
       !value.signals.every((s) => ["edge", "wrap", "scroll-failed", "scroll-complete"].includes(s)) ||
       !Array.isArray(value.speech) || value.speech.length > 101 ||
       !value.speech.every((s) => isText(s.utteranceId) && typeof s.text === "string") ||
@@ -41,13 +42,13 @@ export function validateFocusResponse(value, expected) {
   if (value.status === "not-ready" && value.action !== "hello") throw new Error("readiness is only valid for hello");
   if (expected.session && (value.session !== expected.session || value.pid !== expected.pid ||
       value.windowId !== expected.windowId)) throw new Error("TalkBack companion session or window changed");
-  if (["ready", "focused", "edge"].includes(value.status) &&
+  if (["ready", "focused", "edge", ...(interaction ? ["observed"] : [])].includes(value.status) &&
       (!nodeMatches(value.after, value.target, value.windowId) ||
        value.focusEvents.some((node) => !nodeMatches(node, value.target, value.windowId)) ||
        value.signals.some((s) => ["wrap", "scroll-failed"].includes(s)))) {
     throw new Error("TalkBack companion success has invalid focus evidence");
   }
-  if (value.status === "focused" && (!value.focusEvents.length || !value.speech.some((s) => s.text.length > 0) ||
+  if (value.status === "focused" && (!value.focusEvents.length || (!interaction && !value.speech.some((s) => s.text.length > 0)) ||
       value.signals.includes("edge") || value.focusEvents.at(-1).id !== value.after.id)) {
     throw new Error("TalkBack focus move has no matching focus and speech evidence");
   }

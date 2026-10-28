@@ -39,10 +39,11 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
   private int sequence = -1, windowId;
   private PendingResult pending;
   private JSONObject response;
-  private JSONArray signals, speech, events;
+  private JSONArray signals, speech, events, stateEvents;
   private long started, changed;
   private String failure;
-  private boolean focused;
+  private boolean focused, interacting;
+  private String expectedNodeId;
 
   private AloudBridge(TalkBackService service) { this.service = service; }
 
@@ -81,6 +82,23 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
     if (instance == null || instance.pending == null) return;
     AloudBridge b = instance;
     int type = event.getEventType();
+    if (type == AccessibilityEvent.TYPE_VIEW_CLICKED || type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        || type == AccessibilityEvent.TYPE_VIEW_SELECTED) {
+      if (b.stateEvents.length() >= 200) { b.failure = "event-limit"; return; }
+      AccessibilityNodeInfo source = event.getSource();
+      JSONObject record = new JSONObject();
+      put(record, "type", AccessibilityEvent.eventTypeToString(type));
+      put(record, "eventTime", event.getEventTime());
+      put(record, "observedAt", SystemClock.uptimeMillis());
+      put(record, "windowId", event.getWindowId());
+      put(record, "packageName", safe(event.getPackageName()));
+      put(record, "contentChangeTypes", event.getContentChangeTypes());
+      put(record, "source", source == null ? JSONObject.NULL : b.nodeJson(source));
+      b.stateEvents.put(record);
+      if (source != null) source.recycle();
+      if (b.target.contentEquals(safe(event.getPackageName())) && event.getWindowId() == b.windowId)
+        b.changed = SystemClock.uptimeMillis();
+    }
     if (type == AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED) {
       AccessibilityNodeInfo node = event.getSource();
       if (node != null) {
@@ -126,12 +144,28 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
     put(value, "text", safe(node.getText()));
     put(value, "description", safe(node.getContentDescription()));
     put(value, "enabled", node.isEnabled());
+    put(value, "checkable", node.isCheckable());
+    put(value, "checked", node.isChecked());
+    put(value, "selected", node.isSelected());
+    put(value, "clickable", node.isClickable());
+    put(value, "focusable", node.isFocusable());
+    put(value, "accessibilityFocused", node.isAccessibilityFocused());
+    put(value, "childCount", node.getChildCount());
+    put(value, "stateDescriptionSupported", android.os.Build.VERSION.SDK_INT >= 30);
+    put(value, "stateDescription", android.os.Build.VERSION.SDK_INT >= 30
+        ? safe(node.getStateDescription()) : JSONObject.NULL);
     put(value, "bounds", rect.flattenToString());
     return value;
   }
 
   private AccessibilityNodeInfo focus() {
     return service.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY);
+  }
+
+  private AccessibilityNodeInfo freshFocus() {
+    AccessibilityNodeInfo node = focus();
+    if (node != null && !node.refresh()) { node.recycle(); return null; }
+    return node;
   }
 
   private boolean targetMatches() {
@@ -163,16 +197,21 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
       if (root != null) root.recycle();
     } else if (!incoming.equals(requestId) || !incomingScreen.equals(screen) || !incomingTarget.equals(target) ||
         !session.equals(intent.getStringExtra("session")) || next != sequence + 1 ||
-        !("previous".equals(op) || "first".equals(op) || "reset".equals(op) || "next".equals(op))) {
+        !("previous".equals(op) || "first".equals(op) || "reset".equals(op) || "next".equals(op)
+            || "activate".equals(op))) {
       setResultCode(409); setResultData("stale session or command sequence"); return;
     } else { sequence = next; }
     response = new JSONObject(); signals = new JSONArray(); speech = new JSONArray(); events = new JSONArray();
+    stateEvents = new JSONArray(); interacting = "activate".equals(op);
+    expectedNodeId = intent.getStringExtra("expectedNodeId");
     put(response, "schemaVersion", 1); put(response, "source", "talkback-focus");
     put(response, "requestId", requestId); put(response, "screen", screen); put(response, "target", target);
     put(response, "sequence", sequence); put(response, "action", op); put(response, "session", session);
     put(response, "talkbackCommit", PIN); put(response, "pid", android.os.Process.myPid());
+    put(response, "interactionVersion", 1);
     put(response, "windowId", windowId); put(response, "runtime", android.os.Build.VERSION.RELEASE);
-    AccessibilityNodeInfo before = focus(); put(response, "before", nodeJson(before));
+    AccessibilityNodeInfo before = freshFocus();
+    JSONObject beforeValue = nodeJson(before); put(response, "before", beforeValue);
     if (before != null) before.recycle();
     failure = null; focused = false; started = changed = SystemClock.uptimeMillis();
     pending = goAsync();
@@ -187,7 +226,14 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
       if (current != null) current.recycle();
       finish(ready ? "ready" : "not-ready"); return;
     }
-    int action = "next".equals(op) ? R.string.shortcut_value_next :
+    if (interacting && (expectedNodeId == null || !expectedNodeId.equals(beforeValue.optString("id"))
+        || !target.equals(beforeValue.optString("packageName")) || windowId != beforeValue.optInt("windowId", -1)
+        || !beforeValue.optBoolean("accessibilityFocused") || !beforeValue.optBoolean("enabled"))) {
+      finish("activation-target-mismatch"); return;
+    }
+    put(response, "actionDispatched", true);
+    int action = interacting ? R.string.shortcut_value_perform_click_action :
+        "next".equals(op) ? R.string.shortcut_value_next :
         "previous".equals(op) ? R.string.shortcut_value_previous : R.string.shortcut_value_first_in_screen;
     service.gestureController.performAction(service.getString(action), Performance.EVENT_ID_UNTRACKED);
     handler.postDelayed(this::poll, 100);
@@ -200,7 +246,13 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
     long now = SystemClock.uptimeMillis();
     if (failure != null) { finish(failure); return; }
     boolean edge = signals.toString().contains("\"edge\"");
-    if ((focused || edge) && now - changed >= 600 && !scrollPending.getAsBoolean() && !service.getSpeechController().isSpeakingOrSpeechQueued()) {
+    // This only bounds observation. A click, state transition, or speech is NOT inferred
+    // from dispatch/quiet: the host records and evaluates those independently.
+    if (interacting && now - started >= 1000 && now - changed >= 600
+        && !scrollPending.getAsBoolean() && !service.getSpeechController().isSpeakingOrSpeechQueued()) {
+      finish("observed"); return;
+    }
+    if (!interacting && (focused || edge) && now - changed >= 600 && !scrollPending.getAsBoolean() && !service.getSpeechController().isSpeakingOrSpeechQueued()) {
       finish(edge ? "edge" : "focused"); return;
     }
     if (now - started >= 8000) { finish("step-timeout"); return; }
@@ -209,10 +261,15 @@ public final class AloudBridge extends BroadcastReceiver implements FailoverTtsL
 
   private void finish(String status) {
     handler.removeCallbacksAndMessages(null);
-    AccessibilityNodeInfo after = focus(); put(response, "after", nodeJson(after));
+    AccessibilityNodeInfo after = freshFocus();
+    JSONObject afterValue = nodeJson(after); put(response, "after", afterValue);
     if (after != null) after.recycle();
+    if (interacting && "observed".equals(status) &&
+        (!expectedNodeId.equals(afterValue.optString("id")) || !afterValue.optBoolean("accessibilityFocused")))
+      status = "activation-target-changed";
     put(response, "status", status); put(response, "signals", signals);
     put(response, "speech", speech); put(response, "focusEvents", events);
+    put(response, "stateEvents", stateEvents);
     put(response, "elapsedMs", SystemClock.uptimeMillis() - started);
     JSONObject tts = RequestLedger.end();
     if (tts != null) {
