@@ -26,7 +26,7 @@ fs.appendFileSync(process.env.MOCK_CALLS, JSON.stringify([command, ...args]) + '
 const out = text => process.stdout.write(text);
 if (command === 'xcrun') {
   const a = args.slice(1);
-  if (a[0] === 'list') out(JSON.stringify({ devices: { runtime: [{ state: 'Booted', udid: 'sim-1' }] } }));
+  if (a[0] === 'list') out(JSON.stringify({ devices: { runtime: process.env.MOCK_SIMULATORS ? JSON.parse(process.env.MOCK_SIMULATORS) : [{ state: 'Booted', udid: 'sim-1' }] } }));
   else if (a[0] === 'ui' && a.length === 3) out('dark');
   else if (a[0] === 'io') fs.writeFileSync(a[3], 'image');
 } else if (command === 'idb') {
@@ -136,6 +136,28 @@ test("iOS current-screen launches an explicitly installed build before capture",
   assert.ok(install >= 0 && install < launch && launch < capture, "the installed app must open before capture");
   assert.equal(calls.filter(c => c[2] === "launch").length, 1);
   assert.ok(!calls.some(c => c[2] === "terminate"));
+  assert.ok(calls.filter(c => ["install", "launch", "spawn", "io", "ui"].includes(c[2])).every(c => c[3] === "sim-1"), "all mutations and evidence must target the selected device");
+});
+
+test("iOS CLI pins a selected device across installation and capture on a multi-simulator host", (t) => {
+  const r = rig(t);
+  r.env.MOCK_SIMULATORS = JSON.stringify([{ state: "Booted", udid: "sim-1" }, { state: "Booted", udid: "sim-2" }]);
+  const result = r.run("bin/aloud.mjs", ["ios", "--config", r.env.ALOUD_CONFIG, "--udid", "sim-2", "--app", join(r.dir, "Example.app"), "--no-gate"]);
+  assert.equal(result.status, 0, result.stderr);
+  const calls = r.calls();
+  assert.ok(calls.some(c => c[2] === "launch" && c[3] === "sim-2"));
+  assert.ok(calls.some(c => c[0] === "idb" && c.at(-1) === "sim-2"));
+  assert.ok(!calls.some(c => c.includes("booted") && c[2] !== "list"));
+  assert.ok(!calls.some(c => c.includes("sim-1")));
+});
+
+test("iOS ambiguity fails before app or accessibility setting changes", (t) => {
+  const r = rig(t);
+  r.env.MOCK_SIMULATORS = JSON.stringify([{ state: "Booted", udid: "sim-1" }, { state: "Booted", udid: "sim-2" }]);
+  const result = r.run("bin/aloud.mjs", ["ios", "--config", r.env.ALOUD_CONFIG, "--no-gate"]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /multiple iOS simulators/);
+  assert.ok(!r.calls().some(c => c[0] === "idb" || ["install", "launch", "spawn", "io", "ui", "boot"].includes(c[2])));
 });
 
 test("Android current-screen launches an explicitly installed APK before speech capture", (t) => {

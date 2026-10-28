@@ -8,6 +8,14 @@ Two speech sources are available:
   opt-in with `--voiceover real --no-gate`. Captures are explicitly partial;
   complete traversal has not been established.
 
+Select the prepared simulator with `--udid <simulator-UDID>` or top-level
+`"ios": { "udid": "<simulator-UDID>" }`. With multiple booted simulators,
+an omitted selector fails before changing the app or accessibility settings.
+Installation, navigation, screenshots, trees, and native capture use that same
+device. An unavailable selected device never falls back to another simulator.
+Current-screen mode without `--app` requires an already booted device so the
+screen prepared by the caller is preserved.
+
 ## Computed VoiceOver (default)
 
 `aloud ios --app path/to/YourApp.app` boots a simulator if none is booted,

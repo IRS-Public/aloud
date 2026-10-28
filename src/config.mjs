@@ -114,6 +114,9 @@ export function validateConfig(cfg) {
   if (cfg.ios?.voiceOver !== undefined && !["computed", "real"].includes(cfg.ios.voiceOver)) {
     throw new Error("ios.voiceOver must be computed or real");
   }
+  if (cfg.ios?.udid !== undefined && (typeof cfg.ios.udid !== "string" || !cfg.ios.udid.trim() || cfg.ios.udid !== cfg.ios.udid.trim())) {
+    throw new Error("ios.udid must be a non-empty simulator identifier");
+  }
   if (cfg.ios?.voiceOverMaxSteps !== undefined && (!Number.isInteger(cfg.ios.voiceOverMaxSteps) ||
       cfg.ios.voiceOverMaxSteps < 1 || cfg.ios.voiceOverMaxSteps > 100)) {
     throw new Error("ios.voiceOverMaxSteps must be an integer from 1 to 100");
