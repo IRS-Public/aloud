@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -96,6 +96,33 @@ test("a time budget can stop between steps without pretending the step budget wa
   assert.deepEqual(parseVoiceOverCapture(encode(result), expected), result);
 });
 
+test("native step timestamps preserve capture timing and reject invalid or contradictory clocks", () => {
+  const startedAtMs = 1_800_000_000_000;
+  const result = capture({ startedAtMs, finishedAtMs: startedAtMs + 1000 });
+  result.steps.forEach((step, i) => { step.timestampMs = startedAtMs + i * 100; });
+  assert.deepEqual(parseVoiceOverCapture(encode(result), expected), result);
+  for (const mutate of [
+    (r) => { delete r.finishedAtMs; },
+    (r) => { delete r.startedAtMs; },
+    (r) => { r.startedAtMs = 0; },
+    (r) => { r.finishedAtMs = startedAtMs - 1; },
+    (r) => { delete r.steps[1].timestampMs; },
+    (r) => { r.steps[1].timestampMs = "1800000000100"; },
+    (r) => { r.steps[1].timestampMs = startedAtMs + 0.5; },
+    (r) => { r.steps[1].timestampMs = startedAtMs - 1; },
+    (r) => { r.steps[2].timestampMs = startedAtMs + 50; },
+    (r) => { r.steps[2].timestampMs = r.finishedAtMs + 1; },
+  ]) {
+    const invalid = structuredClone(result);
+    mutate(invalid);
+    assert.throws(() => parseVoiceOverCapture(encode(invalid), expected), /timestamp/);
+  }
+  const legacy = capture();
+  assert.deepEqual(parseVoiceOverCapture(encode(legacy), expected), legacy);
+  legacy.steps[0].timestampMs = null;
+  assert.throws(() => parseVoiceOverCapture(encode(legacy), expected), /timestamp/);
+});
+
 test("missing, stale, duplicate, malformed, host-app and unsupported records fail closed", () => {
   const good = encode(capture());
   for (const log of ["", good + good, encode(capture(), "stale-request"),
@@ -189,6 +216,43 @@ test("builds once, captures screens with unique identities and retains raw/toolc
   const before = r.calls.length;
   assert.throws(() => capturer.capture("../escaped"), /screen/i);
   assert.equal(r.calls.length, before);
+});
+
+test("native progress reaches its log before command completion and survives a native failure", (t) => {
+  for (const fail of [false, true]) {
+    const out = mkdtempSync(join(tmpdir(), "aloud-voiceover-progress-"));
+    t.after(() => rmSync(out, { recursive: true, force: true }));
+    const logPath = join(out, "voiceover/checkout.log");
+    const run = (_tool, args, options) => {
+      if (args[0] === "-version") return "Xcode 27.0\nBuild version 18A1";
+      if (args[0] !== "test-without-building") return "ok";
+      const requestId = options.env.TEST_RUNNER_ALOUD_VO_REQUEST_ID;
+      const result = capture({ requestId });
+      const marker = `ALOUD-VOICEOVER-STEP:${requestId}:${Buffer.from(JSON.stringify({
+        ...result.steps[1], timestampMs: Date.now(),
+      })).toString("base64")}\n`;
+      return execFileSync(process.execPath, ["-e", `
+        const fs = require("node:fs");
+        const [path, fail] = process.argv.slice(1);
+        const marker = process.env.ALOUD_TEST_PROGRESS;
+        fs.writeSync(1, marker);
+        if (!fs.readFileSync(path, "utf8").includes(marker)) throw Error("progress was buffered until completion");
+        fs.writeSync(2, "native diagnostic\\n");
+        if (fail === "true") process.exit(7);
+        fs.writeSync(1, process.env.ALOUD_TEST_FINAL);
+      `, logPath, String(fail)], { ...options, env: { ...options.env,
+        ALOUD_TEST_PROGRESS: marker, ALOUD_TEST_FINAL: encode(result, requestId),
+      } });
+    };
+    const capturer = createVoiceOverCapturer({ out, udid: "device-1", bundleId: expected.bundleId, maxSteps: 2, run });
+    if (fail) assert.throws(() => capturer.capture("checkout"), /VoiceOver xcodebuild failed/);
+    else assert.equal(capturer.capture("checkout").screen, "checkout");
+    const log = readFileSync(logPath, "utf8");
+    assert.match(log, /ALOUD-VOICEOVER-STEP:/);
+    assert.match(log, /native diagnostic/);
+    assert.equal(log.includes("ALOUD-VOICEOVER:"), !fail);
+    assert.equal(existsSync(join(out, "voiceover/checkout.json")), !fail);
+  }
 });
 
 test("unsupported Xcode, native failures and invalid records never substitute computed output", (t) => {
