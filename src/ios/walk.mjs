@@ -124,6 +124,14 @@ async function walk() {
   const loaded = await loadNavigator(NAV_MODE);
   const createNavigator = typeof loaded === "function" ? loaded : loaded.createNavigator;
   const nav = await createNavigator(ctx);
+  if (voiceOverCapturer) {
+    // Retain the requested batch before its first navigation. A later
+    // report must not silently omit an interrupted screen or treat a lost
+    // real-speech transcript as an ordinary passing tree-only capture.
+    writeFileSync(join(OUT, "capture-requirements.json"), JSON.stringify({
+      schemaVersion: 1, voiceOver: true, voiceOverScreens: nav.screens.map((screen) => screen.id),
+    }));
+  }
   // bridge: polls the dev bridge until the app is drivable, then settles.
   await nav.start();
 

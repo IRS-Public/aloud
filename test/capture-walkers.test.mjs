@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -59,7 +59,9 @@ if (command === "idb" && args.join(" ") === "ui describe-all --udid test-device"
   if (args[0] === "-version") {
     console.log("Xcode 27.0\\nBuild version 18A1");
   } else if (args[0] === "test-without-building" && process.env.TEST_RUNNER_ALOUD_VO_REQUEST_ID) {
-    if (process.env.ALOUD_MOCK_NATIVE_FAILURE) throw Error("native speech unavailable");
+    if (["1", process.env.TEST_RUNNER_ALOUD_VO_SCREEN].includes(process.env.ALOUD_MOCK_NATIVE_FAILURE)) {
+      throw Error("native speech unavailable");
+    }
     const requestId = process.env.TEST_RUNNER_ALOUD_VO_REQUEST_ID;
     const maxSteps = Number(process.env.TEST_RUNNER_ALOUD_VO_MAX_STEPS);
     const result = {
@@ -90,7 +92,7 @@ if (command === "idb" && args.join(" ") === "ui describe-all --udid test-device"
 }
 `;
 
-async function capture(t, platform, dumps, { appleAudit = false, nativeFailure = false, voiceOver = "computed", navMode = "deeplinks" } = {}) {
+async function capture(t, platform, dumps, { appleAudit = false, nativeFailure = false, voiceOver = "computed", navMode = "deeplinks", screenIds = ["capture"] } = {}) {
   const root = mkdtempSync(join(tmpdir(), "aloud-capture-test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const bin = join(root, "bin");
@@ -102,7 +104,7 @@ async function capture(t, platform, dumps, { appleAudit = false, nativeFailure =
   writeFileSync(join(root, "dumps.json"), JSON.stringify(dumps));
   const screens = join(root, "screens.json");
   writeFileSync(screens, JSON.stringify([
-    { id: "flow", screens: [{ id: "capture", url: "example://capture", settleMs: 0 }] },
+    { id: "flow", screens: screenIds.map((id) => ({ id, url: `example://${id}`, settleMs: 0 })) },
   ]));
   const config = join(root, "config.json");
   writeFileSync(config, JSON.stringify({
@@ -119,7 +121,7 @@ async function capture(t, platform, dumps, { appleAudit = false, nativeFailure =
         ADB_PATH: join(bin, "adb"),
         ALOUD_CONFIG: config,
         ALOUD_MOCK_ROOT: root,
-        ALOUD_MOCK_NATIVE_FAILURE: nativeFailure ? "1" : "",
+        ALOUD_MOCK_NATIVE_FAILURE: typeof nativeFailure === "string" ? nativeFailure : nativeFailure ? "1" : "",
       },
       timeout: 20_000,
     });
@@ -167,6 +169,9 @@ describe("iOS capture validation", { concurrency: 4 }, () => {
     assert.equal(transcript.voiceOver.coverage.complete, false);
     assert.equal(transcript.voiceOver.screen, "capture");
     assert.equal(transcript.voiceOver.bundleId, APP_PACKAGE);
+    assert.deepEqual(JSON.parse(readFileSync(join(result.out, "capture-requirements.json"))), {
+      schemaVersion: 1, voiceOver: true, voiceOverScreens: ["capture"],
+    });
     assert.equal(JSON.parse(readFileSync(join(result.out, "capture.tree.json"))).appleAudit.issues.length, 1);
     assert.match(result.stdout, /traversal partial/);
     const calls = readFileSync(join(result.root, "calls.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
@@ -181,6 +186,26 @@ describe("iOS capture validation", { concurrency: 4 }, () => {
     assert.match(result.stderr, /VoiceOver xcodebuild failed/);
     assert.equal(existsSync(join(result.out, "capture.transcript.json")), false);
     assert.equal(existsSync(join(result.out, "capture.tree.json")), false);
+  });
+
+  it("keeps an interrupted real-speech batch incomplete when reports are regenerated", async (t) => {
+    const result = await capture(t, "ios", [JSON.stringify([iosButton])], {
+      voiceOver: "real", screenIds: ["capture", "later"], nativeFailure: "later",
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /VoiceOver xcodebuild failed/);
+    assert.equal(existsSync(join(result.out, "capture.transcript.json")), true);
+    assert.equal(existsSync(join(result.out, "later.transcript.json")), false);
+    assert.deepEqual(JSON.parse(readFileSync(join(result.out, "capture-requirements.json"))), {
+      schemaVersion: 1, voiceOver: true, voiceOverScreens: ["capture", "later"],
+    });
+    const regenerated = spawnSync(process.execPath, [join(ROOT, "src/report/report.mjs"), "--dir", result.out], {
+      encoding: "utf8", env: { ...process.env, ALOUD_CONFIG: "" },
+    });
+    assert.notEqual(regenerated.status, 0);
+    assert.match(regenerated.stderr, /later: requested real VoiceOver capture did not finish/);
+    assert.equal(existsSync(join(result.out, "summary.json")), false);
+    assert.equal(existsSync(join(result.out, "index.html")), false);
   });
 
   it("retains raw speech but rejects pairing changed screen content with the earlier tree", async (t) => {

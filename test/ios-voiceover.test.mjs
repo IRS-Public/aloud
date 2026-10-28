@@ -239,7 +239,7 @@ test("CLI forwards real speech settings and allows overriding real back to compu
   assert.notEqual(cli(["--voiceover-max-steps", "NaN"]).status, 0);
 });
 
-function report(t, { gate = false, mutate = () => {} } = {}) {
+function report(t, { gate = false, mutate = () => {}, mutateFiles = () => {} } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "aloud-voiceover-report-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const treeGate = { errors: 0, ruleIds: [] };
@@ -250,8 +250,14 @@ function report(t, { gate = false, mutate = () => {} } = {}) {
   mutate(transcript);
   writeFileSync(join(dir, "checkout.tree.json"), JSON.stringify({ screen: "checkout", gate: treeGate, violations: [] }));
   writeFileSync(join(dir, "checkout.transcript.json"), JSON.stringify(transcript));
+  mkdirSync(join(dir, "voiceover"));
+  writeFileSync(join(dir, "voiceover/checkout.json"), JSON.stringify(voiceOver));
+  writeFileSync(join(dir, "capture-requirements.json"), JSON.stringify({
+    schemaVersion: 1, voiceOver: true, voiceOverScreens: ["checkout"],
+  }));
   const baseline = join(dir, "baseline.json");
   writeFileSync(baseline, JSON.stringify({ checkout: treeGate }));
+  mutateFiles(dir);
   const result = spawnSync(process.execPath, [join(ROOT, "src/report/report.mjs"), "--dir", dir,
     "--baseline", baseline, ...(gate ? ["--gate"] : [])], { encoding: "utf8", env: { ...process.env, ALOUD_CONFIG: "" } });
   return { ...result, dir };
@@ -300,6 +306,51 @@ test("report refuses raw/transcript disagreement, missing provenance and invente
   ]) {
     const result = report(t, { mutate });
     assert.notEqual(result.status, 0);
+    assert.equal(existsSync(join(result.dir, "summary.json")), false);
+  }
+});
+
+test("report regeneration rejects lost real speech, raw records and interrupted screen batches", (t) => {
+  const incomplete = /requested real VoiceOver capture did not finish/;
+  const rawMismatch = /VoiceOver raw capture is missing or differs/;
+  const mutations = [
+    [incomplete, (dir) => rmSync(join(dir, "checkout.transcript.json"))],
+    [incomplete, (dir) => rmSync(join(dir, "checkout.tree.json"))],
+    [rawMismatch, (dir) => rmSync(join(dir, "voiceover/checkout.json"))],
+    [rawMismatch, (dir) => {
+      const path = join(dir, "voiceover/checkout.json");
+      const raw = JSON.parse(readFileSync(path));
+      raw.requestId = "a-different-capture";
+      writeFileSync(path, JSON.stringify(raw));
+    }],
+    [incomplete, (dir) => writeFileSync(join(dir, "checkout.transcript.json"), JSON.stringify({
+      screen: "checkout", source: "computed-voiceover", transcript: ["Computed replacement"],
+    }))],
+    [/never-captured: requested real VoiceOver capture did not finish/, (dir) => writeFileSync(join(dir, "capture-requirements.json"), JSON.stringify({
+      schemaVersion: 1, voiceOver: true, voiceOverScreens: ["checkout", "never-captured"],
+    }))],
+  ];
+  for (const [error, mutateFiles] of mutations) {
+    for (const gate of [false, true]) {
+      const result = report(t, { gate, mutateFiles });
+      assert.notEqual(result.status, 0, result.stdout);
+      assert.match(result.stderr, error);
+      assert.equal(existsSync(join(result.dir, "summary.json")), false);
+      assert.equal(existsSync(join(result.dir, "index.html")), false);
+      assert.doesNotMatch(result.stdout, /508 gate passed/);
+    }
+  }
+});
+
+test("real-speech requirements need an explicit, nonempty list of distinct requested screens", (t) => {
+  for (const voiceOverScreens of [undefined, null, [], [""], ["checkout", "checkout"], ["checkout", 2]]) {
+    const result = report(t, { mutateFiles(dir) {
+      writeFileSync(join(dir, "capture-requirements.json"), JSON.stringify({
+        schemaVersion: 1, voiceOver: true, voiceOverScreens,
+      }));
+    } });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /invalid capture requirements/);
     assert.equal(existsSync(join(result.dir, "summary.json")), false);
   }
 });

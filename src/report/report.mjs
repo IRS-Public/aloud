@@ -20,6 +20,7 @@
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { renderReportHtml } from "./html.mjs";
 import { validateTalkBackFocusCapture, focusTranscript } from "../android/talkback-focus.mjs";
 import { focusTtsSummary, validateFocusTts } from "../android/tts-evidence.mjs";
@@ -31,6 +32,7 @@ import { readTreeReport } from "./tree-report.mjs";
 import { keepAccepted } from "./accepted.mjs";
 import { migrationNote, readBaseline, readEvidenceProvenance } from "./validation.mjs";
 import { combineProvenance } from "../provenance.mjs";
+import { validateScreenId } from "../screen-id.mjs";
 
 const args = cliArgs("report.mjs", {
   dir: { type: "string" },
@@ -132,6 +134,11 @@ for (const f of readdirSync(OUT).sort()) {
           !v.toolchain.xcode.trim() || typeof v.toolchain?.simulatorUdid !== "string" || !v.toolchain.simulatorUdid.trim()) {
         throw new Error(`VoiceOver transcript or toolchain does not match raw evidence in ${f}`);
       }
+      validateScreenId(r.screen, `VoiceOver screen in ${f}`);
+      const rawPath = join("voiceover", `${r.screen}.json`);
+      if (!existsSync(join(OUT, rawPath)) || !isDeepStrictEqual(read(rawPath), v)) {
+        throw new Error(`VoiceOver raw capture is missing or differs from ${f}`);
+      }
     }
     if (r.source === "talkback-focus" || r.talkBackFocus !== undefined) {
       if (r.source !== "talkback-focus" || r.talkBackFocus?.screen !== r.screen) throw new Error(`invalid TalkBack evidence in ${f}`);
@@ -169,11 +176,13 @@ if (provenance?.mixed) console.warn(`warning: --allow-mixed: ${OUT} combines evi
 const requirementsPath = join(OUT, "capture-requirements.json");
 if (existsSync(requirementsPath)) {
   const requirements = JSON.parse(readFileSync(requirementsPath, "utf8"));
-  if (requirements.schemaVersion !== 1 || (!requirements.talkBackFocus && !requirements.androidAtf) ||
-      ["talkBackFocus", "loggingTts", "androidAtf"].some((k) => requirements[k] !== undefined && requirements[k] !== true) ||
+  const screenList = (value) => Array.isArray(value) && value.length > 0 &&
+    value.every((id) => typeof id === "string" && id.trim().length > 0) && new Set(value).size === value.length;
+  if (requirements.schemaVersion !== 1 || (!requirements.talkBackFocus && !requirements.androidAtf && !requirements.voiceOver) ||
+      ["talkBackFocus", "loggingTts", "androidAtf", "voiceOver"].some((k) => requirements[k] !== undefined && requirements[k] !== true) ||
       (requirements.loggingTts && !requirements.talkBackFocus) ||
-      (requirements.androidAtf && (!Array.isArray(requirements.atfScreens) || !requirements.atfScreens.length ||
-        !requirements.atfScreens.every((id) => typeof id === "string" && id.length > 0) || new Set(requirements.atfScreens).size !== requirements.atfScreens.length))) {
+      (requirements.androidAtf && !screenList(requirements.atfScreens)) ||
+      (requirements.voiceOver && !screenList(requirements.voiceOverScreens))) {
     throw new Error("invalid capture requirements");
   }
   for (const id of ids) {
@@ -185,6 +194,14 @@ if (existsSync(requirementsPath)) {
   if (requirements.androidAtf) {
     for (const id of new Set([...ids, ...requirements.atfScreens])) {
       if (!screens[id]?.atfSummary || !requirements.atfScreens.includes(id)) throw new Error(`${id}: requested Android ATF checks did not complete`);
+    }
+  }
+  if (requirements.voiceOver) {
+    for (const id of new Set([...ids, ...requirements.voiceOverScreens])) {
+      if (!requirements.voiceOverScreens.includes(id) || screens[id]?.source !== "voiceover" ||
+          !screens[id]?.voiceOver || !screens[id]?.gate) {
+        throw new Error(`${id}: requested real VoiceOver capture did not finish with paired tree and speech evidence; raw diagnostics are retained`);
+      }
     }
   }
 }

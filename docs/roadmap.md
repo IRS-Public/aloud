@@ -40,6 +40,9 @@ restoration, explicit stopping reasons, report/OpenACR provenance, and
 conservative comparison policies. Tree-count baselines need no transcript
 migration because they contain no transcript text. The simulator workflow
 exercises repeated labels, dynamic content, scrolling, and modals.
+The walker records every requested real-speech screen before navigation.
+Report regeneration rejects missing screens, lost tree or transcript files,
+computed replacements, and missing or mismatched raw VoiceOver records.
 
 Still required before promotion to the default:
 
